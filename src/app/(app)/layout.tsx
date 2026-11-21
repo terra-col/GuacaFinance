@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { Logo } from "@/components/logo";
-import { AdvisorButton, AdvisorFab, Nav } from "@/components/nav";
+import { AdvisorDock } from "@/components/advisor-dock";
+import { AdvisorButton, Nav } from "@/components/nav";
+import { aiProvider } from "@/lib/ai-provider";
 import { NavProgress } from "@/components/nav-progress";
 import { QuickAdd, QuickAddButton } from "@/components/quick-add";
 import { Suspense } from "react";
@@ -41,7 +43,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         ))}
       </datalist>
       <main className="flex flex-col gap-6 sm:gap-8">{children}</main>
-      <AdvisorFab />
+      <AdvisorDock provider={aiProvider()} />
     </div>
   );
 }

@@ -16,8 +16,11 @@ const SUGGESTIONS = [
   "¿Cuánto debo ahorrar para cumplir mis metas?",
 ];
 
-/** Chat with the advisor. The conversation stays in this browser tab; nothing is stored. */
-export function AdvisorChat() {
+/**
+ * Chat with the advisor. The conversation stays in this browser tab; nothing is stored.
+ * `panel`: inside the floating panel (computers), with its own scroll and the box fixed at the bottom.
+ */
+export function AdvisorChat({ panel = false, autoFocus = false }: { panel?: boolean; autoFocus?: boolean }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
@@ -25,10 +28,13 @@ export function AdvisorChat() {
   /** The answer while it is still arriving. */
   const [draft, setDraft] = useState("");
   const end = useRef<HTMLDivElement>(null);
+  const scroller = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    end.current?.scrollIntoView({ behavior: draft ? "auto" : "smooth", block: "end" });
-  }, [messages, busy, draft]);
+    // In the panel only the conversation scrolls; on the page, the page does.
+    if (panel) scroller.current?.scrollTo({ top: scroller.current.scrollHeight, behavior: draft ? "auto" : "smooth" });
+    else end.current?.scrollIntoView({ behavior: draft ? "auto" : "smooth", block: "end" });
+  }, [messages, busy, draft, panel]);
 
   async function send(text: string) {
     const question = text.trim();
@@ -90,7 +96,13 @@ export function AdvisorChat() {
   }
 
   return (
-    <section className="card flex flex-col gap-4" aria-label="Chat con el asesor">
+    <section className={panel ? "flex h-full min-h-0 flex-col" : "card flex flex-col gap-4"} aria-label="Chat con el asesor">
+      <div ref={scroller} className={panel ? "flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 py-4" : "contents"}>
+      {messages.length === 0 && panel && (
+        <p className="text-sm text-ink-2">
+          Hola. Soy tu asesor con IA: miro tus saldos, tasas, pagos fijos, ingresos y metas para responderte con tus números. Pregúntame lo que quieras sobre tu plata.
+        </p>
+      )}
       {messages.length === 0 ? (
         <div className="flex flex-wrap gap-2">
           {SUGGESTIONS.map((s) => (
@@ -132,6 +144,8 @@ export function AdvisorChat() {
       )}
       <div ref={end} />
       {error && <p role="alert" className="alert">{error}</p>}
+      </div>
+      <div className={panel ? "flex flex-col gap-2 border-t border-line p-3" : "contents"}>
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -153,6 +167,7 @@ export function AdvisorChat() {
           placeholder="Pregúntale a tu asesor…"
           aria-label="Tu pregunta"
           maxLength={4000}
+          autoFocus={autoFocus}
         />
         <button className="btn h-12 shrink-0" disabled={busy || !input.trim()}>
           Enviar
@@ -163,6 +178,7 @@ export function AdvisorChat() {
           Empezar de nuevo
         </button>
       )}
+      </div>
     </section>
   );
 }

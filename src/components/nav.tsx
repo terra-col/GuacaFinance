@@ -225,23 +225,3 @@ export function AdvisorButton() {
   );
 }
 
-/** Computers: the advisor floats bottom right on every screen, except its own. */
-export function AdvisorFab() {
-  const pathname = usePathname();
-  if (pathname.startsWith("/asesor")) return null;
-  return (
-    <Link
-      href="/asesor"
-      className="fab advisor-fab fixed bottom-6 right-6 z-40 hidden h-[3.75rem] items-center gap-3 rounded-full pl-4 pr-6 lg:flex"
-      title="Pregúntale a tu asesor con IA: responde a partir de tus cuentas, deudas y metas"
-    >
-      <span className="flex size-10 items-center justify-center rounded-full bg-white/18 shadow-[inset_0_1px_0_rgb(255_255_255/0.3)]">
-        <AdvisorMark className="size-6" />
-      </span>
-      <span className="flex flex-col items-start leading-tight">
-        <span className="text-[15px] font-semibold">Asesor IA</span>
-        <span className="text-xs font-medium text-white/80">según tus cuentas</span>
-      </span>
-    </Link>
-  );
-}
