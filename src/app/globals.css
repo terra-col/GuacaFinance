@@ -1007,3 +1007,34 @@ a.card:active {
     animation-duration: 2.5s;
   }
 }
+
+/* The advisor's floating button (computers): lifts on hover, lands softly when it appears. */
+.advisor-fab {
+  box-shadow:
+    inset 0 1px 0.5px rgb(255 255 255 / 0.5),
+    0 14px 34px -12px var(--brand);
+  animation: fab-in 0.5s cubic-bezier(0.2, 0.8, 0.2, 1.2) 0.2s both;
+  transition:
+    transform 180ms,
+    box-shadow 180ms;
+}
+.advisor-fab:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    inset 0 1px 0.5px rgb(255 255 255 / 0.5),
+    0 20px 40px -12px var(--brand);
+}
+.advisor-fab:active {
+  transform: scale(0.95);
+}
+@keyframes fab-in {
+  from {
+    transform: translateY(16px) scale(0.9);
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .advisor-fab {
+    animation: none;
+  }
+}

@@ -1,5 +1,6 @@
 import { AdvisorChat } from "@/components/advisor-chat";
 import Link from "next/link";
+import { AdvisorMark } from "@/components/advisor-mark";
 import { aiProvider } from "@/lib/ai-provider";
 import { loadData } from "@/lib/data";
 
@@ -11,7 +12,12 @@ export default async function AdvisorPage() {
   return (
     <>
       <div className="pt-2">
-        <h1 className="display text-3xl">Asesor ✨</h1>
+        <h1 className="display flex items-center gap-3 text-3xl">
+          <span className="icon-tile tone-brand" aria-hidden="true">
+            <AdvisorMark className="size-6" />
+          </span>
+          Asesor
+        </h1>
         <p className="text-sm text-ink-3">
           {aiReady && <span className="pill pill-idea mr-1.5">{provider === "gemini" ? "Con Gemini" : "Con Claude"}</span>}
           Pregúntale cómo pagar tus deudas, cuánto ahorrar para una meta o cómo repartir el salario. Usa tus saldos, tasas, pagos fijos, ingresos, presupuestos y metas. Es una guía, no asesoría financiera certificada. Para simular abonos, mira el{" "}

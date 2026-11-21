@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { AdvisorMark } from "./advisor-mark";
 import { useLayoutEffect, useRef, useState } from "react";
 
 interface Item {
@@ -206,7 +207,7 @@ export function Nav({ pending }: { pending: number }) {
   );
 }
 
-/** The AI advisor, one tap away from every screen. */
+/** The AI advisor in the header, on phones and tablets (computers get the floating button). */
 export function AdvisorButton() {
   const pathname = usePathname();
   const on = pathname.startsWith("/asesor");
@@ -214,14 +215,28 @@ export function AdvisorButton() {
     <Link
       href="/asesor"
       aria-current={on ? "page" : undefined}
-      className={`liquid flex h-10 items-center gap-1.5 rounded-xl px-2.5 text-sm font-semibold transition-colors sm:px-3 ${on ? "liquid-tint" : ""}`}
+      className={`liquid flex h-10 items-center gap-1.5 rounded-xl px-2.5 text-sm font-semibold transition-colors sm:px-3 lg:hidden ${on ? "liquid-tint" : ""}`}
       aria-label="Asesor"
       title="Asesor con IA"
     >
-      <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinejoin="round" aria-hidden="true">
-        <path d="M12 3l1.9 4.6L18.5 9l-4.6 1.9L12 15.5l-1.9-4.6L5.5 9l4.6-1.4zM19 15l.9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9z" />
-      </svg>
+      <AdvisorMark className="size-5" />
       <span className="max-sm:hidden">Asesor</span>
+    </Link>
+  );
+}
+
+/** Computers: the advisor floats bottom right on every screen, except its own. */
+export function AdvisorFab() {
+  const pathname = usePathname();
+  if (pathname.startsWith("/asesor")) return null;
+  return (
+    <Link
+      href="/asesor"
+      className="advisor-fab liquid liquid-tint fixed bottom-6 right-6 z-40 hidden h-14 items-center gap-2.5 rounded-full pl-4 pr-5 text-[15px] font-semibold lg:flex"
+      title="Pregúntale a tu asesor con IA"
+    >
+      <AdvisorMark className="size-6" />
+      Asesor
     </Link>
   );
 }
