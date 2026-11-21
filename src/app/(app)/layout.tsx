@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Logo } from "@/components/logo";
 import { AdvisorDock } from "@/components/advisor-dock";
+import { CategoriesProvider } from "@/components/pickers";
 import { AdvisorButton, Nav } from "@/components/nav";
 import { aiProvider } from "@/lib/ai-provider";
 import { NavProgress } from "@/components/nav-progress";
@@ -8,12 +9,13 @@ import { QuickAdd, QuickAddButton } from "@/components/quick-add";
 import { Suspense } from "react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { loadShell } from "@/lib/data";
-import { CATEGORIES } from "@/lib/finance";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const { pending, accounts, today } = await loadShell();
+  const { pending, accounts, categories, today } = await loadShell();
 
   return (
+    // Every category field (Registrar, editing a movement, fixed bills, Wallet's inbox) offers the person's own categories too.
+    <CategoriesProvider categories={categories}>
     <div className="mx-auto w-full max-w-5xl px-4 pb-40 sm:px-6 lg:pb-16">
       <Suspense>
         <NavProgress />
@@ -37,13 +39,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         </div>
         <QuickAdd accounts={accounts} today={today} />
       </header>
-      <datalist id="categorias">
-        {CATEGORIES.map((c) => (
-          <option key={c} value={c} />
-        ))}
-      </datalist>
       <main className="flex flex-col gap-6 sm:gap-8">{children}</main>
       <AdvisorDock provider={aiProvider()} />
     </div>
+    </CategoriesProvider>
   );
 }

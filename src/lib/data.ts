@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { todayInBogota, type Account, type Bill, type Skip, type Tx } from "./finance";
+import { knownCategories, todayInBogota, type Account, type Bill, type Skip, type Tx } from "./finance";
 import type { Budget, Income } from "./budget";
 import type { Goal, GoalDeposit } from "./goals";
 import type { CardPurchase } from "./installments";
@@ -18,15 +18,19 @@ const PAGE = 1000; // Supabase returns at most 1000 rows per request
 /** What every screen's frame needs: accounts for the quick «new movement» sheet and the Wallet inbox count. */
 export async function loadShell() {
   const supabase = await createClient();
-  const [inbox, withFavorite] = await Promise.all([
+  const [inbox, withFavorite, usedInTxs, usedInBills] = await Promise.all([
     supabase.from("wallet_inbox").select("id", { count: "exact", head: true }),
     supabase.from("accounts").select("id, name, kind, favorite").order("created_at"),
+    // The categories the person has used, newest first, to offer next to the app's own.
+    supabase.from("transactions").select("category").not("category", "is", null).order("created_at", { ascending: false }).limit(1000),
+    supabase.from("bills").select("category").not("category", "is", null),
   ]);
   // Until migration 0012 runs there is no favourite column: ask again without it.
   const accounts = withFavorite.error ? await supabase.from("accounts").select("id, name, kind").order("created_at") : withFavorite;
   return {
     pending: inbox.count ?? 0,
     accounts: (accounts.data ?? []) as Pick<Account, "id" | "name" | "kind" | "favorite">[],
+    categories: knownCategories([...(usedInTxs.data ?? []), ...(usedInBills.data ?? [])].map((r) => r.category as string)),
     today: todayInBogota(),
   };
 }

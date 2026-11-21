@@ -9,6 +9,7 @@ import { useCloseModal } from "./modal";
 import { Icon } from "./icons";
 import { MoneyInput } from "./money-input";
 import { SubmitButton } from "./submit-button";
+import { SelectField } from "./pickers";
 
 export const GOAL_EMOJIS = ["🎯", "🛋️", "📱", "✈️", "🏍️", "🚗", "🏠", "🎓", "🎁", "💍", "🐶", "🛟"];
 
@@ -109,13 +110,7 @@ export function GoalForm({ debts, incomes, today }: { debts: DebtOption[]; incom
         <>
           <label className="field">
             ¿Qué crédito?
-            <select className="input" name="account_id" value={debtId} onChange={(e) => setDebtId(e.target.value)} required>
-              {debts.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.name} · {formatCOP(d.balance)}
-                </option>
-              ))}
-            </select>
+            <SelectField name="account_id" options={debts.map((d) => ({ value: d.id, label: `${d.name} · ${formatCOP(d.balance)}` }))} value={debtId} onChange={setDebtId} required />
           </label>
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="field">

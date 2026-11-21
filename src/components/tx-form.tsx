@@ -4,6 +4,7 @@ import { useActionState, useState } from "react";
 import { saveTx, type FormState } from "@/app/actions";
 import { DateField } from "./date-field";
 import { MoneyInput } from "./money-input";
+import { CategoryField, SelectField, type PickOption } from "./pickers";
 import { SubmitButton } from "./submit-button";
 import {
   allowedTxKinds,
@@ -21,6 +22,16 @@ const KIND_OPTIONS: { kind: TxKind; label: string }[] = [
 ];
 
 type AccountOption = Pick<Account, "id" | "name" | "kind" | "favorite">;
+
+const GROUP: Record<Account["kind"], string> = { savings: "Cuentas bancarias", cash: "Efectivo", credit_card: "Tarjetas de crédito", loan: "Préstamos" };
+const KIND_ORDER: Account["kind"][] = ["savings", "cash", "credit_card", "loan"];
+
+/** Accounts as picker options: grouped by kind, the favourite first in its group and starred. */
+function accountOptions(accounts: AccountOption[]): PickOption[] {
+  return KIND_ORDER.flatMap((kind) =>
+    favoriteFirst(accounts.filter((a) => a.kind === kind)).map((a) => ({ value: a.id, label: a.name, group: GROUP[kind], star: Boolean(a.favorite) })),
+  );
+}
 
 /**
  * Records a movement, or edits one when `tx` is given. Editing keeps the
@@ -113,45 +124,27 @@ export function TxForm({
                 : kind === "income"
                   ? "Cuenta que recibe"
                   : "Con qué pagaste"}
-              <select
-                className="input"
+              <SelectField
                 name="account_id"
-                defaultValue={own?.account_id ?? (kind !== "payment" && targets.some((a) => a.id === favorite) ? favorite! : undefined)}
+                options={accountOptions(targets)}
+                defaultValue={own?.account_id ?? (kind !== "payment" && targets.some((a) => a.id === favorite) ? favorite! : (targets[0]?.id ?? ""))}
                 required
-              >
-                {targets.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.name}
-                  </option>
-                ))}
-              </select>
+              />
             </label>
             {kind === "payment" && (
               <label className="field">
                 Sale de
-                <select
-                  className="input"
+                <SelectField
                   name="source_account_id"
+                  options={[{ value: "", label: "Otra fuente (no registrada)" }, ...accountOptions(savings)]}
                   defaultValue={own ? (own.source_account_id ?? "") : (favorite ?? "")}
-                >
-                  <option value="">Otra fuente (no registrada)</option>
-                  {savings.map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.name}
-                    </option>
-                  ))}
-                </select>
+                />
               </label>
             )}
             {kind === "expense" && (
               <label className="field">
                 Categoría
-                <input
-                  className="input"
-                  name="category"
-                  list="categorias"
-                  defaultValue={own?.category ?? "Ocio"}
-                />
+                <CategoryField name="category" defaultValue={own?.category ?? "Ocio"} />
               </label>
             )}
             <label className="field">

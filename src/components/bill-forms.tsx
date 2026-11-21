@@ -12,6 +12,7 @@ import type { Bill } from "@/lib/finance";
 import { useCloseModal } from "./modal";
 import { MoneyInput } from "./money-input";
 import { SubmitButton } from "./submit-button";
+import { SelectField, CategoryField } from "./pickers";
 
 /** A fixed bill, new or (with `bill`) edited in place. `onDone` runs once it is saved. */
 export function BillForm({ bill, onDone }: { bill?: Bill; onDone?: () => void } = {}) {
@@ -40,7 +41,7 @@ export function BillForm({ bill, onDone }: { bill?: Bill; onDone?: () => void } 
         </label>
         <label className="field">
           Categoría
-          <input className="input" name="category" defaultValue={bill ? (bill.category ?? "") : "Hogar"} list="categorias" />
+          <CategoryField name="category" defaultValue={bill ? (bill.category ?? "") : "Hogar"} />
         </label>
       </div>
       {state.error && (
@@ -123,14 +124,11 @@ export function IncomeForm({
         </label>
         <label className="field">
           Llega a
-          <select className="input" name="account_id" defaultValue={income ? (income.account_id ?? "") : (accounts[0]?.id ?? "")}>
-            <option value="">Preguntar cada vez</option>
-            {accounts.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.name}
-              </option>
-            ))}
-          </select>
+          <SelectField
+            name="account_id"
+            options={[{ value: "", label: "Preguntar cada vez" }, ...accounts.map((a) => ({ value: a.id, label: a.name }))]}
+            defaultValue={income ? (income.account_id ?? "") : (accounts[0]?.id ?? "")}
+          />
         </label>
       </div>
       {repeat === "once" && (
@@ -196,16 +194,7 @@ export function BudgetForm({
       <div className="grid gap-4 sm:grid-cols-2">
         <label className="field">
           Categoría
-          <select
-            className="input"
-            name="category"
-            required
-            defaultValue={initial?.category ?? categories[0]}
-          >
-            {categories.map((c) => (
-              <option key={c}>{c}</option>
-            ))}
-          </select>
+          <SelectField name="category" options={categories.map((c) => ({ value: c, label: c }))} defaultValue={initial?.category ?? categories[0]} required />
         </label>
         <label className="field">
           Tope al mes

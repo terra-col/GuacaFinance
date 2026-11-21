@@ -94,6 +94,22 @@ const CATEGORY_ICON: Record<string, string> = {
   otros: "✨",
 };
 
+/**
+ * The categories to offer: the app's own first, then the person's own ones (as they wrote them,
+ * once each, ignoring case), alphabetically. Balance adjustments are not a category to pick.
+ */
+export function knownCategories(used: (string | null | undefined)[]): string[] {
+  const seen = new Set(CATEGORIES.map((c) => c.toLocaleLowerCase("es")));
+  const own: string[] = [];
+  for (const raw of used) {
+    const c = raw?.trim();
+    if (!c || c === ADJUSTMENT || seen.has(c.toLocaleLowerCase("es"))) continue;
+    seen.add(c.toLocaleLowerCase("es"));
+    own.push(c);
+  }
+  return [...CATEGORIES, ...own.sort((a, b) => a.localeCompare(b, "es"))];
+}
+
 /** An emoji for a movement: by category for expenses, by kind for the rest. */
 export function txIcon(tx: Pick<Tx, "kind" | "category">): string {
   if (tx.kind === "income") return "💰";

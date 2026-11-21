@@ -4,6 +4,7 @@ import { useState } from "react";
 import { formatCOP, formatDate } from "@/lib/finance";
 import { planDates } from "@/lib/goals";
 import { MoneyInput } from "./money-input";
+import { SelectField } from "./pickers";
 
 export interface IncomeOption {
   id: string;
@@ -91,23 +92,16 @@ export function GoalPlanFields({
             </label>
             <label className="field">
               De dónde sale (opcional)
-              <select
-                className="input"
+              <SelectField
                 name="plan_income_id"
+                options={[{ value: "", label: "No lo sé / otro" }, ...incomes.map((i) => ({ value: i.id, label: `${i.name} · día ${i.day}` }))]}
                 value={incomeId}
-                onChange={(e) => {
-                  setIncomeId(e.target.value);
-                  const income = incomes.find((i) => i.id === e.target.value);
+                onChange={(id) => {
+                  setIncomeId(id);
+                  const income = incomes.find((i) => i.id === id);
                   if (income) setDay(income.day);
                 }}
-              >
-                <option value="">No lo sé / otro</option>
-                {incomes.map((i) => (
-                  <option key={i.id} value={i.id}>
-                    {i.name} · día {i.day}
-                  </option>
-                ))}
-              </select>
+              />
             </label>
             <label className="field">
               Día del mes

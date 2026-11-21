@@ -6,6 +6,7 @@ import type { InboxItem as Item } from "@/lib/data";
 import { formatDate } from "@/lib/finance";
 import { MoneyInput } from "./money-input";
 import { SubmitButton } from "./submit-button";
+import { SelectField, CategoryField } from "./pickers";
 
 export function InboxItem({ item, accounts }: { item: Item; accounts: { id: string; name: string }[] }) {
   const [state, action] = useActionState<FormState, FormData>(resolveInbox, {});
@@ -23,20 +24,11 @@ export function InboxItem({ item, accounts }: { item: Item; accounts: { id: stri
         </label>
         <label className="field">
           Cuenta o tarjeta
-          <select className="input" name="account_id" required defaultValue="">
-            <option value="" disabled>
-              Elegir…
-            </option>
-            {accounts.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.name}
-              </option>
-            ))}
-          </select>
+          <SelectField name="account_id" options={accounts.map((a) => ({ value: a.id, label: a.name }))} placeholder="Elegir…" required />
         </label>
         <label className="field">
           Categoría
-          <input className="input" name="category" list="categorias" />
+          <CategoryField name="category" />
         </label>
         <SubmitButton className="btn">Registrar</SubmitButton>
         {item.card && (

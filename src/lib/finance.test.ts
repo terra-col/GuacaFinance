@@ -239,3 +239,10 @@ test("favourite account: payments come from it by default, before the one used l
   assert.equal(favoriteAccountId([{ ...tarjeta, favorite: true }]), null, "only savings or cash count");
   assert.deepEqual(favoriteFirst([ahorros, nequi, tarjeta]).map((a) => a.id), ["n", "a", "t"]);
 });
+
+test("categories to offer: the app's own, then the person's, once each", async () => {
+  const { knownCategories, CATEGORIES } = await import("./finance.ts");
+  const list = knownCategories(["Gasolina", "mercado", "Ajuste de saldo", " Gasolina ", null, "Arriendo", "gasolina"]);
+  assert.deepEqual(list.slice(0, CATEGORIES.length), CATEGORIES);
+  assert.deepEqual(list.slice(CATEGORIES.length), ["Arriendo", "Gasolina"], "no repeats (case aside), no adjustments, no app categories again");
+});

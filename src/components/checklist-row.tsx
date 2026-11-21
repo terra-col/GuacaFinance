@@ -5,6 +5,7 @@ import { deleteBill, deleteIncome, markPaid, skipItem, unmarkPaid, unskipItem, u
 import { daysBetween, formatCOP, formatDate, relativeDay, type ChecklistItem } from "@/lib/finance";
 import { DateField } from "./date-field";
 import { MoneyInput } from "./money-input";
+import { SelectField } from "./pickers";
 
 interface Props {
   item: ChecklistItem;
@@ -293,14 +294,12 @@ export function ChecklistRow({ item, month, today, editable, accounts }: Props) 
               </label>
               <label className="field" hidden={saving}>
                 {item.type === "bill" ? "Con qué" : income ? "Llegó a" : "Sale de"}
-                <select className="input" name="account_id" defaultValue={item.quick?.accountId ?? ""} required={item.type !== "debt" && !saving}>
-                  {item.type === "debt" && <option value="">Otra fuente (no registrada)</option>}
-                  {accounts.map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.name}
-                    </option>
-                  ))}
-                </select>
+                <SelectField
+                  name="account_id"
+                  options={[...(item.type === "debt" ? [{ value: "", label: "Otra fuente (no registrada)" }] : []), ...accounts.map((a) => ({ value: a.id, label: a.name }))]}
+                  defaultValue={item.quick?.accountId ?? (item.type === "debt" ? "" : (accounts[0]?.id ?? ""))}
+                  required={item.type !== "debt" && !saving}
+                />
               </label>
               <label className="field">
                 Fecha
@@ -433,14 +432,12 @@ export function ChecklistRow({ item, month, today, editable, accounts }: Props) 
               </label>
               <label className="field" hidden={saving}>
                 {item.type === "bill" ? "Con qué" : income ? "Llegó a" : "Salió de"}
-                <select className="input" name="account_id" defaultValue={item.paidFrom ?? item.quick?.accountId ?? ""} required={item.type !== "debt" && !saving}>
-                  {item.type === "debt" && <option value="">Otra fuente (no registrada)</option>}
-                  {accounts.map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.name}
-                    </option>
-                  ))}
-                </select>
+                <SelectField
+                  name="account_id"
+                  options={[...(item.type === "debt" ? [{ value: "", label: "Otra fuente (no registrada)" }] : []), ...accounts.map((a) => ({ value: a.id, label: a.name }))]}
+                  defaultValue={item.paidFrom ?? item.quick?.accountId ?? (item.type === "debt" ? "" : (accounts[0]?.id ?? ""))}
+                  required={item.type !== "debt" && !saving}
+                />
               </label>
               <label className="field">
                 Fecha

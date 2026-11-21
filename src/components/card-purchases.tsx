@@ -2,11 +2,12 @@
 
 import { useActionState, useEffect, useState } from "react";
 import { deletePurchase, savePurchase, type FormState } from "@/app/actions";
-import { CATEGORIES, formatCOP, monthLabel } from "@/lib/finance";
+import { formatCOP, monthLabel } from "@/lib/finance";
 import type { PurchaseView, RateType } from "@/lib/installments";
 import { DebtTags, InstallmentMeter } from "./installment-meter";
 import { MoneyInput } from "./money-input";
 import { SubmitButton } from "./submit-button";
+import { CategoryField } from "./pickers";
 
 function PurchaseForm({ accountId, view, onDone }: { accountId: string; view?: PurchaseView; onDone: () => void }) {
   const [state, action] = useActionState<FormState, FormData>(savePurchase, {});
@@ -92,11 +93,7 @@ function PurchaseForm({ accountId, view, onDone }: { accountId: string; view?: P
           {record && (
             <label className="field">
               Categoría del gasto
-              <select className="input" name="category" defaultValue="Otros">
-                {CATEGORIES.map((c) => (
-                  <option key={c}>{c}</option>
-                ))}
-              </select>
+              <CategoryField name="category" defaultValue="Otros" />
             </label>
           )}
         </>

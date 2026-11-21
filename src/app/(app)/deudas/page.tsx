@@ -65,14 +65,23 @@ function DebtModule({
         />
       </Link>
 
-      {/* A button, not a link with a ↻ (that reads as "reload"): it opens the balance form on the account. */}
-      <Link
-        href={`/cuentas/${account.id}#saldo`}
-        className="liquid -mt-1 flex h-10 items-center gap-2 self-start rounded-xl px-3.5 text-sm font-semibold"
-      >
-        <Icon name="edit" className="size-4 text-brand" />
-        Actualizar saldo
-      </Link>
+      {/* One row: the balance button and, beside it, what makes this debt different (rediferido,
+          variable rate), so every card keeps the same rhythm whether it has tags or not. */}
+      <div className="-mt-1 flex min-h-10 flex-wrap items-center justify-between gap-2">
+        {/* A button, not a link with a ↻ (that reads as "reload"): it opens the balance form on the account. */}
+        <Link
+          href={`/cuentas/${account.id}#saldo`}
+          className="liquid flex h-10 items-center gap-2 rounded-xl px-3.5 text-sm font-semibold"
+        >
+          <Icon name="edit" className="size-4 text-brand" />
+          Actualizar saldo
+        </Link>
+        <DebtTags
+          rateType={account.rate_type}
+          rateReference={account.rate_reference}
+          refinanced={account.refinanced}
+        />
+      </div>
 
       {first && (
         <p className="pill pill-idea self-start">
@@ -80,12 +89,6 @@ function DebtModule({
           más cara
         </p>
       )}
-
-      <DebtTags
-        rateType={account.rate_type}
-        rateReference={account.rate_reference}
-        refinanced={account.refinanced}
-      />
 
       {account.kind === "credit_card" &&
         (view.usage !== null ? (
