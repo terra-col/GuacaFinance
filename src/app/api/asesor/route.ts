@@ -79,7 +79,7 @@ export async function POST(request: Request) {
             ? "Ese modelo de Gemini ya no existe; cambia GUACA_GEMINI_MODEL."
             : status === 429
               ? "Llegaste al límite gratis de Gemini por ahora; espera un momento."
-              : "El asesor no respondió. Intenta de nuevo.";
+              : `El asesor no respondió (Gemini ${upstream ? `respondió ${status}` : "no contestó"}). Intenta de nuevo.`;
       return Response.json({ error: message }, { status: 502 });
     }
 
