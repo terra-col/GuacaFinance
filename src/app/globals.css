@@ -938,6 +938,12 @@ a.card:active {
 
 /* Guaca's own date picker (computers): frosted glass like the rest of the floating surfaces. */
 .date-pop {
+  /* Undo the browser's popover defaults (full-screen inset, auto margin, system colours); the
+     component sets left, top and width. */
+  inset: auto;
+  margin: 0;
+  overflow: visible;
+  color: var(--ink);
   background:
     linear-gradient(160deg, var(--liquid-a), var(--liquid-b)),
     color-mix(in srgb, var(--surface) 88%, transparent);

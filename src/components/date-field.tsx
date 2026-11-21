@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { createPortal } from "react-dom";
 import { calendarWeeks } from "@/lib/calendar";
 import { formatDate, shiftMonth, todayInBogota } from "@/lib/finance";
 import { Icon } from "./icons";
@@ -46,24 +47,62 @@ export function DateField({
   };
 
   const [open, setOpen] = useState(false);
-  const [above, setAbove] = useState(false);
+  // The popup goes to the browser's top layer (popover API), above everything and clipped by
+  // nothing: not a card, not a sliding panel, not a modal dialog. It is placed inside the open
+  // <dialog> when the field is in one (outside it, a modal dialog makes everything inert), else
+  // on <body>, and positioned on the screen, on the side with room, never past an edge.
+  const [host, setHost] = useState<HTMLElement | null>(null);
+  const [place, setPlace] = useState<React.CSSProperties>({});
   const today = todayInBogota();
   const [view, setView] = useState((value || today).slice(0, 7));
   const box = useRef<HTMLDivElement>(null);
+  const pop = useRef<HTMLDivElement | null>(null);
+  const showPop = (el: HTMLDivElement | null) => {
+    pop.current = el;
+    if (el && typeof el.showPopover === "function" && !el.matches(":popover-open")) el.showPopover();
+  };
 
   useEffect(() => {
     if (!open) return;
+    setHost(box.current?.closest<HTMLElement>("dialog[open]") ?? document.body);
+    const position = () => {
+      const rect = box.current?.getBoundingClientRect();
+      if (!rect) return;
+      const height = pop.current?.offsetHeight || 360;
+      const width = Math.min(304, window.innerWidth - 16);
+      const left = Math.min(Math.max(8, rect.left), window.innerWidth - width - 8);
+      const below = window.innerHeight - rect.bottom;
+      const above = rect.top;
+      const goBelow = below >= height + 16 || below >= above;
+      const wanted = goBelow ? rect.bottom + 8 : rect.top - height - 8;
+      const top = Math.min(Math.max(8, wanted), window.innerHeight - height - 8);
+      setPlace({ left, width, top });
+    };
+    position();
+    // Once drawn, its real height decides the side.
+    const frame = requestAnimationFrame(position);
     const outside = (e: PointerEvent) => {
-      if (!box.current?.contains(e.target as Node)) setOpen(false);
+      const target = e.target as Node;
+      if (!box.current?.contains(target) && !pop.current?.contains(target)) setOpen(false);
     };
     const escape = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
+      if (e.key !== "Escape") return;
+      // Close only the calendar, not the dialog it may be in.
+      e.preventDefault();
+      e.stopPropagation();
+      setOpen(false);
     };
     document.addEventListener("pointerdown", outside);
-    document.addEventListener("keydown", escape);
+    document.addEventListener("keydown", escape, true);
+    // Follows the field when the page or a scrolling panel moves.
+    window.addEventListener("scroll", position, true);
+    window.addEventListener("resize", position);
     return () => {
+      cancelAnimationFrame(frame);
       document.removeEventListener("pointerdown", outside);
-      document.removeEventListener("keydown", escape);
+      document.removeEventListener("keydown", escape, true);
+      window.removeEventListener("scroll", position, true);
+      window.removeEventListener("resize", position);
     };
   }, [open]);
 
@@ -76,12 +115,7 @@ export function DateField({
   const canNext = !max || shiftMonth(view, 1) <= max.slice(0, 7);
 
   function toggle() {
-    if (!open) {
-      setView((value || (max && today > max ? max : today)).slice(0, 7));
-      // Open upwards when the field sits low on the screen.
-      const rect = box.current?.getBoundingClientRect();
-      setAbove(Boolean(rect && window.innerHeight - rect.bottom < 360 && rect.top > 360));
-    }
+    if (!open) setView((value || (max && today > max ? max : today)).slice(0, 7));
     setOpen(!open);
   }
 
@@ -112,13 +146,16 @@ export function DateField({
         />
       )}
 
-      {open && (
+      {open &&
+        host &&
+        createPortal(
         <div
+          ref={showPop}
+          popover="manual"
           role="dialog"
           aria-label="Elegir fecha"
-          // Inside a <label>, a click on an empty spot would "activate" the field and close this.
-          onClick={(e) => e.preventDefault()}
-          className={`date-pop rise absolute left-0 z-50 w-[19rem] max-w-[calc(100vw-2rem)] rounded-2xl p-3 ${above ? "bottom-full mb-2" : "top-full mt-2"}`}
+          style={place}
+          className="date-pop rise fixed z-[90] m-0 rounded-2xl p-3"
         >
           <div className="mb-2 flex items-center justify-between">
             <button type="button" className="flex size-9 items-center justify-center rounded-xl hover:bg-brand/10 disabled:opacity-30" onClick={() => setView(shiftMonth(view, -1))} disabled={!canPrev} aria-label="Mes anterior">
@@ -176,8 +213,9 @@ export function DateField({
               </button>
             )}
           </div>
-        </div>
-      )}
+        </div>,
+          host,
+        )}
     </div>
   );
 }
