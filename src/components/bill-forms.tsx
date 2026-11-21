@@ -7,46 +7,40 @@ import {
   saveIncome,
   type FormState,
 } from "@/app/actions";
+import type { Income } from "@/lib/budget";
+import type { Bill } from "@/lib/finance";
 import { useCloseModal } from "./modal";
 import { MoneyInput } from "./money-input";
 import { SubmitButton } from "./submit-button";
 
-export function BillForm() {
-  const [state, action] = useActionState<FormState, FormData>(
-    saveBill,
-    {},
-  );
+/** A fixed bill, new or (with `bill`) edited in place. `onDone` runs once it is saved. */
+export function BillForm({ bill, onDone }: { bill?: Bill; onDone?: () => void } = {}) {
+  const editing = Boolean(bill);
+  const [state, action] = useActionState<FormState, FormData>(async (prev: FormState, form: FormData) => {
+    const result = await saveBill(prev, form);
+    if (!result.error) onDone?.();
+    return result;
+  }, {});
   return (
-    <form action={action} className="card flex flex-col gap-4">
-      <h2 className="display text-2xl">Nuevo pago fijo</h2>
+    <form action={action} className={editing ? "flex flex-col gap-4" : "card flex flex-col gap-4"}>
+      {!editing && <h2 className="display text-2xl">Nuevo pago fijo</h2>}
+      {bill && <input type="hidden" name="id" value={bill.id} />}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <label className="field">
           Nombre
-          <input
-            className="input"
-            name="name"
-            placeholder="Internet, arriendo, Netflix…"
-            required
-          />
+          <input className="input" name="name" defaultValue={bill?.name} placeholder="Internet, arriendo, Netflix…" required />
         </label>
         <label className="field">
           Valor (vacío si cambia cada mes)
-          <MoneyInput name="amount" placeholder="$ 90.000" />
+          <MoneyInput name="amount" defaultValue={bill?.amount} placeholder="$ 90.000" />
         </label>
         <label className="field">
           Día de pago
-          <input
-            className="input"
-            type="number"
-            name="due_day"
-            min={1}
-            max={31}
-            required
-          />
+          <input className="input" type="number" name="due_day" min={1} max={31} defaultValue={bill?.due_day} required />
         </label>
         <label className="field">
           Categoría
-          <input className="input" name="category" defaultValue="Hogar" />
+          <input className="input" name="category" defaultValue={bill ? (bill.category ?? "") : "Hogar"} list="categorias" />
         </label>
       </div>
       {state.error && (
@@ -54,47 +48,51 @@ export function BillForm() {
           {state.error}
         </p>
       )}
-      {state.message && (
+      {state.message && !editing && (
         <p role="status" className="text-sm text-ink-2">
           {state.message}
         </p>
       )}
-      <SubmitButton className="btn self-start">{"Guardar"}</SubmitButton>
+      <div className="flex flex-wrap gap-2">
+        {editing && (
+          <button type="button" className="btn-quiet" onClick={onDone}>
+            Cancelar
+          </button>
+        )}
+        <SubmitButton className="btn">{editing ? "Guardar cambios" : "Guardar"}</SubmitButton>
+      </div>
     </form>
   );
 }
 
-const MONTHS = [
-  "Ene",
-  "Feb",
-  "Mar",
-  "Abr",
-  "May",
-  "Jun",
-  "Jul",
-  "Ago",
-  "Sep",
-  "Oct",
-  "Nov",
-  "Dic",
-];
+const MONTHS = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
 
-/** A salary, a prima, a rent received: an income expected on a day, every month or only some. */
+/**
+ * A salary, a prima, a rent received: an income expected on a day, every month, only some months
+ * or once. New, or (with `income`) edited in place; `onDone` runs once it is saved.
+ */
 export function IncomeForm({
   accounts,
   currentMonth,
+  income,
+  onDone,
 }: {
   accounts: { id: string; name: string }[];
   currentMonth: string;
+  income?: Income;
+  onDone?: () => void;
 }) {
-  const [state, action] = useActionState<FormState, FormData>(
-    saveIncome,
-    {},
-  );
-  const [repeat, setRepeat] = useState<"monthly" | "some" | "once">("monthly");
+  const editing = Boolean(income);
+  const [state, action] = useActionState<FormState, FormData>(async (prev: FormState, form: FormData) => {
+    const result = await saveIncome(prev, form);
+    if (!result.error) onDone?.();
+    return result;
+  }, {});
+  const [repeat, setRepeat] = useState<"monthly" | "some" | "once">(income?.once_month ? "once" : income?.months ? "some" : "monthly");
   return (
-    <form action={action} className="card flex flex-col gap-4">
-      <h2 className="display text-2xl">Nuevo ingreso</h2>
+    <form action={action} className={editing ? "flex flex-col gap-4" : "card flex flex-col gap-4"}>
+      {!editing && <h2 className="display text-2xl">Nuevo ingreso</h2>}
+      {income && <input type="hidden" name="id" value={income.id} />}
       <fieldset className="flex flex-wrap gap-2">
         <legend className="sr-only">Cada cuánto llega</legend>
         {(
@@ -105,14 +103,7 @@ export function IncomeForm({
           ] as const
         ).map(([value, label]) => (
           <label key={value} className="month-chip">
-            <input
-              type="radio"
-              name="repeat"
-              value={value}
-              checked={repeat === value}
-              onChange={() => setRepeat(value)}
-              className="sr-only"
-            />
+            <input type="radio" name="repeat" value={value} checked={repeat === value} onChange={() => setRepeat(value)} className="sr-only" />
             {label}
           </label>
         ))}
@@ -120,37 +111,19 @@ export function IncomeForm({
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <label className="field">
           Nombre
-          <input
-            className="input"
-            name="name"
-            placeholder={
-              repeat === "once" ? "Horas extra, bono…" : "Salario, prima…"
-            }
-            required
-          />
+          <input className="input" name="name" defaultValue={income?.name} placeholder={repeat === "once" ? "Horas extra, bono…" : "Salario, prima…"} required />
         </label>
         <label className="field">
           Valor (vacío si cambia)
-          <MoneyInput name="amount" placeholder="$ 8.000.000" />
+          <MoneyInput name="amount" defaultValue={income?.amount} placeholder="$ 8.000.000" />
         </label>
         <label className="field">
           Día en que llega
-          <input
-            className="input"
-            type="number"
-            name="day"
-            min={1}
-            max={31}
-            required
-          />
+          <input className="input" type="number" name="day" min={1} max={31} defaultValue={income?.day} required />
         </label>
         <label className="field">
           Llega a
-          <select
-            className="input"
-            name="account_id"
-            defaultValue={accounts[0]?.id ?? ""}
-          >
+          <select className="input" name="account_id" defaultValue={income ? (income.account_id ?? "") : (accounts[0]?.id ?? "")}>
             <option value="">Preguntar cada vez</option>
             {accounts.map((a) => (
               <option key={a.id} value={a.id}>
@@ -163,30 +136,16 @@ export function IncomeForm({
       {repeat === "once" && (
         <label className="field sm:max-w-60">
           Mes en que llega
-          <input
-            className="input"
-            type="month"
-            name="once_month"
-            min={currentMonth}
-            defaultValue={currentMonth}
-            required
-          />
+          <input className="input" type="month" name="once_month" min={currentMonth} defaultValue={income?.once_month ?? currentMonth} required />
         </label>
       )}
       {repeat === "some" && (
         <fieldset>
-          <legend className="text-sm font-medium text-ink-2">
-            Meses en que llega
-          </legend>
+          <legend className="text-sm font-medium text-ink-2">Meses en que llega</legend>
           <div className="mt-2 flex flex-wrap gap-1.5">
             {MONTHS.map((m, i) => (
               <label key={m} className="month-chip">
-                <input
-                  type="checkbox"
-                  name="months"
-                  value={i + 1}
-                  className="sr-only"
-                />
+                <input type="checkbox" name="months" value={i + 1} defaultChecked={income?.months?.includes(i + 1)} className="sr-only" />
                 {m}
               </label>
             ))}
@@ -198,12 +157,19 @@ export function IncomeForm({
           {state.error}
         </p>
       )}
-      {state.message && (
+      {state.message && !editing && (
         <p role="status" className="text-sm text-ink-2">
           {state.message}
         </p>
       )}
-      <SubmitButton className="btn self-start">{"Guardar"}</SubmitButton>
+      <div className="flex flex-wrap gap-2">
+        {editing && (
+          <button type="button" className="btn-quiet" onClick={onDone}>
+            Cancelar
+          </button>
+        )}
+        <SubmitButton className="btn">{editing ? "Guardar cambios" : "Guardar"}</SubmitButton>
+      </div>
     </form>
   );
 }

@@ -1,18 +1,16 @@
 import Link from "next/link";
-import { deleteBill, deleteIncome } from "@/app/actions";
 import { BillForm, IncomeForm } from "@/components/bill-forms";
 import { ChecklistRow } from "@/components/checklist-row";
 import { MonthPlanCard } from "@/components/month-plan";
-import { incomeChecklist, incomeRow, monthPlan } from "@/lib/budget";
+import { incomeChecklist, incomeRow, monthPlan, nextIncomeDate } from "@/lib/budget";
 import { loadData } from "@/lib/data";
-import { byDue, favoriteFirst, formatCOP, monthName, monthlyChecklist, shiftMonth } from "@/lib/finance";
+import { byDue, favoriteFirst, formatCOP, monthName, monthlyChecklist, nextDueDate, shiftMonth } from "@/lib/finance";
+import { ScheduledList, type ScheduledRow } from "@/components/scheduled-list";
 import { goalChecklist } from "@/lib/goals";
-import { SubmitButton } from "@/components/submit-button";
 import { PaymentsCalendar } from "@/components/payments-calendar";
 import { SegmentedNav } from "@/components/segmented-nav";
 import { calendarEntries, calendarTotals, calendarWeeks } from "@/lib/calendar";
 
-const MONTH_SHORT = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
 
 function Chevron({ dir }: { dir: "left" | "right" }) {
   return (
@@ -129,6 +127,11 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
 
   // One-time extras drop off the list once their month is over.
   const visibleIncomes = incomes.filter((i) => !i.once_month || i.once_month >= current);
+  // Incomes and fixed bills with their next date (even in a coming month), soonest first.
+  const scheduled: ScheduledRow[] = [
+    ...visibleIncomes.map((income) => ({ kind: "income" as const, income, next: nextIncomeDate(income, today) })),
+    ...bills.map((bill) => ({ kind: "bill" as const, bill, next: nextDueDate(bill.due_day, today) })),
+  ].sort((a, b) => (a.next ?? "9999").localeCompare(b.next ?? "9999"));
   const counted = items.filter((i) => !i.skipped);
   const done = counted.filter((i) => i.paid).length;
   const skippedCount = items.length - counted.length;
@@ -233,36 +236,16 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
             )}
           </div>
 
-          {(bills.length > 0 || visibleIncomes.length > 0) && (
-            <section className="card">
-              <h2 className="display text-2xl">Programados</h2>
-              <p className="text-sm text-ink-3">Se repiten cada mes. Las tarjetas y préstamos se administran en Créditos.</p>
-              <ul className="mt-2 divide-y divide-line">
-                {visibleIncomes.map((i) => (
-                  <li key={i.id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
-                    <span>
-                      <span className="pill pill-idea mr-1.5">{i.once_month ? "Extra" : "Ingreso"}</span>
-                      <span className="font-medium">{i.name}</span>, {i.once_month ? `${i.day} de ${monthName(i.once_month)}` : `día ${i.day}`}
-                      {i.months ? ` (${i.months.map((m) => MONTH_SHORT[m - 1]).join(", ")})` : ""}, {i.amount ? formatCOP(i.amount) : "valor variable"}
-                    </span>
-                    <form action={deleteIncome}>
-                      <input type="hidden" name="id" value={i.id} />
-                      <SubmitButton className="text-ink-3 hover:text-ink">Eliminar</SubmitButton>
-                    </form>
-                  </li>
-                ))}
-                {bills.map((bill) => (
-                  <li key={bill.id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
-                    <span>
-                      <span className="font-medium">{bill.name}</span>, día {bill.due_day}, {bill.amount ? formatCOP(bill.amount) : "valor variable"}
-                    </span>
-                    <form action={deleteBill}>
-                      <input type="hidden" name="id" value={bill.id} />
-                      <SubmitButton className="text-ink-3 hover:text-ink">Eliminar</SubmitButton>
-                    </form>
-                  </li>
-                ))}
-              </ul>
+          {scheduled.length > 0 && (
+            <section className="card" aria-labelledby="scheduled-title">
+              <h2 id="scheduled-title" className="display text-2xl">
+                Programados
+              </h2>
+              <p className="text-sm text-ink-3">
+                Lo que entra y lo que pagas de forma fija, con su próxima fecha aunque sea en otro mes (la prima, un extra). Toca Editar para cambiarlo. Las
+                tarjetas y préstamos se administran en Créditos.
+              </p>
+              <ScheduledList rows={scheduled} accounts={savings} currentMonth={current} />
             </section>
           )}
         </>

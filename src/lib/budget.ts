@@ -1,6 +1,6 @@
 // Budgets per category, scheduled incomes and the month's free money. Pure, tested under `node --test`.
 
-import { daysInMonth, dueDates, monthEnd, type ChecklistItem, type Skip, type Tx } from "./finance.ts";
+import { daysInMonth, dueDates, monthEnd, shiftMonth, type ChecklistItem, type Skip, type Tx } from "./finance.ts";
 
 export interface Budget {
   id: string;
@@ -60,6 +60,21 @@ export function budgetViews(budgets: Budget[], txs: Tx[], month: string, today: 
 
 export const arrivesIn = (income: Pick<Income, "months" | "once_month">, month: string) =>
   income.once_month ? income.once_month === month : !income.months || income.months.includes(Number(month.slice(5, 7)));
+
+/**
+ * The next date an income arrives, from today on (today counts): a monthly one this month or the
+ * next, a prima in its next month (June, December), a one-time extra on its month. null when a
+ * one-time extra is already behind.
+ */
+export function nextIncomeDate(income: Pick<Income, "months" | "once_month" | "day">, today: string): string | null {
+  for (let i = 0; i < 24; i++) {
+    const month = shiftMonth(today.slice(0, 7), i);
+    if (!arrivesIn(income, month)) continue;
+    const due = dueDates(income.day, `${month}-01`, 1)[0];
+    if (due >= today) return due;
+  }
+  return null;
+}
 
 export interface IncomeItem {
   type: "income";

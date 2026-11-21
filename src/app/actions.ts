@@ -260,10 +260,12 @@ export async function saveBill(_prev: FormState, form: FormData): Promise<FormSt
   const amount = amountRaw ? parsePesos(amountRaw) : null;
   if (amountRaw && !amount) return { error: "El valor no es válido." };
 
-  const { error } = await supabase.from("bills").insert({ name, due_day, amount, category: text(form, "category") || null });
+  const row = { name, due_day, amount, category: text(form, "category") || null };
+  const id = text(form, "id");
+  const { error } = id ? await supabase.from("bills").update(row).eq("id", id) : await supabase.from("bills").insert(row);
   if (error) return { error: `No se pudo guardar: ${error.message}` };
   revalidatePath("/", "layout");
-  return { message: `${name} quedó registrado.` };
+  return { message: id ? `${name} quedó actualizado.` : `${name} quedó registrado.` };
 }
 
 /**
@@ -821,8 +823,9 @@ export async function saveIncome(_prev: FormState, form: FormData): Promise<Form
     amount,
     account_id,
     months: months.length === 0 || months.length === 12 ? null : [...new Set(months)].sort((a, b) => a - b),
-    // Only sent for a one-time income, so recurring ones keep working before migration 0008 runs.
-    ...(once_month ? { once_month } : {}),
+    // Only sent for a one-time income (so recurring ones keep working before migration 0008 runs),
+    // or cleared when an edit turns a one-time extra into a recurring income.
+    ...(once_month ? { once_month } : text(form, "id") ? { once_month: null } : {}),
   };
   const id = text(form, "id");
   const { error } = id ? await supabase.from("incomes").update(row).eq("id", id) : await supabase.from("incomes").insert(row);

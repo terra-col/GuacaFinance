@@ -128,3 +128,14 @@ test("incomes: a one-time extra shows only in its month and adds to that month's
   assert.equal(monthPlan(dec, [], []).income, 7_500_000 + 450_000);
   assert.equal(incomeChecklist([extra], [], "2027-12", "2027-12-01").length, 0, "it does not come back next year");
 });
+
+test("incomes: the next date, also when it falls in a coming month", async () => {
+  const { nextIncomeDate } = await import("./budget.ts");
+  assert.equal(nextIncomeDate({ day: 30, months: null, once_month: null }, "2026-11-21"), "2026-11-30");
+  assert.equal(nextIncomeDate({ day: 15, months: null, once_month: null }, "2026-11-21"), "2026-12-15", "this month's already passed");
+  assert.equal(nextIncomeDate({ day: 20, months: [6, 12], once_month: null }, "2026-11-21"), "2026-12-20", "the prima in December");
+  assert.equal(nextIncomeDate({ day: 20, months: [6, 12], once_month: null }, "2026-12-21"), "2027-06-20");
+  assert.equal(nextIncomeDate({ day: 30, months: null, once_month: "2026-12" }, "2026-11-21"), "2026-12-30", "a one-time extra next month");
+  assert.equal(nextIncomeDate({ day: 5, months: null, once_month: "2026-11" }, "2026-11-21"), null, "a one-time extra already behind");
+  assert.equal(nextIncomeDate({ day: 31, months: null, once_month: null }, "2027-02-10"), "2027-02-28");
+});
