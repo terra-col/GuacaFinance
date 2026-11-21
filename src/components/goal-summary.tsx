@@ -8,7 +8,14 @@ export const GOAL_STATUS: Record<GoalStatus, { label: string; pill: string }> = 
   on_track: { label: "Vas al día", pill: "pill-idea" },
   behind: { label: "Vas atrasado", pill: "pill-warn" },
   overdue: { label: "Se pasó la fecha", pill: "pill-urgent" },
+  scheduled: { label: "Sin plan", pill: "bg-line/60" },
 };
+
+/** The status pill's text: a goal with no pace says what it is instead of how it is going. */
+export function goalStatusLabel(view: GoalView): string {
+  if (view.status === "scheduled") return view.goal.plan_once ? "Pago único" : "Sin plan";
+  return GOAL_STATUS[view.status].label;
+}
 
 export function daysText(days: number) {
   if (days < 0) return `venció hace ${-days} días`;
@@ -34,7 +41,7 @@ export function GoalSummary({ view, large = false }: { view: GoalView; large?: b
           <p className="text-sm text-ink-3">
             {formatDate(goal.target_date)} · {daysText(view.daysLeft)}
           </p>
-          <span className={`pill mt-2 ${GOAL_STATUS[view.status].pill}`}>{GOAL_STATUS[view.status].label}</span>
+          <span className={`pill mt-2 ${GOAL_STATUS[view.status].pill}`}>{goalStatusLabel(view)}</span>
         </div>
       </div>
       <div>

@@ -35,11 +35,15 @@ function GoalCard({ view, deposits, today, index }: { view: GoalView; deposits: 
                 <span className="font-medium text-ink">Te faltarían {formatCOP(outlook.shortfall)}.</span>
               )}
             </p>
+          ) : save && goal.plan_once ? (
+            <p>
+              <span className="font-semibold">Pago único</span> el {formatDate(goal.target_date).replace(/ d{4}$/, "")} por {formatCOP(view.remaining)}. Te aparece en Pagos ese día.
+            </p>
           ) : save ? (
             <p>
-              Para llegar a tiempo, aparta <span className="num font-semibold">{formatCOP(view.perMonth)}</span> al mes.{" "}
+              Sin plan: abonas cuando quieras.{" "}
               <Link href={`/metas/${goal.id}#editar`} className="font-semibold text-brand">
-                Programar el ahorro
+                Programar un plan
               </Link>
             </p>
           ) : (
@@ -52,7 +56,7 @@ function GoalCard({ view, deposits, today, index }: { view: GoalView; deposits: 
       )}
 
       <div className="flex flex-wrap items-center justify-between gap-3">
-        {save && open ? <GoalDeposit goalId={goal.id} suggested={goal.plan_amount ?? view.perMonth} /> : <span />}
+        {save && open ? <GoalDeposit goalId={goal.id} suggested={goal.plan_amount ?? (goal.plan_once ? view.remaining : view.perMonth)} /> : <span />}
         <Link href={`/metas/${goal.id}`} className="text-sm font-medium text-brand">
           Ver detalle ›
         </Link>
@@ -71,9 +75,10 @@ export default async function GoalsPage() {
   const month = today.slice(0, 7);
   const incomeOptions = incomes.filter((i) => !i.once_month || i.once_month >= month).map(({ id, name, day }) => ({ id, name, day }));
   const active = views.filter((v) => v.status !== "done" && v.daysLeft >= 0);
-  // What the goals take each month: the plan where there is one, else what it would take to arrive on time.
-  const monthly = active.reduce((sum, v) => sum + (v.goal.plan_amount ?? v.perMonth), 0);
-  const planned = active.filter((v) => v.goal.plan_amount).length;
+  // What the goals take each month: savings with a monthly plan, and what clearing each debt on time takes.
+  // One-time goals and goals with no plan have no monthly amount.
+  const paced = active.filter((v) => v.goal.kind === "payoff" || v.goal.plan_amount);
+  const monthly = paced.reduce((sum, v) => sum + (v.goal.plan_amount ?? v.perMonth), 0);
 
   return (
     <>
@@ -104,8 +109,7 @@ export default async function GoalsPage() {
           {monthly > 0 && (
             <section className="card flex flex-wrap items-center justify-between gap-3">
               <p className="text-ink-2">
-                Tus {active.length} {active.length === 1 ? "meta toma" : "metas toman"}
-                {planned > 0 && planned < active.length ? " (con plan o lo sugerido)" : ""}
+                {paced.length === 1 ? "Tu meta con plan mensual toma" : `Tus ${paced.length} metas con plan mensual toman`}
               </p>
               <p className="display text-3xl">{formatCOP(monthly)} al mes</p>
             </section>

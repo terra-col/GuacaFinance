@@ -39,9 +39,19 @@ export default async function GoalPage({ params }: { params: Promise<{ id: strin
       {save && open && (
         <section className="card flex flex-col gap-3" aria-labelledby="plan-title">
           <h2 id="plan-title" className="display text-2xl">
-            Tu plan de ahorro
+            {goal.plan_once ? "Cómo lo vas a pagar" : "Tu plan de ahorro"}
           </h2>
-          {outlook ? (
+          {goal.plan_once ? (
+            <>
+              <p className="text-ink-2">
+                <span className="font-semibold text-ink">Pago único</span> el {formatDate(goal.target_date)} por {formatCOP(view.remaining)}. Te aparece en Pagos ese día; al
+                marcarlo, la meta queda lograda. No se mide por ritmo, así que nunca dirá que vas atrasado.
+              </p>
+              <Link href={`/pagos?vista=calendario&mes=${goal.target_date.slice(0, 7)}`} className="text-sm font-medium text-brand">
+                Ver en el calendario de pagos ›
+              </Link>
+            </>
+          ) : outlook ? (
             <>
               <p className="text-ink-2">
                 Abonas <span className="num font-semibold text-ink">{formatCOP(goal.plan_amount!)}</span> el día {goal.plan_day} de cada mes
@@ -68,12 +78,12 @@ export default async function GoalPage({ params }: { params: Promise<{ id: strin
             </>
           ) : (
             <>
-              <p className="text-ink-2">Aún no programas este ahorro. Si eliges cuánto y qué día, te aparece cada mes en Pagos y en el calendario.</p>
+              <p className="text-ink-2">Sin plan: abonas cuando quieras y no se mide por ritmo. Si prefieres, programa abonos cada mes o un solo pago en su fecha.</p>
               <p className="text-sm text-ink-3">
-                Para llegar a tiempo: {formatCOP(view.perMonth)} al mes, {formatCOP(view.perQuincena)} por quincena o {formatCOP(view.perWeek)} por semana.
+                Como referencia, para llegar a tiempo: {formatCOP(view.perMonth)} al mes, {formatCOP(view.perQuincena)} por quincena o {formatCOP(view.perWeek)} por semana.
               </p>
-              <Link href="#editar" className="btn self-start">
-                Programar el ahorro
+              <Link href="#editar" className="btn-quiet self-start">
+                Programar un plan
               </Link>
             </>
           )}
@@ -106,7 +116,7 @@ export default async function GoalPage({ params }: { params: Promise<{ id: strin
             <h2 id="deposits-title" className="display text-2xl">
               Abonos
             </h2>
-            <GoalDeposit goalId={goal.id} suggested={goal.plan_amount ?? view.perMonth} />
+            <GoalDeposit goalId={goal.id} suggested={goal.plan_amount ?? (goal.plan_once ? view.remaining : view.perMonth)} />
           </div>
           {own.length === 0 ? (
             <p className="text-sm text-ink-3">Todavía no hay abonos. Puedes abonar aquí o marcar el ahorro del mes en Pagos.</p>

@@ -148,9 +148,11 @@ export function advisorContext({ accounts, txs, bills, goals, deposits, incomes 
       const o = planOutlook(v, deposits, today);
       const plan = o
         ? `; plan: abona ${formatCOP(g.plan_amount!)} el día ${g.plan_day} de cada mes (${o.instalments} abonos más, ${o.enough ? "llega a tiempo" : `le faltarían ${formatCOP(o.shortfall)}`})`
-        : g.kind === "save"
-          ? "; sin plan de ahorro programado"
-          : "";
+        : g.plan_once
+          ? "; se junta o paga en un solo pago en su fecha (no se mide por ritmo)"
+          : g.kind === "save"
+            ? "; sin plan (abona cuando quiere, no se mide por ritmo)"
+            : "";
       lines.push(
         `- ${g.name} (${g.kind === "save" ? "ahorro" : "pagar deuda"}): ${formatCOP(v.achieved)} de ${formatCOP(v.target)} para el ${g.target_date}; necesita ${formatCOP(v.perMonth)}/mes; estado: ${v.status}${plan}`,
       );

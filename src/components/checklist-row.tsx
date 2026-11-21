@@ -3,6 +3,7 @@
 import { useEffect, useOptimistic, useState, useTransition } from "react";
 import { markPaid, skipItem, unmarkPaid, unskipItem } from "@/app/actions";
 import { daysBetween, formatCOP, formatDate, relativeDay, type ChecklistItem } from "@/lib/finance";
+import { DateField } from "./date-field";
 import { MoneyInput } from "./money-input";
 
 interface Props {
@@ -262,7 +263,7 @@ export function ChecklistRow({ item, month, today, editable, accounts }: Props) 
               </label>
               <label className="field">
                 Fecha
-                <input className="input" type="date" name="occurred_on" defaultValue={today} min={`${month}-01`} max={today} required />
+                <DateField name="occurred_on" defaultValue={today} min={`${month}-01`} max={today} required />
               </label>
               <div className="flex gap-2 sm:col-span-4 sm:justify-end">
                 <button type="button" className="btn-quiet flex-1 sm:flex-none" onClick={() => setPanel("skip")}>

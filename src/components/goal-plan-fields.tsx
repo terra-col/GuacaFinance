@@ -37,9 +37,10 @@ export function GoalPlanFields({
   /** First month that still counts: next month when this month's saving is already in. */
   fromMonth?: string;
   incomes: IncomeOption[];
-  initial?: { amount: number | null; day: number | null; incomeId: string | null };
+  initial?: { amount: number | null; day: number | null; incomeId: string | null; once?: boolean };
 }) {
-  const [on, setOn] = useState(initial ? initial.amount !== null : true);
+  const [mode, setMode] = useState<"monthly" | "once" | "none">(initial ? (initial.once ? "once" : initial.amount !== null ? "monthly" : "none") : "monthly");
+  const on = mode === "monthly";
   const [amount, setAmount] = useState(initial?.amount ?? 0);
   const [amountKey, setAmountKey] = useState(0);
   const [day, setDay] = useState(initial?.day ?? incomes[0]?.day ?? 30);
@@ -58,14 +59,28 @@ export function GoalPlanFields({
 
   return (
     <fieldset className="flex flex-col gap-4 rounded-2xl border border-line p-4">
-      <legend className="px-1 text-sm font-semibold text-ink">¿Cómo vas a ahorrar?</legend>
-      <label className="check-row">
-        <input type="checkbox" name="plan" checked={on} onChange={(e) => setOn(e.target.checked)} />
-        <span>
-          <span className="font-medium text-ink">Programar un abono cada mes</span>
-          <span className="block text-xs text-ink-3">Te aparece en Pagos y en el calendario como un compromiso más; al marcarlo se suma a la meta.</span>
-        </span>
-      </label>
+      <legend className="px-1 text-sm font-semibold text-ink">¿Cómo lo vas a juntar?</legend>
+      <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Cómo lo vas a juntar">
+        {(
+          [
+            ["monthly", "Abonos cada mes"],
+            ["once", "En un solo pago"],
+            ["none", "Sin plan"],
+          ] as const
+        ).map(([value, label]) => (
+          <label key={value} className="month-chip">
+            <input type="radio" name="plan_mode" value={value} checked={mode === value} onChange={() => setMode(value)} className="sr-only" />
+            {label}
+          </label>
+        ))}
+      </div>
+      <p className="text-xs text-ink-3">
+        {mode === "monthly"
+          ? "Cada mes te aparece en Pagos y en el calendario como un compromiso más; al marcarlo se suma a la meta."
+          : mode === "once"
+            ? `Te aparece una sola vez en Pagos${/^d{4}-d{2}-d{2}$/.test(targetDate) ? `, el ${formatDate(targetDate)},` : " en su fecha"} por lo que falte. Sin abonos mensuales ni avisos de atraso.`
+            : "Queda guardada con su fecha y abonas cuando quieras. Sin recordatorios ni avisos de atraso."}
+      </p>
 
       {on && (
         <>

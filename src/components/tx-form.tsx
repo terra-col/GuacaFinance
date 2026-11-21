@@ -2,6 +2,7 @@
 
 import { useActionState, useState } from "react";
 import { saveTx, type FormState } from "@/app/actions";
+import { DateField } from "./date-field";
 import { MoneyInput } from "./money-input";
 import { SubmitButton } from "./submit-button";
 import {
@@ -101,14 +102,7 @@ export function TxForm({
             </label>
             <label className="field">
               Fecha
-              <input
-                className="input"
-                type="date"
-                name="occurred_on"
-                defaultValue={tx?.occurred_on ?? today}
-                max={today}
-                required
-              />
+              <DateField name="occurred_on" defaultValue={tx?.occurred_on ?? today} max={today} required />
             </label>
             {/* key: the option list changes with the kind, so the select starts fresh */}
             <label className="field" key={kind}>

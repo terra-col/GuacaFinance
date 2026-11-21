@@ -16,14 +16,15 @@ test("save goal: what to set aside per month, fortnight and week, rounded up to 
   assert.equal(v.perMonth, 500_000, "76 days = 3 months");
   assert.equal(v.perQuincena, 300_000, "5 fortnights");
   assert.equal(v.perWeek, 137_000, "11 weeks, rounded up");
-  assert.equal(v.status, "on_track", "16 of 92 days elapsed (17%) and 25% saved: inside the 10% band");
+  assert.equal(v.status, "scheduled", "no plan: no pace to be on or off");
   const more = goalView(goal({ kind: "save", target_amount: 2_000_000, target_date: "2027-02-01" }), [{ id: "d", goal_id: "g", amount: 800_000, occurred_on: "2026-11-05" }], [], [], "2026-11-17");
-  assert.equal(more.status, "ahead");
+  assert.equal(more.status, "scheduled");
 });
 
-test("save goal status: behind, done and overdue", () => {
+test("save goal status: no plan means no pace (never behind); done and overdue still count", () => {
   const g = goal({ kind: "save", target_amount: 1_000_000, target_date: "2026-12-01" });
-  assert.equal(goalView(g, [], [], [], "2026-11-20").status, "behind");
+  assert.equal(goalView(g, [], [], [], "2026-11-20").status, "scheduled", "nothing to keep up with");
+  assert.equal(goalView({ ...g, plan_once: true }, [], [], [], "2026-11-20").status, "scheduled");
   assert.equal(goalView(g, [{ id: "d", goal_id: "g", amount: 1_000_000, occurred_on: "2026-11-02" }], [], [], "2026-11-20").status, "done");
   assert.equal(goalView(g, [], [], [], "2026-12-05").status, "overdue");
 });
@@ -140,4 +141,22 @@ test("goal plan: a plan day already past when the goal is created starts next mo
   assert.deepEqual(planDates(15, "2026-11", "2026-11-21", "2027-04-30"), ["2026-12-15", "2027-01-15", "2027-02-15", "2027-03-15", "2027-04-15"]);
   assert.equal(suggestedPlan(600_000, 15, "2026-11-21", "2027-04-30"), 120_000, "5 instalments");
   assert.equal(suggestedPlan(1_000_000, 30, "2026-11-21", "2027-02-28"), 250_000, "nov 30, dec 30, jan 30 and feb 28");
+});
+
+test("save goal status: with a monthly plan, behind or ahead is measured against the plan", () => {
+  const g = goal({ kind: "save", target_amount: 1_200_000, target_date: "2027-06-30", created_on: "2026-09-01", plan_amount: 100_000, plan_day: 30 });
+  // Sep, Oct and Nov instalments are due by Nov 30.
+  assert.equal(goalView(g, [], [], [], "2026-11-30").expected, 300_000);
+  assert.equal(goalView(g, [{ id: "d", goal_id: "g", amount: 200_000, occurred_on: "2026-11-01" }], [], [], "2026-11-30").status, "behind");
+  assert.equal(goalView(g, [{ id: "d", goal_id: "g", amount: 300_000, occurred_on: "2026-11-01" }], [], [], "2026-11-30").status, "on_track");
+  assert.equal(goalView(g, [{ id: "d", goal_id: "g", amount: 400_000, occurred_on: "2026-11-01" }], [], [], "2026-11-30").status, "ahead");
+});
+
+test("one-time goal: shows up once in Pagos, on its date, for what is missing", async () => {
+  const { goalChecklist, planOutlook } = await import("./goals.ts");
+  const juanfe = goal({ kind: "save", name: "Deuda JuanFe", target_amount: 800_000, target_date: "2026-12-31", created_on: "2026-11-21", plan_once: true });
+  assert.equal(goalChecklist([juanfe], [], "2026-11", "2026-11-21").length, 0, "not before its month");
+  const [row] = goalChecklist([juanfe], [{ id: "d", goal_id: "g", amount: 300_000, occurred_on: "2026-11-25" }], "2026-12", "2026-12-01");
+  assert.deepEqual([row.name, row.due, row.expected], ["Deuda JuanFe", "2026-12-31", 500_000]);
+  assert.equal(planOutlook(goalView(juanfe, [], [], [], "2026-11-21"), [], "2026-11-21"), null, "no monthly plan to project");
 });

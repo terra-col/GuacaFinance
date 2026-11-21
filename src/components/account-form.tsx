@@ -3,6 +3,7 @@
 import { useActionState, useEffect, useState } from "react";
 import { saveAccount, type FormState } from "@/app/actions";
 import { isDebt, type AccountKind } from "@/lib/finance";
+import { DateField } from "./date-field";
 import { Icon, KIND_ICON } from "./icons";
 import { CreditDetailFields } from "./credit-detail-fields";
 import { MoneyInput } from "./money-input";
@@ -76,7 +77,7 @@ export function AccountForm({ today, onSaved, initialKind = "savings" }: { today
         </label>
         <label className="field">
           Fecha de ese saldo
-          <input className="input" type="date" name="opening_date" defaultValue={today} max={today} required />
+          <DateField name="opening_date" defaultValue={today} max={today} required />
         </label>
         {kind === "credit_card" && (
           <>

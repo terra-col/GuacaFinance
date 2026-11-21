@@ -18,6 +18,8 @@ export interface Goal {
   plan_amount?: number | null;
   plan_day?: number | null;
   plan_income_id?: string | null;
+  /** Saved or paid in one go on its date (no monthly plan): shows up once in Pagos, never "behind". */
+  plan_once?: boolean;
 }
 
 export interface GoalDeposit {
@@ -27,7 +29,8 @@ export interface GoalDeposit {
   occurred_on: string;
 }
 
-export type GoalStatus = "done" | "ahead" | "on_track" | "behind" | "overdue";
+/** «scheduled»: a goal with no pace to keep (one payment on its date, or no plan): only its date matters. */
+export type GoalStatus = "done" | "ahead" | "on_track" | "behind" | "overdue" | "scheduled";
 
 export interface GoalView {
   goal: Goal;
@@ -42,7 +45,7 @@ export interface GoalView {
   perMonth: number;
   perQuincena: number;
   perWeek: number;
-  /** Where a steady pace from the start date would have you today. */
+  /** Where you should be today: by the plan's instalments due so far, or (debts) a steady pace. 0 when there is no pace. */
   expected: number;
   status: GoalStatus;
 }
@@ -84,9 +87,23 @@ export function goalView(goal: Goal, deposits: GoalDeposit[], accounts: Account[
     perMonth = remaining / months;
   }
 
-  const span = Math.max(1, daysBetween(goal.created_on, goal.target_date));
-  const elapsed = Math.min(span, Math.max(0, daysBetween(goal.created_on, today)));
-  const expected = (target * elapsed) / span;
+  // The pace to compare with. A debt: steady from the day the goal was set. Savings with a monthly
+  // plan: the plan's instalments due so far. A one-time goal or one with no plan has no pace, so
+  // it is never "behind": only its date counts.
+  let expected = 0;
+  let paced = true;
+  let ahead = target * 0.1;
+  if (goal.kind === "payoff") {
+    const span = Math.max(1, daysBetween(goal.created_on, goal.target_date));
+    const elapsed = Math.min(span, Math.max(0, daysBetween(goal.created_on, today)));
+    expected = (target * elapsed) / span;
+  } else if (goal.plan_amount && goal.plan_day) {
+    const due = planDates(goal.plan_day, goal.created_on.slice(0, 7), goal.created_on, goal.target_date).filter((d) => d <= today).length;
+    expected = Math.min(target, due * goal.plan_amount);
+    ahead = goal.plan_amount;
+  } else {
+    paced = false;
+  }
   const slack = target * 0.03;
 
   const status: GoalStatus =
@@ -94,11 +111,13 @@ export function goalView(goal: Goal, deposits: GoalDeposit[], accounts: Account[
       ? "done"
       : daysLeft < 0
         ? "overdue"
-        : achieved < expected - slack
-          ? "behind"
-          : achieved > expected + target * 0.1
-            ? "ahead"
-            : "on_track";
+        : !paced
+          ? "scheduled"
+          : achieved < expected - slack
+            ? "behind"
+            : achieved >= expected + ahead
+              ? "ahead"
+              : "on_track";
 
   return {
     goal,
@@ -150,23 +169,27 @@ export function goalChecklist(goals: Goal[], deposits: GoalDeposit[], month: str
   const last = monthEnd(month);
   const items: ChecklistItem[] = [];
   for (const goal of goals) {
-    if (goal.kind !== "save" || !goal.plan_amount || !goal.plan_day || !goal.target_amount) continue;
+    if (goal.kind !== "save" || !goal.target_amount) continue;
+    const monthly = Boolean(goal.plan_amount && goal.plan_day);
+    if (!monthly && !goal.plan_once) continue;
     if (month < goal.created_on.slice(0, 7) || month > goal.target_date.slice(0, 7)) continue;
+    // A one-time goal: only the month of its date.
+    if (goal.plan_once && month !== goal.target_date.slice(0, 7)) continue;
     const thisMonth = deposits.filter((d) => d.goal_id === goal.id && d.occurred_on >= first && d.occurred_on <= last && d.amount > 0);
     const missing = goal.target_amount - savedBy(goal, deposits, first);
     if (missing <= 0 && thisMonth.length === 0) continue;
     const skip = skips.find((s) => s.item_type === "goal" && s.item_id === goal.id && s.month === month) ?? null;
     // The plan's day, but never after the goal's own date.
-    const planned = dueDates(goal.plan_day, first, 1)[0];
+    const planned = goal.plan_once ? goal.target_date : dueDates(goal.plan_day!, first, 1)[0];
     const due = planned > goal.target_date ? goal.target_date : planned;
-    const expected = Math.min(goal.plan_amount, Math.max(missing, 0)) || goal.plan_amount;
+    const expected = goal.plan_once ? Math.max(missing, 0) || goal.target_amount : Math.min(goal.plan_amount!, Math.max(missing, 0)) || goal.plan_amount!;
     const paid = thisMonth.length > 0;
     // A plan day that had already passed when the goal was created starts next month.
     if (!paid && due < goal.created_on) continue;
     items.push({
       type: "goal",
       id: goal.id,
-      name: `Ahorro: ${goal.name}`,
+      name: goal.plan_once ? goal.name : `Ahorro: ${goal.name}`,
       due,
       expected,
       paid,

@@ -575,22 +575,31 @@ export async function adjustBalance(_prev: FormState, form: FormData): Promise<F
 }
 
 const goalsMissing = (message: string) =>
-  /plan_amount|plan_day|plan_income_id|checklist_skips_item_type/i.test(message)
+  /plan_once/i.test(message)
+    ? "Falta ejecutar la migración 0011 en Supabase."
+    : /plan_amount|plan_day|plan_income_id|checklist_skips_item_type/i.test(message)
     ? "Falta ejecutar la migración 0010 en Supabase."
     : /relation .* does not exist|schema cache|could not find the table/i.test(message)
       ? "Falta ejecutar la migración 0006 en Supabase."
       : null;
 
-/** A savings goal's plan: what is set aside each month, on which day, from which income. Off unless «plan» is checked. */
-function goalPlan(form: FormData): { error: string } | { plan: { plan_amount: number | null; plan_day: number | null; plan_income_id: string | null } } {
-  if (form.get("plan") !== "on") return { plan: { plan_amount: null, plan_day: null, plan_income_id: null } };
+type GoalPlan = { plan_amount: number | null; plan_day: number | null; plan_income_id: string | null; plan_once: boolean };
+
+/**
+ * How a savings goal is reached (`plan_mode`): «monthly» (an amount on a day of each month, maybe from
+ * an income), «once» (all on its date) or «none» (no plan, no pace).
+ */
+function goalPlan(form: FormData): { error: string } | { plan: GoalPlan } {
+  const mode = text(form, "plan_mode") || "none";
+  if (mode === "once") return { plan: { plan_amount: null, plan_day: null, plan_income_id: null, plan_once: true } };
+  if (mode !== "monthly") return { plan: { plan_amount: null, plan_day: null, plan_income_id: null, plan_once: false } };
   const plan_amount = parsePesos(text(form, "plan_amount"));
   if (!plan_amount) return { error: "Escribe cuánto vas a abonar cada mes." };
   const plan_day = Number(text(form, "plan_day"));
   if (!Number.isInteger(plan_day) || plan_day < 1 || plan_day > 31) return { error: "El día del abono debe estar entre 1 y 31." };
   const plan_income_id = text(form, "plan_income_id") || null;
   if (plan_income_id && !UUID.test(plan_income_id)) return { error: "Ese ingreso no es válido." };
-  return { plan: { plan_amount, plan_day, plan_income_id } };
+  return { plan: { plan_amount, plan_day, plan_income_id, plan_once: false } };
 }
 
 export async function saveGoal(_prev: FormState, form: FormData): Promise<FormState> {
@@ -608,8 +617,9 @@ export async function saveGoal(_prev: FormState, form: FormData): Promise<FormSt
     if (!target_amount) return { error: "Escribe cuánto quieres juntar." };
     const plan = goalPlan(form);
     if ("error" in plan) return plan;
-    // Only with a plan, so creating a goal keeps working before migration 0010 runs.
-    row = { ...row, target_amount, ...(plan.plan.plan_amount ? plan.plan : {}) };
+    // Only with a plan, so creating a goal keeps working before migrations 0010 and 0011 run.
+    const { plan_once, ...monthly } = plan.plan;
+    row = { ...row, target_amount, ...(monthly.plan_amount ? monthly : {}), ...(plan_once ? { plan_once } : {}) };
   } else {
     const account_id = text(form, "account_id");
     const start_balance = Number(text(form, "start_balance"));

@@ -872,6 +872,17 @@ a.segment:active {
   color: var(--brand);
 }
 
+/* Guaca's own date picker (computers): frosted glass like the rest of the floating surfaces. */
+.date-pop {
+  background:
+    linear-gradient(160deg, var(--liquid-a), var(--liquid-b)),
+    color-mix(in srgb, var(--surface) 88%, transparent);
+  border: 1px solid var(--line);
+  -webkit-backdrop-filter: blur(24px) saturate(1.6);
+  backdrop-filter: blur(24px) saturate(1.6);
+  box-shadow: 0 24px 50px -20px var(--liquid-drop);
+}
+
 /* Splash for the big jumps: signing in, signing out, a new password. */
 .splash {
   position: fixed;

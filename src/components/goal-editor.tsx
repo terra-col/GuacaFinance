@@ -3,6 +3,7 @@
 import { useActionState, useEffect, useState } from "react";
 import { updateGoal, type FormState } from "@/app/actions";
 import type { Goal } from "@/lib/goals";
+import { DateField } from "./date-field";
 import { EmojiPicker } from "./goal-form";
 import { GoalPlanFields, type IncomeOption } from "./goal-plan-fields";
 import { Icon } from "./icons";
@@ -100,7 +101,7 @@ export function GoalEditor({
         )}
         <label className="field">
           ¿Para cuándo?
-          <input className="input" type="date" name="target_date" value={date} onChange={(e) => setDate(e.target.value)} required />
+          <DateField name="target_date" value={date} onChange={setDate} required />
         </label>
       </div>
       {save && (
@@ -112,7 +113,7 @@ export function GoalEditor({
           createdOn={goal.created_on}
           fromMonth={fromMonth}
           incomes={incomes}
-          initial={{ amount: goal.plan_amount ?? null, day: goal.plan_day ?? null, incomeId: goal.plan_income_id ?? null }}
+          initial={{ amount: goal.plan_amount ?? null, day: goal.plan_day ?? null, incomeId: goal.plan_income_id ?? null, once: goal.plan_once }}
         />
       )}
       {state.error && (

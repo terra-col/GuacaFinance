@@ -3,6 +3,7 @@
 import { useActionState, useEffect, useState } from "react";
 import { saveGoal, type FormState } from "@/app/actions";
 import { formatCOP } from "@/lib/finance";
+import { DateField } from "./date-field";
 import { GoalPlanFields, type IncomeOption } from "./goal-plan-fields";
 import { useCloseModal } from "./modal";
 import { Icon } from "./icons";
@@ -99,7 +100,7 @@ export function GoalForm({ debts, incomes, today }: { debts: DebtOption[]; incom
             </label>
             <label className="field">
               ¿Para cuándo?
-              <input className="input" type="date" name="target_date" min={today} required value={date} onChange={(e) => setDate(e.target.value)} />
+              <DateField name="target_date" min={today} required value={date} onChange={setDate} />
             </label>
           </div>
           <GoalPlanFields target={target} targetDate={date} today={today} incomes={incomes} />
@@ -123,7 +124,7 @@ export function GoalForm({ debts, incomes, today }: { debts: DebtOption[]; incom
             </label>
             <label className="field">
               ¿Para cuándo?
-              <input className="input" type="date" name="target_date" min={today} required />
+              <DateField name="target_date" min={today} required />
             </label>
           </div>
           <p className="text-sm text-ink-3">

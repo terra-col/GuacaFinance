@@ -3,6 +3,7 @@
 import { useActionState, useState } from "react";
 import { adjustBalance, type FormState } from "@/app/actions";
 import { formatCOP } from "@/lib/finance";
+import { DateField } from "./date-field";
 import { MoneyInput } from "./money-input";
 import { SubmitButton } from "./submit-button";
 
@@ -49,7 +50,7 @@ export function BalanceAdjuster({
             </label>
             <label className="field">
               A la fecha
-              <input className="input" type="date" name="occurred_on" defaultValue={today} max={today} required />
+              <DateField name="occurred_on" defaultValue={today} max={today} required />
             </label>
             <div className="flex gap-2">
               <button type="button" className="btn-quiet h-11" onClick={() => (onCancel ? onCancel() : setOpen(false))}>

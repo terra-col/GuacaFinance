@@ -201,3 +201,8 @@ test("goal plans: amount and day go together, the income must be one's own, and 
   await assert.rejects(as(ANA, "update goals set plan_income_id = $1 where id = $2", [betoIncome.id, closet.id]), /row-level security/, "someone else's income");
   await as(ANA, "insert into checklist_skips (item_type, item_id, month) values ('goal', $1, '2026-12')", [closet.id]);
 });
+
+test("goal plans: a one-time goal has no monthly plan", async () => {
+  await as(ANA, "insert into goals (kind, name, target_amount, target_date, plan_once) values ('save', 'Deuda JuanFe', 800000, '2026-12-31', true)");
+  await assert.rejects(as(ANA, "insert into goals (kind, name, target_amount, target_date, plan_once, plan_amount, plan_day) values ('save', 'X', 1, '2027-01-01', true, 100, 5)"), /check constraint/);
+});
