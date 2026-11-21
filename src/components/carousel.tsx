@@ -41,12 +41,12 @@ export function Carousel({ label, children }: { label: string; children: React.R
         {children}
       </ul>
       {!edges.start && (
-        <button type="button" onClick={() => go(-1)} aria-label="Ver anteriores" className="liquid absolute -left-3 top-[40%] hidden size-11 -translate-y-1/2 items-center justify-center rounded-full text-xl sm:flex">
+        <button type="button" onClick={() => go(-1)} aria-label="Ver anteriores" className="liquid absolute -left-3 top-[62%] hidden size-11 -translate-y-1/2 items-center justify-center rounded-full text-xl sm:flex">
           ‹
         </button>
       )}
       {!edges.end && (
-        <button type="button" onClick={() => go(1)} aria-label="Ver siguientes" className="liquid absolute -right-3 top-[40%] hidden size-11 -translate-y-1/2 items-center justify-center rounded-full text-xl sm:flex">
+        <button type="button" onClick={() => go(1)} aria-label="Ver siguientes" className="liquid absolute -right-3 top-[62%] hidden size-11 -translate-y-1/2 items-center justify-center rounded-full text-xl sm:flex">
           ›
         </button>
       )}

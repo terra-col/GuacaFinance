@@ -1094,3 +1094,22 @@ a.card:active {
     animation: none;
   }
 }
+
+/* The favourite star pops when it is switched on. */
+.favorite-star-on {
+  animation: star-pop 0.45s cubic-bezier(0.3, 1.6, 0.5, 1);
+  filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.25));
+}
+@keyframes star-pop {
+  0% {
+    transform: scale(0.6) rotate(-20deg);
+  }
+  60% {
+    transform: scale(1.2) rotate(6deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .favorite-star-on {
+    animation: none;
+  }
+}
