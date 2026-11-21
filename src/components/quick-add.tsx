@@ -55,11 +55,11 @@ export function QuickAdd({ accounts, today }: { accounts: Pick<Account, "id" | "
       <button
         type="button"
         onClick={show}
-        className="liquid liquid-tint fixed bottom-[calc(5.75rem+env(safe-area-inset-bottom))] right-4 z-30 flex h-12 items-center gap-2 rounded-full px-5 text-sm font-semibold lg:hidden"
+        className="fab fixed bottom-[calc(5.75rem+env(safe-area-inset-bottom))] right-4 z-30 flex h-12 items-center gap-2 rounded-full pl-4 pr-5 text-sm font-semibold lg:hidden"
       >
-        <span aria-hidden="true" className="text-lg leading-none">
-          +
-        </span>
+        <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" aria-hidden="true">
+          <path d="M12 5v14M5 12h14" />
+        </svg>
         Registrar
       </button>
 

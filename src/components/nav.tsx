@@ -215,12 +215,12 @@ export function AdvisorButton() {
     <Link
       href="/asesor"
       aria-current={on ? "page" : undefined}
-      className={`liquid flex h-10 items-center gap-1.5 rounded-xl px-2.5 text-sm font-semibold transition-colors sm:px-3 lg:hidden ${on ? "liquid-tint" : ""}`}
+      className={`flex h-10 items-center gap-1.5 rounded-xl px-2.5 text-sm font-semibold transition-colors sm:px-3 lg:hidden ${on ? "fab" : "liquid"}`}
       aria-label="Asesor"
       title="Asesor con IA"
     >
       <AdvisorMark className="size-5" />
-      <span className="max-sm:hidden">Asesor</span>
+      <span className="max-sm:hidden">Asesor IA</span>
     </Link>
   );
 }
@@ -232,11 +232,16 @@ export function AdvisorFab() {
   return (
     <Link
       href="/asesor"
-      className="advisor-fab liquid liquid-tint fixed bottom-6 right-6 z-40 hidden h-14 items-center gap-2.5 rounded-full pl-4 pr-5 text-[15px] font-semibold lg:flex"
-      title="Pregúntale a tu asesor con IA"
+      className="fab advisor-fab fixed bottom-6 right-6 z-40 hidden h-[3.75rem] items-center gap-3 rounded-full pl-4 pr-6 lg:flex"
+      title="Pregúntale a tu asesor con IA: responde a partir de tus cuentas, deudas y metas"
     >
-      <AdvisorMark className="size-6" />
-      Asesor
+      <span className="flex size-10 items-center justify-center rounded-full bg-white/18 shadow-[inset_0_1px_0_rgb(255_255_255/0.3)]">
+        <AdvisorMark className="size-6" />
+      </span>
+      <span className="flex flex-col items-start leading-tight">
+        <span className="text-[15px] font-semibold">Asesor IA</span>
+        <span className="text-xs font-medium text-white/80">según tus cuentas</span>
+      </span>
     </Link>
   );
 }

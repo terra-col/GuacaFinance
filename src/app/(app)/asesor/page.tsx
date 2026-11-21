@@ -13,10 +13,10 @@ export default async function AdvisorPage() {
     <>
       <div className="pt-2">
         <h1 className="display flex items-center gap-3 text-3xl">
-          <span className="icon-tile tone-brand" aria-hidden="true">
+          <span className="fab flex size-11 items-center justify-center rounded-2xl" aria-hidden="true">
             <AdvisorMark className="size-6" />
           </span>
-          Asesor
+          Asesor IA
         </h1>
         <p className="text-sm text-ink-3">
           {aiReady && <span className="pill pill-idea mr-1.5">{provider === "gemini" ? "Con Gemini" : "Con Claude"}</span>}

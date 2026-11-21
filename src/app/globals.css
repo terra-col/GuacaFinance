@@ -1008,24 +1008,35 @@ a.card:active {
   }
 }
 
-/* The advisor's floating button (computers): lifts on hover, lands softly when it appears. */
-.advisor-fab {
+/* Floating action buttons (Registrar on phones, the advisor on computers): solid brand colour,
+   no glass. A fine highlight on top, depth inside and a coloured shadow below, like a real key. */
+.fab {
+  color: #fff;
+  background: linear-gradient(135deg, #7a58ff 0%, #6d4aff 45%, #9a34e6 100%);
   box-shadow:
-    inset 0 1px 0.5px rgb(255 255 255 / 0.5),
-    0 14px 34px -12px var(--brand);
-  animation: fab-in 0.5s cubic-bezier(0.2, 0.8, 0.2, 1.2) 0.2s both;
+    inset 0 1px 0 rgb(255 255 255 / 0.35),
+    inset 0 -3px 8px rgb(40 10 120 / 0.25),
+    0 12px 28px -10px rgb(109 74 255 / 0.75),
+    0 2px 6px -2px rgb(30 10 90 / 0.35);
   transition:
-    transform 180ms,
+    transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1),
     box-shadow 180ms;
 }
-.advisor-fab:hover {
+.fab:hover {
   transform: translateY(-2px);
   box-shadow:
-    inset 0 1px 0.5px rgb(255 255 255 / 0.5),
-    0 20px 40px -12px var(--brand);
+    inset 0 1px 0 rgb(255 255 255 / 0.35),
+    inset 0 -3px 8px rgb(40 10 120 / 0.25),
+    0 18px 36px -12px rgb(109 74 255 / 0.85),
+    0 3px 8px -2px rgb(30 10 90 / 0.35);
 }
-.advisor-fab:active {
+.fab:active {
   transform: scale(0.95);
+  transition-duration: 60ms;
+}
+/* The advisor's button lands softly when it appears. */
+.advisor-fab {
+  animation: fab-in 0.5s cubic-bezier(0.2, 0.8, 0.2, 1.2) 0.2s backwards;
 }
 @keyframes fab-in {
   from {
@@ -1033,8 +1044,56 @@ a.card:active {
     opacity: 0;
   }
 }
+
+/* The advisor's mark, alive: the balance keeps weighing. The centre line drifts while the bar of
+   what you have and the bar of what you owe grow and give way from their outer ends. */
+.advisor-alive .advisor-have,
+.advisor-alive .advisor-owe,
+.advisor-alive .advisor-pivot {
+  transform-box: fill-box;
+  animation: 4.2s cubic-bezier(0.45, 0, 0.55, 1) infinite alternate;
+}
+.advisor-alive .advisor-have {
+  transform-origin: left center;
+  animation-name: balance-have;
+}
+.advisor-alive .advisor-owe {
+  transform-origin: right center;
+  animation-name: balance-owe;
+}
+.advisor-alive .advisor-pivot {
+  animation-name: balance-pivot;
+}
+/* ±1.1 units around the centre: the bars are 4.55 wide, so they scale by (4.55 ± 1.1) / 4.55. */
+@keyframes balance-have {
+  from {
+    transform: scaleX(0.76);
+  }
+  to {
+    transform: scaleX(1.24);
+  }
+}
+@keyframes balance-owe {
+  from {
+    transform: scaleX(1.24);
+  }
+  to {
+    transform: scaleX(0.76);
+  }
+}
+@keyframes balance-pivot {
+  from {
+    transform: translateX(-1.1px);
+  }
+  to {
+    transform: translateX(1.1px);
+  }
+}
 @media (prefers-reduced-motion: reduce) {
-  .advisor-fab {
+  .advisor-fab,
+  .advisor-alive .advisor-have,
+  .advisor-alive .advisor-owe,
+  .advisor-alive .advisor-pivot {
     animation: none;
   }
 }
