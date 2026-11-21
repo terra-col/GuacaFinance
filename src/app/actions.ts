@@ -490,6 +490,15 @@ export async function updateAccount(_prev: FormState, form: FormData): Promise<F
     })
     .eq("id", id);
   if (error) return { error: accountWriteError(error.message) };
+
+  // «Datos» of a debt also carries its balance. Only a value changed from the one shown records an
+  // adjustment, so saving the other fields never creates one by accident.
+  const typed = text(form, "balance");
+  const shown = text(form, "balance_shown");
+  if (typed && shown && parsePesos(typed) !== Number(shown)) {
+    const adjusted = await adjustBalance({}, form);
+    if (adjusted.error) return { error: `Los datos quedaron guardados, pero el saldo no: ${adjusted.error}` };
+  }
   revalidatePath("/", "layout");
   return { message: "Cambios guardados." };
 }

@@ -3,12 +3,13 @@
 import { useActionState, useEffect, useRef, useState } from "react";
 import { deleteAccount, updateAccount, type FormState } from "@/app/actions";
 import { CARD_COLORS, bankColor, bankKey, cardColor } from "@/lib/banks";
-import { formatCOP, type Account } from "@/lib/finance";
+import type { Account } from "@/lib/finance";
 import { installmentsPaid } from "@/lib/installments";
 import { AccountCard } from "./account-card";
 import { CreditDetailFields } from "./credit-detail-fields";
 import { BalanceAdjuster } from "./balance-adjuster";
 import { Icon } from "./icons";
+import { DateField } from "./date-field";
 import { MoneyInput } from "./money-input";
 import { SubmitButton } from "./submit-button";
 import { UsageBar } from "./usage-bar";
@@ -265,6 +266,23 @@ export function AccountHero({
       </div>
 
       <div hidden={mode !== "data"} className="flex flex-col gap-5">
+        {/* The balance, open like the other numbers: saved with them, as an adjustment if it changed. */}
+        {debt && (
+          <div className="grid gap-4 rounded-2xl bg-brand/6 p-4 sm:grid-cols-2">
+            <input type="hidden" name="balance_shown" value={Math.max(0, balance)} />
+            <label className="field">
+              Saldo de la deuda hoy
+              <MoneyInput name="balance" defaultValue={Math.max(0, balance)} autoFocus={mode === "data" && balanceOpen} />
+            </label>
+            <label className="field">
+              Según el banco a la fecha
+              <DateField name="occurred_on" defaultValue={today} max={today} />
+            </label>
+            <p className="text-xs text-ink-3 sm:col-span-2">
+              Si no coincide con el extracto, escribe lo que dice el banco: la diferencia queda registrada como un ajuste (intereses, cargos o un pago).
+            </p>
+          </div>
+        )}
         {(isCard || isLoan) && (
           <div className="grid gap-4 sm:grid-cols-2">
             {isCard && (
@@ -420,24 +438,12 @@ export function AccountHero({
       {mode === "data" && (
         <div className="card rise flex flex-col gap-5">
           {panelTitle(debt ? "Datos" : "Saldo", debt ? `Los números de ${noun}: con ellos se calculan intereses, cupo y cuotas.` : "Cuadra el saldo con lo que ves en el banco.")}
-          <section className="flex flex-col gap-2" aria-label="Saldo">
-            {/* Savings and cash open straight on the form, which already says the current balance. */}
-            {debt && (
-              <p className="text-sm text-ink-2">
-                Saldo de la deuda hoy: <span className="num font-semibold text-ink">{formatCOP(balance)}</span>
-              </p>
-            )}
-            <BalanceAdjuster
-              key={String(balanceOpen)}
-              id={account.id}
-              current={balance}
-              debt={debt}
-              today={today}
-              defaultOpen={balanceOpen || !debt}
-              onCancel={debt ? undefined : close}
-            />
-          </section>
-          {debt && <div className="border-t border-line pt-5">{form}</div>}
+          {/* A debt's balance is one more field of the form; savings and cash have only the balance form. */}
+          {debt ? (
+            form
+          ) : (
+            <BalanceAdjuster id={account.id} current={balance} debt={false} today={today} defaultOpen onCancel={close} />
+          )}
 
           <details className="border-t border-line pt-4 text-sm">
             <summary className="cursor-pointer font-medium text-ink-3 hover:text-ink">Eliminar {noun}</summary>
