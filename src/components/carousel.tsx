@@ -31,7 +31,8 @@ export function Carousel({ label, children }: { label: string; children: React.R
   };
 
   return (
-    <div className="relative">
+    // min-w-0: inside a flex column, the row of slides must not widen its container.
+    <div className="relative min-w-0">
       <ul
         ref={track}
         aria-label={label}

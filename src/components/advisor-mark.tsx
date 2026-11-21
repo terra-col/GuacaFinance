@@ -1,7 +1,7 @@
 /**
  * The advisor's mark: a speech bubble holding the logo's gesture (what you have meeting what you
- * owe, two bars at a centre line). With `alive`, the balance keeps weighing: the centre line drifts
- * from side to side as one bar grows and the other gives way, the AI reading your accounts.
+ * owe, two bars meeting in the middle) as a balance on a fulcrum. With `alive`, the beam tips from
+ * side to side like a balance weighing: the AI reading your accounts.
  */
 export function AdvisorMark({ className = "size-5", alive = true }: { className?: string; alive?: boolean }) {
   return (
@@ -12,9 +12,12 @@ export function AdvisorMark({ className = "size-5", alive = true }: { className?
         strokeWidth={1.7}
         strokeLinejoin="round"
       />
-      <rect className="advisor-have" x="7.2" y="9.6" width="4.55" height="1.9" rx="0.95" fill="currentColor" />
-      <rect className="advisor-owe" x="12.25" y="9.6" width="4.55" height="1.9" rx="0.95" fill="currentColor" opacity="0.45" />
-      <path className="advisor-pivot" d="M12 7.4v6.3" stroke="currentColor" strokeWidth={1.1} strokeLinecap="round" opacity="0.85" />
+      {/* A balance: the beam (what you have, what you owe) resting on a small fulcrum, tipping. */}
+      <g className="advisor-beam">
+        <rect x="6.8" y="8.75" width="5" height="1.9" rx="0.95" fill="currentColor" />
+        <rect x="12.2" y="8.75" width="5" height="1.9" rx="0.95" fill="currentColor" opacity="0.45" />
+      </g>
+      <path d="M12 10.9l1.75 2.75h-3.5z" fill="currentColor" stroke="currentColor" strokeWidth={0.6} strokeLinejoin="round" />
     </svg>
   );
 }

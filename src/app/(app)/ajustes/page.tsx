@@ -6,6 +6,8 @@ import { ShareInvite } from "@/components/share-invite";
 import { FormSplash } from "@/components/splash";
 import { ScalePicker, ThemePicker } from "@/components/theme-toggle";
 import { TokenCard } from "@/components/token-card";
+import { WalletGuide } from "@/components/wallet-guide";
+import { cardColor } from "@/lib/banks";
 import { loadData } from "@/lib/data";
 import { SCALE_COOKIE, THEME_COOKIE, parseScale, parseTheme } from "@/lib/theme";
 import { SubmitButton } from "@/components/submit-button";
@@ -56,40 +58,39 @@ export default async function SettingsPage() {
             Cada vez que pagas con Apple Pay desde el iPhone o el Apple Watch, un Atajo envía el pago aquí. No captura pagos con la tarjeta física.
           </p>
         </div>
-        <TokenCard kind="wallet" exists={has("wallet")} origin={origin} />
-        <ol className="list-decimal space-y-1.5 pl-5 text-sm text-ink-2">
-          <li>En el iPhone abre Atajos → Automatización → «+» → Wallet (en iOS 17–18 se llama «Transacción»).</li>
-          <li>Elige las tarjetas, marca todas las categorías y «Ejecutar inmediatamente».</li>
-          <li>
-            Agrega la acción «Obtener contenido de URL» con la dirección <code className="break-all">{origin}/api/wallet</code>, método POST.
-          </li>
-          <li>
-            En Cabeceras agrega <code>Authorization</code> con el valor <code>Bearer TU_TOKEN</code>.
-          </li>
-          <li>
-            Cuerpo JSON con tres campos de texto tomados de «Entrada del atajo»: <code>card</code> → Tarjeta o pase, <code>merchant</code> → Comercio,{" "}
-            <code>amount</code> → Importe.
-          </li>
-          <li>Opcional: agrega «Mostrar notificación» con el campo <code>message</code> de la respuesta.</li>
-        </ol>
-        <p className="text-sm text-ink-3">
-          La primera vez que pagues con una tarjeta, el pago llega a «por revisar» en Movimientos; al registrarlo queda vinculada y los siguientes entran solos.
-        </p>
-        {linked.length > 0 && (
-          <ul className="divide-y divide-line text-sm">
-            {linked.map((a) => (
-              <li key={a.id} className="flex items-center justify-between gap-3 py-2">
-                <span>
-                  «{a.wallet_card_name}» → <span className="font-medium">{a.name}</span>
-                </span>
-                <form action={clearWalletName}>
-                  <input type="hidden" name="id" value={a.id} />
-                  <SubmitButton className="text-ink-3 hover:text-ink">Desvincular</SubmitButton>
-                </form>
-              </li>
-            ))}
-          </ul>
-        )}
+        <div className="flex flex-col gap-2">
+          <h3 className="display text-xl">Tu token</h3>
+          <TokenCard kind="wallet" exists={has("wallet")} origin={origin} />
+        </div>
+
+        {/* The cards already linked: a subsection of their own, each in its colour. */}
+        <div className="flex flex-col gap-2 rounded-2xl border border-line bg-surface/50 p-4">
+          <div className="flex items-baseline justify-between gap-3">
+            <h3 className="display text-xl">Tarjetas vinculadas</h3>
+            {linked.length > 0 && <p className="text-xs text-ink-3">{linked.length} {linked.length === 1 ? "tarjeta" : "tarjetas"}</p>}
+          </div>
+          {linked.length === 0 ? (
+            <p className="text-sm text-ink-3">Todavía ninguna. Cada tarjeta se vincula sola con su primer pago con Apple Pay (paso 10).</p>
+          ) : (
+            <ul className="divide-y divide-line">
+              {linked.map((a) => (
+                <li key={a.id} className="flex items-center gap-3 py-2.5 text-sm">
+                  <span aria-hidden="true" className="h-6 w-9 shrink-0 rounded-md shadow-sm" style={{ background: cardColor(a) }} />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-medium">«{a.wallet_card_name}»</span>
+                    <span className="block truncate text-xs text-ink-3">se registra en {a.name}</span>
+                  </span>
+                  <form action={clearWalletName}>
+                    <input type="hidden" name="id" value={a.id} />
+                    <SubmitButton className="btn-quiet h-8 px-2.5 text-xs">Desvincular</SubmitButton>
+                  </form>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        <WalletGuide origin={origin} />
       </section>
 
       <section className="card flex flex-col gap-4">

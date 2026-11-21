@@ -1045,55 +1045,29 @@ a.card:active {
   }
 }
 
-/* The advisor's mark, alive: the balance keeps weighing. The centre line drifts while the bar of
-   what you have and the bar of what you owe grow and give way from their outer ends. */
-.advisor-alive .advisor-have,
-.advisor-alive .advisor-owe,
-.advisor-alive .advisor-pivot {
-  transform-box: fill-box;
-  animation: 4.2s cubic-bezier(0.45, 0, 0.55, 1) infinite alternate;
+/* The advisor's mark, alive: the beam (what you have, what you owe) tips from side to side on the
+   centre line, like a balance weighing, and pauses a moment at each end. */
+.advisor-alive .advisor-beam {
+  transform-box: view-box;
+  transform-origin: 12px 10.9px;
+  animation: balance-tip 3.6s cubic-bezier(0.45, 0, 0.55, 1) infinite;
 }
-.advisor-alive .advisor-have {
-  transform-origin: left center;
-  animation-name: balance-have;
-}
-.advisor-alive .advisor-owe {
-  transform-origin: right center;
-  animation-name: balance-owe;
-}
-.advisor-alive .advisor-pivot {
-  animation-name: balance-pivot;
-}
-/* ±1.1 units around the centre: the bars are 4.55 wide, so they scale by (4.55 ± 1.1) / 4.55. */
-@keyframes balance-have {
-  from {
-    transform: scaleX(0.76);
+@keyframes balance-tip {
+  0%,
+  8% {
+    transform: rotate(-14deg);
   }
-  to {
-    transform: scaleX(1.24);
+  50%,
+  58% {
+    transform: rotate(14deg);
   }
-}
-@keyframes balance-owe {
-  from {
-    transform: scaleX(1.24);
-  }
-  to {
-    transform: scaleX(0.76);
-  }
-}
-@keyframes balance-pivot {
-  from {
-    transform: translateX(-1.1px);
-  }
-  to {
-    transform: translateX(1.1px);
+  100% {
+    transform: rotate(-14deg);
   }
 }
 @media (prefers-reduced-motion: reduce) {
   .advisor-fab,
-  .advisor-alive .advisor-have,
-  .advisor-alive .advisor-owe,
-  .advisor-alive .advisor-pivot {
+  .advisor-alive .advisor-beam {
     animation: none;
   }
 }
