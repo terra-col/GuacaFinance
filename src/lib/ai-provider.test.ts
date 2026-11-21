@@ -1,6 +1,14 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { advisorStream, aiProvider, geminiChunkText, geminiRequest, geminiText, takeSseData } from "./ai-provider.ts";
+import { advisorStream, aiProvider, geminiChunkText, geminiModels, geminiRequest, geminiText, retryable, takeSseData } from "./ai-provider.ts";
+
+test("advisor: models to try, main first, no repeats; which failures deserve another try", () => {
+  assert.deepEqual(geminiModels({}), ["gemini-3.8-flash", "gemini-3.5-flash", "gemini-3.1-flash-lite"]);
+  assert.deepEqual(geminiModels({ main: "m1", fallback: " m2 , m1,, m3 " }), ["m1", "m2", "m3"]);
+  assert.deepEqual(geminiModels({ main: "m1", fallback: "" }), ["m1"], "fallbacks can be turned off");
+  assert.deepEqual([503, 500, 429, null].map(retryable), [true, true, true, true]);
+  assert.deepEqual([400, 403, 404].map(retryable), [false, false, false]);
+});
 
 const piece = (text: string, thought = false) => `data: ${JSON.stringify({ candidates: [{ content: { parts: [{ text, thought }] } }] })}\n\n`;
 

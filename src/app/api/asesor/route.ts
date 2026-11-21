@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { ADVISOR_SYSTEM, advisorContext } from "@/lib/advisor-context";
-import { GEMINI_MODEL, advisorStream, aiProvider, geminiRequest, geminiStreamUrl, type ChatTurn } from "@/lib/ai-provider";
+import { advisorStream, aiProvider, geminiModels, geminiRequest, geminiStreamUrl, retryable, type ChatTurn } from "@/lib/ai-provider";
 import { loadData } from "@/lib/data";
 import { createClient } from "@/lib/supabase/server";
 
@@ -58,20 +58,42 @@ export async function POST(request: Request) {
     // Long answers (a month-by-month plan) take Gemini more than a minute, so the answer is streamed
     // as it is written. The request stops if the person leaves the page, or after GEMINI_LIMIT_MS.
     const signal = AbortSignal.any([request.signal, AbortSignal.timeout(GEMINI_LIMIT_MS)]);
-    let upstream: Response | null = null;
-    try {
-      upstream = await fetch(geminiStreamUrl(GEMINI_MODEL()), {
+    const body = JSON.stringify(geminiRequest(system, messages, 6000));
+    const ask = (model: string) =>
+      fetch(geminiStreamUrl(model), {
         method: "POST",
         headers: { "content-type": "application/json", "x-goog-api-key": process.env.GEMINI_API_KEY! },
-        body: JSON.stringify(geminiRequest(system, messages, 6000)),
+        body,
         signal,
+      }).catch((error) => {
+        console.error(`asesor: Gemini ${model} request failed`, error);
+        return null;
       });
-    } catch (error) {
-      console.error("asesor: Gemini request failed", error);
+
+    // Google's models get overloaded at times (503). One more try after a second, then the next
+    // model in the list, which has its own capacity. Errors that would repeat stop at once.
+    let upstream: Response | null = null;
+    let status: number | null = null;
+    let mainStatus: number | null = null;
+    const models = geminiModels();
+    attempts: for (const [index, model] of models.entries()) {
+      for (const wait of [0, 1000]) {
+        if (wait) await new Promise((r) => setTimeout(r, wait));
+        upstream = await ask(model);
+        status = upstream?.status ?? null;
+        if (upstream?.ok && upstream.body) break attempts;
+        if (upstream) console.error(`asesor: Gemini ${model} answered`, status, (await upstream.text().catch(() => "")).slice(0, 300));
+        if (index === 0) mainStatus = status;
+        if (signal.aborted) break attempts;
+        // A fallback that no longer exists is skipped; the main model's errors are the ones to report.
+        if (index > 0 && status === 404) break;
+        if (!retryable(status)) break attempts;
+        if (status !== 503) break; // a spent quota or a hiccup: straight to the next model
+      }
     }
     if (!upstream?.ok || !upstream.body) {
-      const status = upstream?.status ?? 500;
-      if (upstream) console.error("asesor: Gemini answered", status, (await upstream.text().catch(() => "")).slice(0, 500));
+      // Report the main model's problem when a fallback only failed for being gone.
+      if (status === 404 && mainStatus !== null && mainStatus !== 404) status = mainStatus;
       const message =
         status === 400 || status === 403
           ? "La clave de Gemini no es válida o el modelo no está disponible."
@@ -79,7 +101,9 @@ export async function POST(request: Request) {
             ? "Ese modelo de Gemini ya no existe; cambia GUACA_GEMINI_MODEL."
             : status === 429
               ? "Llegaste al límite gratis de Gemini por ahora; espera un momento."
-              : `El asesor no respondió (Gemini ${upstream ? `respondió ${status}` : "no contestó"}). Intenta de nuevo.`;
+              : status === 503
+                ? "Gemini está saturado en este momento. Intenta de nuevo en un minuto."
+                : `El asesor no respondió (Gemini ${status ? `respondió ${status}` : "no contestó"}). Intenta de nuevo.`;
       return Response.json({ error: message }, { status: 502 });
     }
 

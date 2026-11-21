@@ -12,6 +12,26 @@ export function aiProvider(): Provider | null {
 /** A free-tier Gemini model; override with GUACA_GEMINI_MODEL if Google renames it. */
 export const GEMINI_MODEL = () => process.env.GUACA_GEMINI_MODEL || "gemini-3.8-flash";
 
+/**
+ * The models to try, in order: the main one, then the fallbacks (GUACA_GEMINI_FALLBACK, comma
+ * separated). Each model has its own capacity, so when one is overloaded another usually answers.
+ */
+export function geminiModels(env: { main?: string; fallback?: string } = { main: process.env.GUACA_GEMINI_MODEL, fallback: process.env.GUACA_GEMINI_FALLBACK }): string[] {
+  const main = env.main || "gemini-3.8-flash";
+  const rest = (env.fallback ?? "gemini-3.5-flash,gemini-3.1-flash-lite")
+    .split(",")
+    .map((m) => m.trim())
+    .filter(Boolean);
+  return [...new Set([main, ...rest])];
+}
+
+/**
+ * Whether a failed answer is worth another try: overloaded (503), a server hiccup (500) or a
+ * spent quota (429, per model). A bad key or request (400, 403) or a gone model (404) is not:
+ * those fail the same everywhere, or need fixing.
+ */
+export const retryable = (status: number | null) => status === null || status === 429 || status === 500 || status === 503;
+
 export interface ChatTurn {
   role: "user" | "assistant";
   content: string;
