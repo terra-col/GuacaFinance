@@ -14,6 +14,14 @@ import { calendarEntries, calendarTotals, calendarWeeks } from "@/lib/calendar";
 
 const MONTH_SHORT = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
 
+function Chevron({ dir }: { dir: "left" | "right" }) {
+  return (
+    <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d={dir === "left" ? "M15 5l-7 7 7 7" : "M9 5l7 7-7 7"} />
+    </svg>
+  );
+}
+
 export default async function PaymentsPage({ searchParams }: { searchParams: Promise<{ mes?: string; vista?: string }> }) {
   const { accounts, txs, bills, incomes, budgets, skips, planReady, goals, deposits, today } = await loadData();
   const current = today.slice(0, 7);
@@ -42,27 +50,26 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
 
   const header = (
     <div className="pt-2">
-      <div className="flex items-center justify-between gap-3">
-        <h1 className="display text-3xl">
+      {/* A month picker: the title centred between the previous and next month. */}
+      <div className="flex items-center justify-center gap-2 sm:gap-4">
+        <Link href={hrefFor(shiftMonth(month, -1))} className="liquid flex size-10 shrink-0 items-center justify-center rounded-full" aria-label={`Ver ${monthName(shiftMonth(month, -1))}`}>
+          <Chevron dir="left" />
+        </Link>
+        <h1 className="display min-w-0 text-center text-2xl sm:text-3xl">
           Pagos de {monthName(month)}
           {month.slice(0, 4) !== current.slice(0, 4) ? ` ${month.slice(0, 4)}` : ""}
         </h1>
-        <nav className="flex gap-2" aria-label="Cambiar de mes">
-          <Link href={hrefFor(shiftMonth(month, -1))} className="btn-quiet" aria-label={`Ver ${monthName(shiftMonth(month, -1))}`}>
-            ‹
+        {canGoNext ? (
+          <Link href={hrefFor(shiftMonth(month, 1))} className="liquid flex size-10 shrink-0 items-center justify-center rounded-full" aria-label={`Ver ${monthName(shiftMonth(month, 1))}`}>
+            <Chevron dir="right" />
           </Link>
-          {canGoNext ? (
-            <Link href={hrefFor(shiftMonth(month, 1))} className="btn-quiet" aria-label={`Ver ${monthName(shiftMonth(month, 1))}`}>
-              ›
-            </Link>
-          ) : (
-            <span className="btn-quiet opacity-40" aria-hidden="true">
-              ›
-            </span>
-          )}
-        </nav>
+        ) : (
+          <span className="liquid flex size-10 shrink-0 items-center justify-center rounded-full opacity-35" aria-hidden="true">
+            <Chevron dir="right" />
+          </span>
+        )}
       </div>
-      {/* Segmented control, centred: the active view is tinted and ticked. */}
+      {/* Segmented control, centred under the title. */}
       <div className="mt-4 flex flex-col items-center gap-2">
         <SegmentedNav
           label="Cómo ver los pagos"
@@ -87,7 +94,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
     return (
       <>
         {header}
-        <p className="-mt-3 text-sm text-ink-3">
+        <p className="-mt-3 text-balance text-center text-sm text-ink-3">
           {month < current ? "Así quedó ese mes." : month === current ? "Lo que te toca pagar y recibir, día por día." : "Lo que viene, según tus pagos fijos, deudas e ingresos de hoy."}{" "}
           {(totals.toPay > 0 || totals.toReceive > 0) && (
             <>
@@ -132,7 +139,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
   return (
     <>
       {header}
-      <p className="-mt-3 text-sm text-ink-3">
+      <p className="-mt-3 text-balance text-center text-sm text-ink-3">
         {editable
           ? "Lo que entra y lo que tienes que pagar este mes. Al marcar uno se registra el movimiento; cada mes la lista vuelve a empezar."
           : "Mes cerrado: así quedó la lista."}
