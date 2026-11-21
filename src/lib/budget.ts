@@ -69,6 +69,8 @@ export interface IncomeItem {
   expected: number | null;
   received: boolean;
   receivedAmount: number;
+  /** The day of the month as set. */
+  day?: number;
   /** Once received: the date and account of the latest movement, to edit it in place. */
   receivedOn?: string | null;
   receivedIn?: string | null;
@@ -94,6 +96,7 @@ export function incomeChecklist(incomes: Income[], txs: Tx[], month: string, tod
         name: i.name,
         due,
         expected: i.amount,
+        day: i.day,
         received: got.length > 0,
         receivedAmount: got.reduce((sum, t) => sum + t.amount, 0),
         receivedOn: got[0]?.occurred_on ?? null,
@@ -157,6 +160,7 @@ export function incomeRow(i: IncomeItem): ChecklistItem {
     expected: i.expected,
     paid: i.received,
     paidAmount: i.receivedAmount,
+    day: i.day,
     paidOn: i.receivedOn ?? null,
     paidFrom: i.receivedIn ?? null,
     overdue: i.late,

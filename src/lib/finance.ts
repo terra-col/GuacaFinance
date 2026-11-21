@@ -361,6 +361,8 @@ export interface ChecklistItem {
   /** Once paid: the date and the account of the latest payment, to edit it in place. */
   paidOn?: string | null;
   paidFrom?: string | null;
+  /** Bills and incomes: the day of the month as set (a «31» shows as the 30th in November). */
+  day?: number;
 }
 
 /**
@@ -393,6 +395,7 @@ export function monthlyChecklist(accounts: Account[], bills: Bill[], txs: Tx[], 
       type: "bill",
       id: bill.id,
       name: bill.name,
+      day: bill.due_day,
       due,
       expected: bill.amount,
       paid: payments.length > 0,

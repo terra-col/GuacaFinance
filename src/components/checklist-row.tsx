@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useOptimistic, useState, useTransition } from "react";
-import { deleteBill, deleteIncome, markPaid, skipItem, unmarkPaid, unskipItem, updatePaid } from "@/app/actions";
+import { deleteBill, deleteIncome, markPaid, skipItem, unmarkPaid, unskipItem, updatePaid, updateRecurring } from "@/app/actions";
 import { daysBetween, formatCOP, formatDate, relativeDay, type ChecklistItem } from "@/lib/finance";
 import { DateField } from "./date-field";
 import { MoneyInput } from "./money-input";
@@ -36,7 +36,7 @@ function buzz() {
 export function ChecklistRow({ item, month, today, editable, accounts }: Props) {
   const [paid, setOptimisticPaid] = useOptimistic(item.paid);
   const [pending, startTransition] = useTransition();
-  const [panel, setPanel] = useState<"none" | "form" | "edit" | "skip" | "unskip" | "delete">("none");
+  const [panel, setPanel] = useState<"none" | "form" | "edit" | "skip" | "unskip" | "delete" | "recurring">("none");
   const income = item.type === "income";
   // A goal's monthly saving: recorded as a deposit to the goal, no account involved.
   const saving = item.type === "goal";
@@ -116,6 +116,16 @@ export function ChecklistRow({ item, month, today, editable, accounts }: Props) 
 
   // Fixed bills and scheduled incomes can be removed from here; the movements already recorded stay.
   const removable = item.type === "bill" || income;
+
+  /** New name, amount or day for the fixed bill or income itself. */
+  function editRecurring(form: FormData) {
+    setError(null);
+    startTransition(async () => {
+      const result = await updateRecurring({}, form);
+      if (result.error) return setError(result.error);
+      setPanel("none");
+    });
+  }
 
   function remove() {
     setError(null);
@@ -298,9 +308,14 @@ export function ChecklistRow({ item, month, today, editable, accounts }: Props) 
               </label>
               <div className="flex flex-wrap items-center gap-2 sm:col-span-4 sm:justify-end">
                 {removable && (
-                  <button type="button" className="mr-auto text-sm font-medium text-ink-3 hover:text-ink" onClick={() => setPanel("delete")}>
-                    Eliminar {income ? "ingreso" : "pago fijo"}
-                  </button>
+                  <span className="mr-auto flex flex-wrap gap-x-4 gap-y-1">
+                    <button type="button" className="text-sm font-medium text-brand" onClick={() => setPanel("recurring")}>
+                      Editar {income ? "ingreso" : "pago fijo"}
+                    </button>
+                    <button type="button" className="text-sm font-medium text-ink-3 hover:text-ink" onClick={() => setPanel("delete")}>
+                      Eliminar
+                    </button>
+                  </span>
                 )}
                 <button type="button" className="btn-quiet flex-1 sm:flex-none" onClick={() => setPanel("skip")}>
                   Omitir este mes
@@ -350,6 +365,39 @@ export function ChecklistRow({ item, month, today, editable, accounts }: Props) 
                 </button>
               </div>
             </div>
+          )}
+          {editable && panel === "recurring" && removable && (
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                editRecurring(new FormData(e.currentTarget));
+              }}
+              className="mt-3 grid gap-3 rounded-2xl bg-brand/8 p-3 sm:ml-14 sm:grid-cols-[2fr_1.4fr_0.8fr] sm:items-end"
+            >
+              <input type="hidden" name="type" value={item.type} />
+              <input type="hidden" name="id" value={item.id} />
+              <label className="field">
+                Nombre
+                <input className="input" name="name" defaultValue={item.name} maxLength={80} required autoFocus />
+              </label>
+              <label className="field">
+                Valor (vacío si cambia)
+                <MoneyInput name="amount" defaultValue={item.expected} />
+              </label>
+              <label className="field">
+                Día del mes
+                <input className="input num" type="number" name="day" min={1} max={31} defaultValue={item.day ?? (item.due ? Number(item.due.slice(8)) : "")} required />
+              </label>
+              <p className="text-xs text-ink-3 sm:col-span-3">Cambia {income ? "el ingreso" : "el pago fijo"} desde ahora; lo que ya registraste no se toca.</p>
+              <div className="flex justify-end gap-2 sm:col-span-3">
+                <button type="button" className="btn-quiet" onClick={() => setPanel(paid ? "edit" : "form")}>
+                  Cancelar
+                </button>
+                <button className="btn" disabled={pending}>
+                  Guardar
+                </button>
+              </div>
+            </form>
           )}
           {editable && panel === "delete" && removable && (
             <div className="mt-3 flex flex-col gap-3 rounded-2xl bg-debt/10 p-3 sm:ml-14 sm:flex-row sm:items-center sm:justify-between">
@@ -404,9 +452,14 @@ export function ChecklistRow({ item, month, today, editable, accounts }: Props) 
                     Desmarcar (borra {income ? "el ingreso" : saving ? "el abono" : "el pago"})
                   </button>
                   {removable && (
-                    <button type="button" className="text-sm font-medium text-ink-3 hover:text-ink" onClick={() => setPanel("delete")}>
-                      Eliminar {income ? "ingreso" : "pago fijo"}
-                    </button>
+                    <>
+                      <button type="button" className="text-sm font-medium text-brand" onClick={() => setPanel("recurring")}>
+                        Editar {income ? "ingreso" : "pago fijo"}
+                      </button>
+                      <button type="button" className="text-sm font-medium text-ink-3 hover:text-ink" onClick={() => setPanel("delete")}>
+                        Eliminar
+                      </button>
+                    </>
                   )}
                 </span>
                 <div className="flex gap-2">

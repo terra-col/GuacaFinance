@@ -266,6 +266,30 @@ export async function saveBill(_prev: FormState, form: FormData): Promise<FormSt
   return { message: `${name} quedó registrado.` };
 }
 
+/**
+ * Edits a fixed bill or a scheduled income from its row in Pagos: name, amount (empty when it
+ * varies) and day of the month. Nothing already recorded changes; an income keeps its months and account.
+ */
+export async function updateRecurring(_prev: FormState, form: FormData): Promise<FormState> {
+  const supabase = await signedIn();
+  const type = text(form, "type");
+  if (type !== "bill" && type !== "income") return { error: "Eso no se puede editar aquí." };
+  const name = text(form, "name");
+  if (!name) return { error: "Ponle un nombre." };
+  const day = optionalDay(form, "day");
+  if (day === null || day === "invalid") return { error: "El día debe estar entre 1 y 31." };
+  const amountRaw = text(form, "amount");
+  const amount = amountRaw ? parsePesos(amountRaw) : null;
+  if (amountRaw && !amount) return { error: "El valor no es válido." };
+  const { error } =
+    type === "bill"
+      ? await supabase.from("bills").update({ name, amount, due_day: day }).eq("id", text(form, "id"))
+      : await supabase.from("incomes").update({ name, amount, day }).eq("id", text(form, "id"));
+  if (error) return { error: `No se pudo guardar: ${error.message}` };
+  revalidatePath("/", "layout");
+  return { message: "Guardado." };
+}
+
 export async function deleteBill(form: FormData) {
   const supabase = await signedIn();
   const { error } = await supabase.from("bills").delete().eq("id", text(form, "id"));
