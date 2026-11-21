@@ -7,6 +7,8 @@ import { MoneyInput } from "./money-input";
 import { SubmitButton } from "./submit-button";
 import {
   allowedTxKinds,
+  favoriteAccountId,
+  favoriteFirst,
   type Account,
   type Tx,
   type TxKind,
@@ -18,7 +20,7 @@ const KIND_OPTIONS: { kind: TxKind; label: string }[] = [
   { kind: "income", label: "Ingreso" },
 ];
 
-type AccountOption = Pick<Account, "id" | "name" | "kind">;
+type AccountOption = Pick<Account, "id" | "name" | "kind" | "favorite">;
 
 /**
  * Records a movement, or edits one when `tx` is given. Editing keeps the
@@ -47,10 +49,10 @@ export function TxForm({
   const editing = Boolean(tx);
   // Keep the original values when the person flips back to the movement's own kind.
   const own = tx && kind === tx.kind ? tx : undefined;
-  const targets = accounts.filter((a) => allowedTxKinds(a.kind).includes(kind));
-  const savings = accounts.filter(
-    (a) => a.kind === "savings" || a.kind === "cash",
-  );
+  // The favourite account first, and already chosen for a new expense or payment.
+  const targets = favoriteFirst(accounts.filter((a) => allowedTxKinds(a.kind).includes(kind)));
+  const savings = favoriteFirst(accounts.filter((a) => a.kind === "savings" || a.kind === "cash"));
+  const favorite = favoriteAccountId(accounts);
 
   return (
     // Lives inside a sheet (new or edit), so it has no card or title of its own.
@@ -114,7 +116,7 @@ export function TxForm({
               <select
                 className="input"
                 name="account_id"
-                defaultValue={own?.account_id}
+                defaultValue={own?.account_id ?? (kind !== "payment" && targets.some((a) => a.id === favorite) ? favorite! : undefined)}
                 required
               >
                 {targets.map((a) => (
@@ -130,7 +132,7 @@ export function TxForm({
                 <select
                   className="input"
                   name="source_account_id"
-                  defaultValue={own?.source_account_id ?? ""}
+                  defaultValue={own ? (own.source_account_id ?? "") : (favorite ?? "")}
                 >
                   <option value="">Otra fuente (no registrada)</option>
                   {savings.map((a) => (

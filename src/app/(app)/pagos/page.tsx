@@ -5,7 +5,7 @@ import { ChecklistRow } from "@/components/checklist-row";
 import { MonthPlanCard } from "@/components/month-plan";
 import { incomeChecklist, incomeRow, monthPlan } from "@/lib/budget";
 import { loadData } from "@/lib/data";
-import { byDue, formatCOP, monthName, monthlyChecklist, shiftMonth } from "@/lib/finance";
+import { byDue, favoriteFirst, formatCOP, monthName, monthlyChecklist, shiftMonth } from "@/lib/finance";
 import { goalChecklist } from "@/lib/goals";
 import { SubmitButton } from "@/components/submit-button";
 import { PaymentsCalendar } from "@/components/payments-calendar";
@@ -45,8 +45,8 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
   const items = [...monthlyChecklist(accounts, bills, txs, month, today, skips), ...goalChecklist(goals, deposits, month, today, skips)].sort(byDue);
   const incomeItems = incomeChecklist(incomes, txs, month, today, skips);
   // Where a payment can come from: cards and savings for a bill, savings and cash for the rest.
-  const spendable = accounts.filter((a) => a.kind !== "loan").map(({ id, name }) => ({ id, name }));
-  const savings = accounts.filter((a) => a.kind === "savings" || a.kind === "cash").map(({ id, name }) => ({ id, name }));
+  const spendable = favoriteFirst(accounts.filter((a) => a.kind !== "loan")).map(({ id, name }) => ({ id, name }));
+  const savings = favoriteFirst(accounts.filter((a) => a.kind === "savings" || a.kind === "cash")).map(({ id, name }) => ({ id, name }));
 
   const header = (
     <div className="pt-2">

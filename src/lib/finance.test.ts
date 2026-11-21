@@ -225,3 +225,17 @@ test("checklist: a bill created late on the last evening of a month (Bogotá) is
   assert.equal(monthlyChecklist([], [bill], [], "2026-10", "2026-10-31").length, 1);
   assert.equal(monthlyChecklist([], [bill], [], "2026-09", "2026-10-31").length, 0);
 });
+
+test("favourite account: payments come from it by default, before the one used last time", async () => {
+  const { favoriteAccountId, favoriteFirst } = await import("./finance.ts");
+  const nequi: Account = { ...ahorros, id: "n", name: "Nequi", favorite: true };
+  const bill = { id: "b", name: "Internet", amount: 90_000, due_day: 10, category: null };
+  const lastTime = [tx({ account_id: "a", kind: "expense", amount: 90_000, occurred_on: "2026-10-10", bill_id: "b" })];
+  const debtTxs = [...txs];
+  const withFav = monthlyChecklist([ahorros, nequi, tarjeta], [bill], [...lastTime, ...debtTxs], "2026-11", "2026-11-17");
+  assert.equal(withFav.find((i) => i.type === "bill")!.quick!.accountId, "n", "the favourite wins over the last one used");
+  const noFav = monthlyChecklist([ahorros, { ...nequi, favorite: false }, tarjeta], [bill], [...lastTime, ...debtTxs], "2026-11", "2026-11-17");
+  assert.equal(noFav.find((i) => i.type === "bill")!.quick!.accountId, "a", "without one, the last one used");
+  assert.equal(favoriteAccountId([{ ...tarjeta, favorite: true }]), null, "only savings or cash count");
+  assert.deepEqual(favoriteFirst([ahorros, nequi, tarjeta]).map((a) => a.id), ["n", "a", "t"]);
+});

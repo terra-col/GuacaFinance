@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useEffect, useRef, useState } from "react";
-import { deleteAccount, updateAccount, type FormState } from "@/app/actions";
+import { deleteAccount, toggleFavorite, updateAccount, type FormState } from "@/app/actions";
 import { CARD_COLORS, bankColor, bankKey, cardColor } from "@/lib/banks";
 import type { Account } from "@/lib/finance";
 import { installmentsPaid } from "@/lib/installments";
@@ -420,6 +420,23 @@ export function AccountHero({
               </span>
             </button>
           </div>
+          {/* Savings and cash: the favourite account payments come from by default. */}
+          {!debt && (
+            <form action={toggleFavorite} className="w-full max-w-md">
+              <input type="hidden" name="id" value={account.id} />
+              <SubmitButton className={`w-full rounded-2xl p-3 text-left text-sm ${account.favorite ? "fab" : "liquid"}`}>
+                <svg viewBox="0 0 24 24" className="size-5 shrink-0" fill={account.favorite ? "currentColor" : "none"} stroke="currentColor" strokeWidth={1.8} strokeLinejoin="round" aria-hidden="true">
+                  <path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.5 9.7l5.9-.9z" />
+                </svg>
+                <span className="ml-1.5 flex flex-col">
+                  <span className="font-semibold">{account.favorite ? "Favorita para pagos" : "Hacerla favorita para pagos"}</span>
+                  <span className={`text-xs ${account.favorite ? "text-white/80" : "text-ink-3"}`}>
+                    {account.favorite ? "Los pagos salen de aquí por defecto. Toca para quitarla." : "Aparece de primera al marcar un pago o registrar un gasto."}
+                  </span>
+                </span>
+              </SubmitButton>
+            </form>
+          )}
           {saved && (
             <p role="status" className="rise text-sm font-medium text-ink-2">
               ✓ Cambios guardados

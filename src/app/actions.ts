@@ -103,11 +103,12 @@ function optionalDay(form: FormData, name: string): number | null | "invalid" {
 }
 
 const DETAIL_COLUMNS = /term_months|first_due_month|rate_type|rate_reference|refinanced|card_purchases/;
+const FAVORITE_COLUMN = /favorite/;
 
 /** The message for a failed account write, naming the migration that is missing if that is the cause. */
 function accountWriteError(message: string): string {
   if (/column .* does not exist|schema cache|could not find/i.test(message)) {
-    return `Falta ejecutar la migración ${DETAIL_COLUMNS.test(message) ? "0009" : "0004"} en Supabase.`;
+    return `Falta ejecutar la migración ${FAVORITE_COLUMN.test(message) ? "0012" : DETAIL_COLUMNS.test(message) ? "0009" : "0004"} en Supabase.`;
   }
   return `No se pudo guardar: ${message}`;
 }
@@ -556,6 +557,25 @@ export async function savePurchase(_prev: FormState, form: FormData): Promise<Fo
   }
   revalidatePath("/", "layout");
   return { message: id ? "Compra actualizada." : "Compra registrada." };
+}
+
+/** Marks an account (savings or cash) as the favourite for payments, or unmarks it. One at a time. */
+export async function toggleFavorite(form: FormData) {
+  const supabase = await signedIn();
+  const id = text(form, "id");
+  const { data: account } = await supabase.from("accounts").select("kind, favorite").eq("id", id).maybeSingle();
+  if (!account || isDebt(account)) throw new Error("Solo una cuenta bancaria o el efectivo pueden ser la favorita.");
+  if (account.favorite) {
+    const { error } = await supabase.from("accounts").update({ favorite: false }).eq("id", id);
+    if (error) throw new Error(accountWriteError(error.message));
+  } else {
+    // The previous favourite gives way first: only one is allowed.
+    const { error: clearError } = await supabase.from("accounts").update({ favorite: false }).eq("favorite", true);
+    if (clearError) throw new Error(accountWriteError(clearError.message));
+    const { error } = await supabase.from("accounts").update({ favorite: true }).eq("id", id);
+    if (error) throw new Error(accountWriteError(error.message));
+  }
+  revalidatePath("/", "layout");
 }
 
 export async function deletePurchase(form: FormData) {

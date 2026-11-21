@@ -7,7 +7,7 @@ Stack: Next.js 16 (App Router) · Supabase (Postgres + Auth) · Tailwind 4 · Re
 ## Puesta en marcha
 
 1. Crea un proyecto en [Supabase](https://supabase.com).
-2. En el SQL Editor ejecuta, en orden, los archivos de `supabase/migrations/` (`0001` a `0011`).
+2. En el SQL Editor ejecuta, en orden, los archivos de `supabase/migrations/` (`0001` a `0012`).
 3. Copia `.env.example` a `.env.local` y pon la URL y la clave *publishable* del proyecto.
 4. `npm install && npm run dev`, abre http://localhost:3000 y usa **Crear cuenta**.
 5. Como es de un solo usuario: después de crear tu cuenta, desactiva los registros nuevos en Supabase (Authentication → Sign In / Providers → *Allow new users to sign up*).

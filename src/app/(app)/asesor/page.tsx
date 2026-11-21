@@ -18,7 +18,7 @@ export default async function AdvisorPage() {
           </span>
           Asesor IA
         </h1>
-        <p className="text-sm text-ink-3">
+        <p className="mt-3 text-sm leading-relaxed text-ink-3">
           {aiReady && <span className="pill pill-idea mr-1.5">{provider === "gemini" ? "Con Gemini" : "Con Claude"}</span>}
           Pregúntale cómo pagar tus deudas, cuánto ahorrar para una meta o cómo repartir el salario. Usa tus saldos, tasas, pagos fijos, ingresos, presupuestos y metas. Es una guía, no asesoría financiera certificada. Para simular abonos, mira el{" "}
           <Link href="/deudas#plan" className="font-medium text-brand">

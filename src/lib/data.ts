@@ -18,13 +18,15 @@ const PAGE = 1000; // Supabase returns at most 1000 rows per request
 /** What every screen's frame needs: accounts for the quick «new movement» sheet and the Wallet inbox count. */
 export async function loadShell() {
   const supabase = await createClient();
-  const [inbox, accounts] = await Promise.all([
+  const [inbox, withFavorite] = await Promise.all([
     supabase.from("wallet_inbox").select("id", { count: "exact", head: true }),
-    supabase.from("accounts").select("id, name, kind").order("created_at"),
+    supabase.from("accounts").select("id, name, kind, favorite").order("created_at"),
   ]);
+  // Until migration 0012 runs there is no favourite column: ask again without it.
+  const accounts = withFavorite.error ? await supabase.from("accounts").select("id, name, kind").order("created_at") : withFavorite;
   return {
     pending: inbox.count ?? 0,
-    accounts: (accounts.data ?? []) as Pick<Account, "id" | "name" | "kind">[],
+    accounts: (accounts.data ?? []) as Pick<Account, "id" | "name" | "kind" | "favorite">[],
     today: todayInBogota(),
   };
 }

@@ -33,7 +33,17 @@ export interface Account {
   rate_reference?: string | null;
   /** Debts: the bank stretched the term ("rediferido"). */
   refinanced?: boolean;
+  /** Savings or cash: the account payments come from by default (one per person). */
+  favorite?: boolean;
 }
+
+/** The favourite account for payments, if one is set. */
+export const favoriteAccountId = (accounts: Pick<Account, "id" | "kind" | "favorite">[]) =>
+  accounts.find((a) => a.favorite && (a.kind === "savings" || a.kind === "cash"))?.id ?? null;
+
+/** Accounts with the favourite first, the rest in their order: for the "pay from" lists. */
+export const favoriteFirst = <T extends Pick<Account, "favorite">>(accounts: T[]) =>
+  [...accounts].sort((a, b) => Number(Boolean(b.favorite)) - Number(Boolean(a.favorite)));
 
 export interface Tx {
   id: string;
@@ -368,6 +378,8 @@ export function monthlyChecklist(accounts: Account[], bills: Bill[], txs: Tx[], 
   const inMonth = (t: Tx) => t.occurred_on >= first && t.occurred_on <= last;
   const dueIn = (day: number) => dueDates(day, first, 1)[0];
   const spendable = accounts.filter((a) => a.kind !== "loan");
+  // Where a payment comes from by default: the favourite account, else the one used last time.
+  const favorite = favoriteAccountId(accounts);
   const items: ChecklistItem[] = [];
 
   for (const bill of bills) {
@@ -376,7 +388,7 @@ export function monthlyChecklist(accounts: Account[], bills: Bill[], txs: Tx[], 
     const payments = txs.filter((t) => t.bill_id === bill.id && inMonth(t));
     const due = dueIn(bill.due_day);
     const lastUsed = txs.find((t) => t.bill_id === bill.id)?.account_id; // txs come newest first
-    const accountId = accounts.some((a) => a.id === lastUsed) ? lastUsed! : spendable.length === 1 ? spendable[0].id : null;
+    const accountId = favorite ?? (accounts.some((a) => a.id === lastUsed) ? lastUsed! : spendable.length === 1 ? spendable[0].id : null);
     items.push({
       type: "bill",
       id: bill.id,
@@ -415,7 +427,7 @@ export function monthlyChecklist(accounts: Account[], bills: Bill[], txs: Tx[], 
       paidFrom: payments[0]?.source_account_id ?? null,
       overdue: payments.length === 0 && due !== null && due < today && !skipOf("debt", account.id),
       skipped: payments.length === 0 ? skipOf("debt", account.id) : null,
-      quick: instalment ? { amount: instalment, accountId: accounts.some((a) => a.id === lastSource) ? lastSource : null } : null,
+      quick: instalment ? { amount: instalment, accountId: favorite ?? (accounts.some((a) => a.id === lastSource) ? lastSource : null) } : null,
     });
   }
 

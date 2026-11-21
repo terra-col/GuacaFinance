@@ -206,3 +206,11 @@ test("goal plans: a one-time goal has no monthly plan", async () => {
   await as(ANA, "insert into goals (kind, name, target_amount, target_date, plan_once) values ('save', 'Deuda JuanFe', 800000, '2026-12-31', true)");
   await assert.rejects(as(ANA, "insert into goals (kind, name, target_amount, target_date, plan_once, plan_amount, plan_day) values ('save', 'X', 1, '2027-01-01', true, 100, 5)"), /check constraint/);
 });
+
+test("favorite account: one per person, and only one that holds money", async () => {
+  const [nomina] = await as(ANA, "insert into accounts (kind, name, favorite) values ('savings', 'Nómina fav', true) returning id");
+  await assert.rejects(as(ANA, "insert into accounts (kind, name, favorite) values ('cash', 'Billetera fav', true)"), /duplicate key/, "a second favorite");
+  await assert.rejects(as(ANA, "update accounts set favorite = true where id = $1", [visa.id]), /check constraint|duplicate key/, "a card cannot be the favorite");
+  await as(BETO, "insert into accounts (kind, name, favorite) values ('savings', 'De Beto', true)");
+  await as(ANA, "update accounts set favorite = false where id = $1", [nomina.id]);
+});

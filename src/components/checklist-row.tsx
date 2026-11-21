@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useOptimistic, useState, useTransition } from "react";
-import { markPaid, skipItem, unmarkPaid, unskipItem, updatePaid } from "@/app/actions";
+import { deleteBill, deleteIncome, markPaid, skipItem, unmarkPaid, unskipItem, updatePaid } from "@/app/actions";
 import { daysBetween, formatCOP, formatDate, relativeDay, type ChecklistItem } from "@/lib/finance";
 import { DateField } from "./date-field";
 import { MoneyInput } from "./money-input";
@@ -36,7 +36,7 @@ function buzz() {
 export function ChecklistRow({ item, month, today, editable, accounts }: Props) {
   const [paid, setOptimisticPaid] = useOptimistic(item.paid);
   const [pending, startTransition] = useTransition();
-  const [panel, setPanel] = useState<"none" | "form" | "edit" | "skip" | "unskip">("none");
+  const [panel, setPanel] = useState<"none" | "form" | "edit" | "skip" | "unskip" | "delete">("none");
   const income = item.type === "income";
   // A goal's monthly saving: recorded as a deposit to the goal, no account involved.
   const saving = item.type === "goal";
@@ -111,6 +111,22 @@ export function ChecklistRow({ item, month, today, editable, accounts }: Props) 
       const result = await updatePaid({}, form);
       if (result.error) return setError(result.error);
       setPanel("none");
+    });
+  }
+
+  // Fixed bills and scheduled incomes can be removed from here; the movements already recorded stay.
+  const removable = item.type === "bill" || income;
+
+  function remove() {
+    setError(null);
+    startTransition(async () => {
+      const form = new FormData();
+      form.set("id", item.id);
+      try {
+        await (income ? deleteIncome : deleteBill)(form);
+      } catch {
+        setError("No se pudo eliminar. Intenta de nuevo.");
+      }
     });
   }
 
@@ -280,7 +296,12 @@ export function ChecklistRow({ item, month, today, editable, accounts }: Props) 
                 Fecha
                 <DateField name="occurred_on" defaultValue={today} min={`${month}-01`} max={today} required />
               </label>
-              <div className="flex gap-2 sm:col-span-4 sm:justify-end">
+              <div className="flex flex-wrap items-center gap-2 sm:col-span-4 sm:justify-end">
+                {removable && (
+                  <button type="button" className="mr-auto text-sm font-medium text-ink-3 hover:text-ink" onClick={() => setPanel("delete")}>
+                    Eliminar {income ? "ingreso" : "pago fijo"}
+                  </button>
+                )}
                 <button type="button" className="btn-quiet flex-1 sm:flex-none" onClick={() => setPanel("skip")}>
                   Omitir este mes
                 </button>
@@ -330,6 +351,22 @@ export function ChecklistRow({ item, month, today, editable, accounts }: Props) 
               </div>
             </div>
           )}
+          {editable && panel === "delete" && removable && (
+            <div className="mt-3 flex flex-col gap-3 rounded-2xl bg-debt/10 p-3 sm:ml-14 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-sm">
+                ¿Eliminar <span className="font-semibold">{item.name}</span> de {income ? "tus ingresos programados" : "tus pagos fijos"}? Deja de aparecer desde ahora; lo que ya
+                registraste se queda en tus movimientos.
+              </p>
+              <div className="flex shrink-0 gap-2">
+                <button type="button" className="btn-quiet" onClick={() => setPanel(paid ? "edit" : "form")}>
+                  Cancelar
+                </button>
+                <button type="button" className="btn" onClick={remove} disabled={pending}>
+                  Eliminar
+                </button>
+              </div>
+            </div>
+          )}
           {editable && panel === "edit" && paid && (
             <form
               key={`${item.paidAmount}-${item.paidOn}`}
@@ -362,9 +399,16 @@ export function ChecklistRow({ item, month, today, editable, accounts }: Props) 
                 <DateField name="occurred_on" defaultValue={item.paidOn ?? today} min={`${month}-01`} max={today} required />
               </label>
               <div className="flex flex-wrap items-center justify-between gap-2 sm:col-span-3">
-                <button type="button" className="text-sm font-medium text-ink-3 hover:text-ink" onClick={unpay} disabled={pending}>
-                  Desmarcar (borra {income ? "el ingreso" : saving ? "el abono" : "el pago"})
-                </button>
+                <span className="flex flex-wrap gap-x-4 gap-y-1">
+                  <button type="button" className="text-sm font-medium text-ink-3 hover:text-ink" onClick={unpay} disabled={pending}>
+                    Desmarcar (borra {income ? "el ingreso" : saving ? "el abono" : "el pago"})
+                  </button>
+                  {removable && (
+                    <button type="button" className="text-sm font-medium text-ink-3 hover:text-ink" onClick={() => setPanel("delete")}>
+                      Eliminar {income ? "ingreso" : "pago fijo"}
+                    </button>
+                  )}
+                </span>
                 <div className="flex gap-2">
                   <button type="button" className="btn-quiet" onClick={() => setPanel("none")}>
                     Cancelar
