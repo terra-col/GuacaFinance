@@ -4,7 +4,7 @@ import { ChecklistRow } from "@/components/checklist-row";
 import { MonthPlanCard } from "@/components/month-plan";
 import { incomeChecklist, incomeRow, monthPlan, nextIncomeDate } from "@/lib/budget";
 import { loadData } from "@/lib/data";
-import { byDue, favoriteFirst, formatCOP, monthName, monthlyChecklist, nextDueDate, shiftMonth } from "@/lib/finance";
+import { byDue, favoriteFirst, formatCOP, monthName, monthlyChecklist, nextDueDate, pendingFirst, shiftMonth } from "@/lib/finance";
 import { ScheduledList, type ScheduledRow } from "@/components/scheduled-list";
 import { goalChecklist } from "@/lib/goals";
 import { PaymentsCalendar } from "@/components/payments-calendar";
@@ -165,7 +165,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
             </p>
           </div>
           <ul className="mt-2 divide-y divide-line">
-            {incomeItems.map((i) => (
+            {[...incomeItems].sort((a, b) => pendingFirst(incomeRow(a), incomeRow(b))).map((i) => (
               <ChecklistRow key={`income-${i.id}`} item={incomeRow(i)} month={month} today={today} editable={editable} accounts={savings} />
             ))}
           </ul>
@@ -203,7 +203,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
             </p>
           )}
           <ul className="mt-3 divide-y divide-line">
-            {items.map((item) => (
+            {[...items].sort(pendingFirst).map((item) => (
               <ChecklistRow
                 key={`${item.type}-${item.id}`}
                 item={item}

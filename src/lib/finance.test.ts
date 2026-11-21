@@ -246,3 +246,10 @@ test("categories to offer: the app's own, then the person's, once each", async (
   assert.deepEqual(list.slice(0, CATEGORIES.length), CATEGORIES);
   assert.deepEqual(list.slice(CATEGORIES.length), ["Arriendo", "Gasolina"], "no repeats (case aside), no adjustments, no app categories again");
 });
+
+test("Pagos list: pending first (late ones by date), then skipped, paid at the end", async () => {
+  const { pendingFirst } = await import("./finance.ts");
+  const row = (name: string, due: string | null, paid = false, skipped = false) => ({ name, due, paid, skipped: skipped ? { id: "s", item_type: "bill" as const, item_id: name, month: "2026-11", note: null } : null });
+  const ordered = [row("Luz", "2026-11-05", true), row("Gym", "2026-11-03", false, true), row("Internet", "2026-11-28"), row("Arriendo", "2026-11-05"), row("Visa", null)].sort(pendingFirst);
+  assert.deepEqual(ordered.map((r) => r.name), ["Arriendo", "Internet", "Visa", "Gym", "Luz"]);
+});

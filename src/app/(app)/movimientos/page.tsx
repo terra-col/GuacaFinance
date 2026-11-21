@@ -5,7 +5,7 @@ import { budgetViews } from "@/lib/budget";
 import { NewMovementButton } from "@/components/quick-add";
 import { TxList } from "@/components/tx-list";
 import { loadData } from "@/lib/data";
-import { formatCOP, monthLabel } from "@/lib/finance";
+import { ADJUSTMENT, formatCOP, monthLabel, spendingByCategory } from "@/lib/finance";
 
 export default async function TransactionsPage() {
   const { accounts, txs, inbox, budgets, planReady, today } = await loadData();
@@ -55,7 +55,14 @@ export default async function TransactionsPage() {
         </div>
       </section>
 
-      {planReady && <BudgetsCard views={budgetViews(budgets, txs, month, today)} current />}
+      {planReady && (
+        <BudgetsCard
+          views={budgetViews(budgets, txs, month, today)}
+          current
+          // Where the month's spending went; balance adjustments are not spending.
+          totals={spendingByCategory(txs.filter((t) => t.category !== ADJUSTMENT), month)}
+        />
+      )}
 
       {inbox.length > 0 && (
         <section className="card">

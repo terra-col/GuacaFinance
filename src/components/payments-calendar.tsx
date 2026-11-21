@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { CalendarEntry } from "@/lib/calendar";
-import { formatCOP, formatCompact, type ChecklistItem } from "@/lib/finance";
+import { formatCOP, formatCompact, pendingFirst, type ChecklistItem } from "@/lib/finance";
 import { ChecklistRow } from "./checklist-row";
 
 const WEEKDAYS = ["L", "M", "M", "J", "V", "S", "D"];
@@ -77,7 +77,7 @@ export function PaymentsCalendar({
   const from = today.startsWith(month) ? today : `${month}-01`;
   const upcoming = days.filter((d) => d >= from).flatMap((d) => byDate[d].filter((e) => e.status === "pending" || e.status === "overdue"));
   const overdue = days.filter((d) => d < from).flatMap((d) => byDate[d].filter((e) => e.status === "overdue"));
-  const chosen = selected ? rows.filter((r) => r.due === selected) : [];
+  const chosen = selected ? rows.filter((r) => r.due === selected).sort(pendingFirst) : [];
 
   return (
     <>

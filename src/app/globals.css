@@ -44,6 +44,16 @@
   --bubble-ring: rgb(109 74 255 / 0.2);
   --tab-ink: #34305e;
   --tab-on: #5a37f2;
+  /* Categorical colours for charts (spending by category), in a fixed order, validated for
+     colour-blind separation on both surfaces (adjacent pairs). "Otras" is neutral. */
+  --cat-1: #2a78d6;
+  --cat-2: #eb6834;
+  --cat-3: #1baf7a;
+  --cat-4: #eda100;
+  --cat-5: #e87ba4;
+  --cat-6: #008300;
+  --cat-7: #6250d6;
+  --cat-other: #a3a0bd;
   --shadow: 0 18px 50px -24px rgb(80 60 190 / 0.45);
   --aurora:
     radial-gradient(60rem 40rem at -10% -10%, rgb(139 108 255 / 0.28), transparent 60%),
@@ -89,6 +99,14 @@
   --bubble-ring: rgb(170 150 255 / 0.3);
   --tab-ink: #e4e1fb;
   --tab-on: #c2b4ff;
+  --cat-1: #3987e5;
+  --cat-2: #d95926;
+  --cat-3: #199e70;
+  --cat-4: #c98500;
+  --cat-5: #d55181;
+  --cat-6: #0ca30c;
+  --cat-7: #9085e9;
+  --cat-other: #6f6b93;
     --liquid-a: rgb(255 255 255 / 0.13);
     --liquid-b: rgb(255 255 255 / 0.03);
     --liquid-edge: rgb(255 255 255 / 0.2);
@@ -105,6 +123,14 @@
     --bubble-ring: rgb(170 150 255 / 0.3);
     --tab-ink: #e4e1fb;
     --tab-on: #c2b4ff;
+    --cat-1: #3987e5;
+    --cat-2: #d95926;
+    --cat-3: #199e70;
+    --cat-4: #c98500;
+    --cat-5: #d55181;
+    --cat-6: #0ca30c;
+    --cat-7: #9085e9;
+    --cat-other: #6f6b93;
     --shadow: 0 18px 50px -24px rgb(0 0 0 / 0.7);
     --aurora:
       radial-gradient(60rem 40rem at -10% -10%, rgb(109 74 255 / 0.32), transparent 60%),
@@ -1110,6 +1136,25 @@ a.card:active {
 }
 @media (prefers-reduced-motion: reduce) {
   .favorite-star-on {
+    animation: none;
+  }
+}
+
+/* Donut slices: they draw in on arrival and thicken under the pointer. */
+.donut-slice {
+  transition:
+    stroke-width 160ms,
+    opacity 160ms;
+  animation: donut-in 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation-delay: calc(var(--i, 0) * 60ms);
+}
+@keyframes donut-in {
+  from {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .donut-slice {
     animation: none;
   }
 }

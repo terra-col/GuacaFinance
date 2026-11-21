@@ -386,6 +386,15 @@ export interface ChecklistItem {
  * that owes something. Nothing is stored per month: an item is ticked when a
  * movement dated in that month pays it, so each new month starts unticked.
  */
+/**
+ * The list the person works through: what is still pending first (late ones come first by their
+ * date), then what was skipped this month, and what is already paid at the end.
+ */
+export const pendingFirst = <T extends Pick<ChecklistItem, "paid" | "skipped" | "due" | "name">>(a: T, b: T) => {
+  const rank = (i: T) => (i.paid ? 2 : i.skipped ? 1 : 0);
+  return rank(a) - rank(b) || (a.due ?? "9999").localeCompare(b.due ?? "9999") || a.name.localeCompare(b.name);
+};
+
 /** Soonest first; items with no payment day last; then by name. */
 export const byDue = (a: ChecklistItem, b: ChecklistItem) => (a.due ?? "9999").localeCompare(b.due ?? "9999") || a.name.localeCompare(b.name);
 
