@@ -9,28 +9,10 @@ import { byDue, formatCOP, monthName, monthlyChecklist, shiftMonth } from "@/lib
 import { goalChecklist } from "@/lib/goals";
 import { SubmitButton } from "@/components/submit-button";
 import { PaymentsCalendar } from "@/components/payments-calendar";
+import { SegmentedNav } from "@/components/segmented-nav";
 import { calendarEntries, calendarTotals, calendarWeeks } from "@/lib/calendar";
 
 const MONTH_SHORT = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
-
-/** One option of the segmented control: a link, or the current view with its tick. */
-function Segment({ href, active, children }: { href: string; active: boolean; children: React.ReactNode }) {
-  const tick = (
-    <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M5 12.5l4.5 4.5L19 7.5" />
-    </svg>
-  );
-  return active ? (
-    <span className="segment" aria-current="page">
-      {tick}
-      {children}
-    </span>
-  ) : (
-    <Link href={href} className="segment">
-      {children}
-    </Link>
-  );
-}
 
 export default async function PaymentsPage({ searchParams }: { searchParams: Promise<{ mes?: string; vista?: string }> }) {
   const { accounts, txs, bills, incomes, budgets, skips, planReady, goals, deposits, today } = await loadData();
@@ -82,14 +64,14 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
       </div>
       {/* Segmented control, centred: the active view is tinted and ticked. */}
       <div className="mt-4 flex flex-col items-center gap-2">
-        <nav className="segmented" aria-label="Cómo ver los pagos">
-          <Segment href={hrefFor(month <= current ? month : current, false)} active={!calendar}>
-            Lista
-          </Segment>
-          <Segment href={hrefFor(month, true)} active={calendar}>
-            Calendario
-          </Segment>
-        </nav>
+        <SegmentedNav
+          label="Cómo ver los pagos"
+          name="pagos-view"
+          items={[
+            { href: hrefFor(month <= current ? month : current, false), label: "Lista", active: !calendar },
+            { href: hrefFor(month, true), label: "Calendario", active: calendar },
+          ]}
+        />
         {!editable && (
           <Link href={hrefFor(current)} className="text-sm font-medium text-brand">
             Volver a {monthName(current)}

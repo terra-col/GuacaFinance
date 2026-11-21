@@ -426,6 +426,25 @@ export async function unmarkPaid(form: FormData) {
 
 const LOGO = /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/;
 
+/**
+ * Edits a payment already ticked (amount, account, date): the month's movements that ticked it are
+ * replaced by one with the new data. Checked before anything is deleted, so a typo loses nothing.
+ */
+export async function updatePaid(_prev: FormState, form: FormData): Promise<FormState> {
+  const amount = parsePesos(text(form, "amount"));
+  if (!amount) return { error: "Escribe el monto." };
+  if (!DATE.test(text(form, "occurred_on"))) return { error: "La fecha no es válida." };
+  const type = form.get("type");
+  if ((type === "bill" || type === "income") && !text(form, "account_id")) return { error: type === "bill" ? "Elige con qué pagaste." : "Elige a qué cuenta llegó." };
+  try {
+    await unmarkPaid(form);
+  } catch {
+    return { error: "No se pudo actualizar. Intenta de nuevo." };
+  }
+  const result = await markPaid({}, form);
+  return result.error ? result : { message: "Actualizado." };
+}
+
 /** Edits an account's details and the look of its card. The opening balance is not editable: it anchors the history. */
 export async function updateAccount(_prev: FormState, form: FormData): Promise<FormState> {
   const supabase = await signedIn();

@@ -5,6 +5,7 @@ import { AddTile } from "@/components/add-tile";
 import { Carousel } from "@/components/carousel";
 import { PlanSimulator } from "@/components/plan-simulator";
 import { planDebts } from "@/lib/planner";
+import { Icon } from "@/components/icons";
 import { LinkPending } from "@/components/link-pending";
 import { UsageBar } from "@/components/usage-bar";
 import { DebtTags, InstallmentMeter } from "@/components/installment-meter";
@@ -64,11 +65,13 @@ function DebtModule({
         />
       </Link>
 
+      {/* A button, not a link with a ↻ (that reads as "reload"): it opens the balance form on the account. */}
       <Link
         href={`/cuentas/${account.id}#saldo`}
-        className="-mt-2 self-start text-sm font-medium text-brand"
+        className="liquid -mt-1 flex h-10 items-center gap-2 self-start rounded-xl px-3.5 text-sm font-semibold"
       >
-        ↻ Actualizar saldo
+        <Icon name="edit" className="size-4 text-brand" />
+        Actualizar saldo
       </Link>
 
       {first && (

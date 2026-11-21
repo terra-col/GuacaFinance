@@ -15,22 +15,22 @@ const longDay = (date: string) => {
 };
 
 /**
- * The legend, by state: what is still to pay, what is paid, what is late, and what comes in.
- * A goal's saving counts as a payment like any other.
+ * The legend, by state. An open ring is something still to happen (to pay, or to come in); a
+ * filled dot is settled; coral is late. A goal's saving counts as a payment like any other.
  */
 const LEGEND = [
-  { key: "pending", label: "Pago pendiente", color: "var(--brand)", hollow: false },
-  { key: "paid", label: "Pagado", color: "var(--ink-3)", hollow: true },
+  { key: "pending", label: "Pago pendiente", color: "var(--brand)", hollow: true },
+  { key: "paid", label: "Pagado", color: "var(--ink-3)", hollow: false },
   { key: "overdue", label: "Vencido", color: "var(--debt)", hollow: false },
-  { key: "income", label: "Ingreso", color: "var(--savings)", hollow: false },
+  { key: "income", label: "Ingreso", color: "var(--savings)", hollow: true },
 ] as const;
 
 function tone(entry: CalendarEntry): { color: string; hollow: boolean } {
   const settled = entry.status === "paid" || entry.status === "skipped";
-  if (entry.type === "income") return { color: "var(--savings)", hollow: settled };
-  if (settled) return { color: "var(--ink-3)", hollow: true };
+  if (entry.type === "income") return { color: "var(--savings)", hollow: !settled };
+  if (settled) return { color: "var(--ink-3)", hollow: false };
   if (entry.status === "overdue") return { color: "var(--debt)", hollow: false };
-  return { color: "var(--brand)", hollow: false };
+  return { color: "var(--brand)", hollow: true };
 }
 
 function Dot({ color, hollow, onAccent = false }: { color: string; hollow: boolean; onAccent?: boolean }) {
@@ -39,7 +39,7 @@ function Dot({ color, hollow, onAccent = false }: { color: string; hollow: boole
     <span
       aria-hidden="true"
       className="size-1.5 shrink-0 rounded-full sm:size-2.5"
-      style={hollow ? { boxShadow: `inset 0 0 0 1.5px ${c}`, opacity: onAccent ? 0.8 : 1 } : { background: c }}
+      style={hollow ? { boxShadow: `inset 0 0 0 1.75px ${c}` } : { background: c, opacity: onAccent ? 0.8 : 1 }}
     />
   );
 }
@@ -131,7 +131,7 @@ export function PaymentsCalendar({
               <span
                 aria-hidden="true"
                 className="size-2.5 rounded-full"
-                style={l.hollow ? { boxShadow: `inset 0 0 0 1.5px ${l.color}` } : { background: l.color }}
+                style={l.hollow ? { boxShadow: `inset 0 0 0 1.75px ${l.color}` } : { background: l.color }}
               />
               {l.label}
             </span>

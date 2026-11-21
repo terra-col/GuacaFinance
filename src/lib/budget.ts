@@ -69,6 +69,9 @@ export interface IncomeItem {
   expected: number | null;
   received: boolean;
   receivedAmount: number;
+  /** Once received: the date and account of the latest movement, to edit it in place. */
+  receivedOn?: string | null;
+  receivedIn?: string | null;
   /** Expected date passed and nothing recorded. */
   late: boolean;
   skipped: Skip | null;
@@ -93,6 +96,8 @@ export function incomeChecklist(incomes: Income[], txs: Tx[], month: string, tod
         expected: i.amount,
         received: got.length > 0,
         receivedAmount: got.reduce((sum, t) => sum + t.amount, 0),
+        receivedOn: got[0]?.occurred_on ?? null,
+        receivedIn: got[0]?.account_id ?? null,
         late: got.length === 0 && !skipped && due < today,
         skipped,
         accountId: i.account_id,
@@ -152,6 +157,8 @@ export function incomeRow(i: IncomeItem): ChecklistItem {
     expected: i.expected,
     paid: i.received,
     paidAmount: i.receivedAmount,
+    paidOn: i.receivedOn ?? null,
+    paidFrom: i.receivedIn ?? null,
     overdue: i.late,
     skipped: i.skipped,
     quick: i.expected && i.accountId ? { amount: i.expected, accountId: i.accountId } : null,

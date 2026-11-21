@@ -4,6 +4,7 @@ import { useActionState, useState } from "react";
 import { adjustBalance, type FormState } from "@/app/actions";
 import { formatCOP } from "@/lib/finance";
 import { DateField } from "./date-field";
+import { Icon } from "./icons";
 import { MoneyInput } from "./money-input";
 import { SubmitButton } from "./submit-button";
 
@@ -33,8 +34,9 @@ export function BalanceAdjuster({
   return (
     <div id="saldo" className="scroll-mt-4">
       {!open ? (
-        <button type="button" className="liquid h-11 rounded-2xl px-4 text-sm font-semibold" onClick={() => setOpen(true)}>
-          ↻ Actualizar saldo
+        <button type="button" className="liquid flex h-11 items-center gap-2 rounded-2xl px-4 text-sm font-semibold" onClick={() => setOpen(true)}>
+          <Icon name="edit" className="size-4 text-brand" />
+          Actualizar saldo
         </button>
       ) : (
         <form action={action} className="card rise flex flex-col gap-3">

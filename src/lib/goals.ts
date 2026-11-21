@@ -194,6 +194,7 @@ export function goalChecklist(goals: Goal[], deposits: GoalDeposit[], month: str
       expected,
       paid,
       paidAmount: thisMonth.reduce((sum, d) => sum + d.amount, 0),
+      paidOn: thisMonth[0]?.occurred_on ?? null, // deposits come newest first
       overdue: !paid && due < today && !skip,
       skipped: paid ? null : skip,
       quick: { amount: expected, accountId: null },

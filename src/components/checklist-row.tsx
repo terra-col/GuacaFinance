@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useOptimistic, useState, useTransition } from "react";
-import { markPaid, skipItem, unmarkPaid, unskipItem } from "@/app/actions";
+import { markPaid, skipItem, unmarkPaid, unskipItem, updatePaid } from "@/app/actions";
 import { daysBetween, formatCOP, formatDate, relativeDay, type ChecklistItem } from "@/lib/finance";
 import { DateField } from "./date-field";
 import { MoneyInput } from "./money-input";
@@ -36,7 +36,7 @@ function buzz() {
 export function ChecklistRow({ item, month, today, editable, accounts }: Props) {
   const [paid, setOptimisticPaid] = useOptimistic(item.paid);
   const [pending, startTransition] = useTransition();
-  const [panel, setPanel] = useState<"none" | "form" | "confirm" | "skip" | "unskip">("none");
+  const [panel, setPanel] = useState<"none" | "form" | "edit" | "skip" | "unskip">("none");
   const income = item.type === "income";
   // A goal's monthly saving: recorded as a deposit to the goal, no account involved.
   const saving = item.type === "goal";
@@ -104,6 +104,16 @@ export function ChecklistRow({ item, month, today, editable, accounts }: Props) 
     });
   }
 
+  /** A ticked payment with new data (amount, account, date): replaces what was recorded. */
+  function edit(form: FormData) {
+    setError(null);
+    startTransition(async () => {
+      const result = await updatePaid({}, form);
+      if (result.error) return setError(result.error);
+      setPanel("none");
+    });
+  }
+
   function skip(form: FormData) {
     setError(null);
     setPanel("none");
@@ -130,7 +140,7 @@ export function ChecklistRow({ item, month, today, editable, accounts }: Props) 
   function onCheck() {
     if (!editable || pending) return;
     if (skipped) return setPanel(panel === "unskip" ? "none" : "unskip");
-    if (paid) return setPanel(panel === "confirm" ? "none" : "confirm");
+    if (paid) return setPanel(panel === "edit" ? "none" : "edit");
     if (item.quick) return quickPay();
     setPanel(panel === "form" ? "none" : "form");
   }
@@ -155,7 +165,7 @@ export function ChecklistRow({ item, month, today, editable, accounts }: Props) 
   const label = skipped
     ? `${item.name}: omitido este mes. Volver a incluir`
     : paid
-      ? `${item.name}: ${doneLower}. Desmarcar`
+      ? `${item.name}: ${doneLower}. Editar o desmarcar`
       : item.quick
         ? `Marcar ${item.name} como ${doneLower} por ${formatCOP(item.quick.amount)}`
         : `Marcar ${item.name} como ${doneLower}`;
@@ -230,10 +240,15 @@ export function ChecklistRow({ item, month, today, editable, accounts }: Props) 
               Opciones
             </button>
           )}
+          {editable && paid && !undoable && (
+            <button type="button" className="text-xs font-medium text-ink-3 hover:text-ink" onClick={() => setPanel(panel === "edit" ? "none" : "edit")} aria-expanded={panel === "edit"}>
+              Editar
+            </button>
+          )}
         </div>
       </div>
 
-      {/* The panel slides open: a form for a different amount, or a confirmation to untick. */}
+      {/* The panel slides open: a form for a different amount, the edit of a ticked payment, or skipping. */}
       <div className={`grid transition-[grid-template-rows,opacity] duration-300 ${panel !== "none" ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"}`}>
         <div className="overflow-hidden">
           {editable && panel === "form" && !paid && (
@@ -315,20 +330,51 @@ export function ChecklistRow({ item, month, today, editable, accounts }: Props) 
               </div>
             </div>
           )}
-          {editable && panel === "confirm" && paid && (
-            <div className="mt-3 flex flex-col gap-3 rounded-2xl bg-debt/10 p-3 sm:ml-14 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-sm">
-                ¿Desmarcar <span className="font-semibold">{item.name}</span>? Se borra {income ? "el ingreso" : saving ? "el abono a la meta" : "el pago"} de {formatCOP(item.paidAmount)} registrado este mes.
-              </p>
-              <div className="flex shrink-0 gap-2">
-                <button type="button" className="btn-quiet" onClick={() => setPanel("none")}>
-                  Cancelar
+          {editable && panel === "edit" && paid && (
+            <form
+              key={`${item.paidAmount}-${item.paidOn}`}
+              onSubmit={(e) => {
+                e.preventDefault();
+                edit(new FormData(e.currentTarget));
+              }}
+              className="mt-3 grid gap-3 rounded-2xl bg-savings/10 p-3 sm:ml-14 sm:grid-cols-[1fr_1fr_1fr] sm:items-end"
+            >
+              <input type="hidden" name="type" value={item.type} />
+              <input type="hidden" name="id" value={item.id} />
+              <input type="hidden" name="month" value={month} />
+              <label className="field">
+                {income ? "Cuánto llegó" : saving ? "Cuánto abonaste" : "Cuánto pagaste"}
+                <MoneyInput name="amount" defaultValue={item.paidAmount || item.expected} required />
+              </label>
+              <label className="field" hidden={saving}>
+                {item.type === "bill" ? "Con qué" : income ? "Llegó a" : "Salió de"}
+                <select className="input" name="account_id" defaultValue={item.paidFrom ?? item.quick?.accountId ?? ""} required={item.type !== "debt" && !saving}>
+                  {item.type === "debt" && <option value="">Otra fuente (no registrada)</option>}
+                  {accounts.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="field">
+                Fecha
+                <DateField name="occurred_on" defaultValue={item.paidOn ?? today} min={`${month}-01`} max={today} required />
+              </label>
+              <div className="flex flex-wrap items-center justify-between gap-2 sm:col-span-3">
+                <button type="button" className="text-sm font-medium text-ink-3 hover:text-ink" onClick={unpay} disabled={pending}>
+                  Desmarcar (borra {income ? "el ingreso" : saving ? "el abono" : "el pago"})
                 </button>
-                <button type="button" className="btn" onClick={unpay} disabled={pending}>
-                  Desmarcar
-                </button>
+                <div className="flex gap-2">
+                  <button type="button" className="btn-quiet" onClick={() => setPanel("none")}>
+                    Cancelar
+                  </button>
+                  <button className="btn" disabled={pending}>
+                    Guardar cambios
+                  </button>
+                </div>
               </div>
-            </div>
+            </form>
           )}
         </div>
       </div>

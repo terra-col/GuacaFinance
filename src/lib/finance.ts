@@ -348,6 +348,9 @@ export interface ChecklistItem {
   skipped: Skip | null;
   /** Enough to record the payment in one tap; null when the amount or the account must be asked. */
   quick: { amount: number; accountId: string | null } | null;
+  /** Once paid: the date and the account of the latest payment, to edit it in place. */
+  paidOn?: string | null;
+  paidFrom?: string | null;
 }
 
 /**
@@ -382,6 +385,8 @@ export function monthlyChecklist(accounts: Account[], bills: Bill[], txs: Tx[], 
       expected: bill.amount,
       paid: payments.length > 0,
       paidAmount: payments.reduce((sum, t) => sum + t.amount, 0),
+      paidOn: payments[0]?.occurred_on ?? null,
+      paidFrom: payments[0]?.account_id ?? null,
       overdue: payments.length === 0 && due < today && !skipOf("bill", bill.id),
       skipped: payments.length === 0 ? skipOf("bill", bill.id) : null,
       quick: bill.amount && accountId ? { amount: bill.amount, accountId } : null,
@@ -406,6 +411,8 @@ export function monthlyChecklist(accounts: Account[], bills: Bill[], txs: Tx[], 
       expected: instalment,
       paid: payments.length > 0,
       paidAmount: payments.reduce((sum, t) => sum + t.amount, 0),
+      paidOn: payments[0]?.occurred_on ?? null,
+      paidFrom: payments[0]?.source_account_id ?? null,
       overdue: payments.length === 0 && due !== null && due < today && !skipOf("debt", account.id),
       skipped: payments.length === 0 ? skipOf("debt", account.id) : null,
       quick: instalment ? { amount: instalment, accountId: accounts.some((a) => a.id === lastSource) ? lastSource : null } : null,
