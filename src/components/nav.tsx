@@ -188,7 +188,7 @@ export function Nav({ pending }: { pending: number }) {
                 draggable={false}
                 onClick={tap(item.href)}
                 aria-current={i === current ? "page" : undefined}
-                className={`relative flex flex-col items-center gap-0.5 rounded-[1.4rem] py-1.5 text-[11px] font-semibold transition-colors duration-300 ${on ? "text-brand" : "text-ink-2"}`}
+                className={`relative flex flex-col items-center gap-0.5 rounded-[1.4rem] py-1.5 text-[11px] font-semibold transition-colors duration-300 ${on ? "text-[var(--tab-on)]" : "text-[var(--tab-ink)]"}`}
               >
                 {/* Re-keyed when it becomes active, so the icon bounces once on arrival. */}
                 <span key={on ? "on" : "off"} className={`relative ${on ? "tab-bounce" : ""}`}>
