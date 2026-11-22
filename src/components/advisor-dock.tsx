@@ -90,6 +90,7 @@ export function AdvisorDock({ provider, userId }: { provider: "gemini" | "claude
         aria-expanded={open}
         aria-label={open ? "Cerrar el asesor" : "Abrir el asesor IA"}
         title={open ? "Cerrar" : "Pregúntale a tu asesor con IA: responde a partir de tus cuentas, deudas y metas"}
+        data-tour="advisor"
         className={`fab advisor-fab fixed bottom-6 right-6 z-40 flex h-[3.75rem] items-center rounded-full ${open ? "w-[3.75rem] justify-center" : "gap-3 pl-4 pr-6"}`}
       >
         {open ? (

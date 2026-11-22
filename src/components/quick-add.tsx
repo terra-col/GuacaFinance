@@ -55,6 +55,7 @@ export function QuickAdd({ accounts, today }: { accounts: Pick<Account, "id" | "
       <button
         type="button"
         onClick={show}
+        data-tour="register"
         className="fab fixed bottom-[calc(5.75rem+env(safe-area-inset-bottom))] right-4 z-30 flex h-12 items-center gap-2 rounded-full pl-4 pr-5 text-sm font-semibold lg:hidden"
       >
         <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" aria-hidden="true">
@@ -91,7 +92,7 @@ export function QuickAdd({ accounts, today }: { accounts: Pick<Account, "id" | "
 /** The same action in the header on wide screens. */
 export function QuickAddButton() {
   return (
-    <button type="button" onClick={openQuickAdd} className="btn hidden h-10 gap-1.5 rounded-xl px-4 text-sm lg:inline-flex">
+    <button type="button" onClick={openQuickAdd} data-tour="register" className="btn hidden h-10 gap-1.5 rounded-xl px-4 text-sm lg:inline-flex">
       <span aria-hidden="true" className="text-lg leading-none">
         +
       </span>

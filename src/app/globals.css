@@ -186,6 +186,7 @@ html[data-scale="lg"] {
   --color-bg: var(--bg);
   --color-surface: var(--surface);
   --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
   --color-ink: var(--ink);
   --color-ink-2: var(--ink-2);
   --color-ink-3: var(--ink-3);
@@ -1226,5 +1227,31 @@ html[data-privacy="on"]:not([data-masked]) body {
   }
   ::-webkit-scrollbar-button {
     display: none;
+  }
+}
+
+/* The welcome tour: the screen dims around a lit, rounded hole over the real element, which
+   glides from one step to the next; the explanation sits on a solid card. */
+.tour-spot {
+  box-shadow:
+    0 0 0 3px var(--brand),
+    0 0 0 9999px rgb(8 6 24 / 0.62);
+  transition:
+    left 0.35s cubic-bezier(0.3, 1.2, 0.5, 1),
+    top 0.35s cubic-bezier(0.3, 1.2, 0.5, 1),
+    width 0.35s cubic-bezier(0.3, 1.2, 0.5, 1),
+    height 0.35s cubic-bezier(0.3, 1.2, 0.5, 1);
+}
+.tour-dim {
+  background: rgb(8 6 24 / 0.62);
+}
+.tour-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: 0 24px 60px -20px rgb(8 6 24 / 0.6);
+}
+@media (prefers-reduced-motion: reduce) {
+  .tour-spot {
+    transition: none;
   }
 }

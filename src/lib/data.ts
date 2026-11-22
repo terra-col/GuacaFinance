@@ -34,6 +34,8 @@ export async function loadShell() {
     pending: inbox.count ?? 0,
     accounts: (accounts.data ?? []) as Pick<Account, "id" | "name" | "kind" | "favorite">[],
     userId: session.data.session?.user.id ?? null,
+    // The welcome tour starts by itself until it is seen once (see markTourSeen).
+    tourSeen: Boolean(session.data.session?.user.user_metadata?.tour_seen),
     categories: knownCategories([...(usedInTxs.data ?? []), ...(usedInBills.data ?? [])].map((r) => r.category as string)),
     today: todayInBogota(),
   };

@@ -99,6 +99,7 @@ export function PrivacyToggle({ initial }: { initial: boolean }) {
     <button
       type="button"
       onClick={toggle}
+      data-tour="privacy"
       aria-pressed={on}
       aria-label={on ? "Mostrar saldos" : "Ocultar saldos"}
       title={on ? "Mostrar saldos" : "Ocultar saldos (modo privado)"}

@@ -137,6 +137,12 @@ export async function updateProfile(_prev: FormState, form: FormData): Promise<F
   return { message: emailChanged ? `Nombre guardado. Para cambiar el correo, abre el enlace que te enviamos a ${email} (si no llega, revisa spam).` : "Datos guardados." };
 }
 
+/** The welcome tour was seen (or skipped): kept with the profile, so it does not start again on another device. */
+export async function markTourSeen() {
+  const supabase = await createClient();
+  await supabase.auth.updateUser({ data: { tour_seen: true } });
+}
+
 export async function signOut() {
   const supabase = await createClient();
   await supabase.auth.signOut();

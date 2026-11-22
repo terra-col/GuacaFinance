@@ -6,6 +6,7 @@ import { ProfileForm } from "@/components/profile-form";
 import { ShareInvite } from "@/components/share-invite";
 import { profileName } from "@/lib/brand";
 import { profilePhone } from "@/lib/phone";
+import { TourLink } from "@/components/tour";
 import { FormSplash, ForgetOnSignOut } from "@/components/splash";
 import { ScalePicker, ThemePicker } from "@/components/theme-toggle";
 import { TokenCard } from "@/components/token-card";
@@ -26,7 +27,10 @@ export default async function SettingsPage() {
 
   return (
     <>
-      <h1 className="display pt-2 text-3xl">Ajustes</h1>
+      <div className="flex flex-wrap items-baseline justify-between gap-3 pt-2">
+        <h1 className="display text-3xl">Ajustes</h1>
+        <TourLink />
+      </div>
 
       <section id="perfil" className="card flex scroll-mt-4 flex-col gap-4">
         <div>

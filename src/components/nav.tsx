@@ -149,6 +149,7 @@ export function Nav({ pending }: { pending: number }) {
           <Link
             key={item.href}
             href={item.href}
+            data-tour={`tab${item.href}`}
             onClick={tap(item.href)}
             aria-current={i === current ? "page" : undefined}
             className={`relative rounded-full px-3.5 py-1.5 transition-colors ${i === active ? "font-semibold text-ink" : "text-ink-2 hover:text-ink"}`}
@@ -186,6 +187,7 @@ export function Nav({ pending }: { pending: number }) {
               <Link
                 key={item.href}
                 href={item.href}
+                data-tour={`tab${item.href}`}
                 draggable={false}
                 onClick={tap(item.href)}
                 aria-current={i === current ? "page" : undefined}
@@ -214,6 +216,7 @@ export function AdvisorButton() {
   return (
     <Link
       href="/asesor"
+      data-tour="advisor"
       aria-current={on ? "page" : undefined}
       className={`flex h-10 items-center gap-1.5 rounded-xl px-2.5 text-sm font-semibold transition-colors sm:px-3 lg:hidden ${on ? "fab" : "liquid"}`}
       aria-label="Asesor"

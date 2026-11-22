@@ -13,7 +13,7 @@ export function BalanceBeam({ savings, debt, previousNet }: { savings: number; d
   const diff = previousNet === null ? null : net - previousNet;
 
   return (
-    <section aria-labelledby="balance-title" className="card @container flex h-full flex-col justify-between gap-8">
+    <section aria-labelledby="balance-title" data-tour="balance" className="card @container flex h-full flex-col justify-between gap-8">
       <div>
         <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
           <h2 id="balance-title" className="eyebrow">

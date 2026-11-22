@@ -13,6 +13,7 @@ import { profileName } from "@/lib/brand";
 import { loadData } from "@/lib/data";
 import { balanceAt, byDue, daysBetween, formatCOP, isDebt, monthName, monthlyChecklist, monthlySeries, relativeDay, spendingByCategory, totals } from "@/lib/finance";
 import { goalChecklist } from "@/lib/goals";
+import { TourButton } from "@/components/tour";
 
 const LEVEL = { urgent: "Urgente", warn: "Atención", idea: "Idea" };
 // Phones swipe through the cards sideways; wider screens lay them out in two columns.
@@ -58,7 +59,10 @@ async function Dashboard({ searchParams }: Props) {
   const name = profileName(user);
   const greeting = (
     <div className="pt-1">
-      <h1 className="display text-3xl sm:text-4xl">{name ? `Hola, ${name.split(" ")[0]}` : "Hola"}</h1>
+      <div className="flex items-center gap-3">
+        <h1 className="display text-3xl sm:text-4xl">{name ? `Hola, ${name.split(" ")[0]}` : "Hola"}</h1>
+        <TourButton />
+      </div>
       <p className="text-sm text-ink-3">
         {greetingLine(today)}
         {!name && (
@@ -77,7 +81,7 @@ async function Dashboard({ searchParams }: Props) {
     return (
       <>
       {greeting}
-      <section className="max-w-xl pt-2">
+      <section className="max-w-xl pt-2" data-tour="accounts">
         <h2 className="display text-3xl">Empieza por lo que tienes y lo que debes</h2>
         <p className="mt-3 text-ink-2">
           Registra tus cuentas de ahorros, tarjetas y créditos con el saldo de hoy. Desde ahí, cada pago y cada gasto mueve el balance.
@@ -153,7 +157,7 @@ async function Dashboard({ searchParams }: Props) {
         </div>
       </div>
 
-      <section aria-labelledby="money-title">
+      <section aria-labelledby="money-title" data-tour="accounts">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 id="money-title" className="display text-2xl">
