@@ -151,7 +151,7 @@ export function PaymentsCalendar({
                   month={month}
                   today={today}
                   editable={editable}
-                  accounts={item.type === "bill" ? spendable : savings}
+                  accounts={item.type === "bill" || item.type === "house" ? spendable : savings}
                 />
               ))}
             </ul>

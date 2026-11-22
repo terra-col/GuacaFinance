@@ -1,5 +1,7 @@
 import { redirect } from "next/navigation";
-import { knownCategories, todayInBogota, type Account, type Bill, type Skip, type Tx } from "./finance";
+import { houseChecklist } from "./house";
+import { loadHouse } from "./house-data";
+import { knownCategories, shiftMonth, todayInBogota, type Account, type Bill, type Skip, type Tx } from "./finance";
 import type { Budget, Income } from "./budget";
 import type { Goal, GoalDeposit } from "./goals";
 import type { CardPurchase } from "./installments";
@@ -86,7 +88,7 @@ export async function loadData() {
     if (data.length < PAGE) break;
   }
 
-  const [bills, inbox, goals, deposits, budgets, skips, incomes, purchases, sharing, dateSkips] = await Promise.all([
+  const [bills, inbox, goals, deposits, budgets, skips, incomes, purchases, sharing, house, dateSkips] = await Promise.all([
     supabase.from("bills").select("*").order("due_day"),
     supabase.from("wallet_inbox").select("*").order("received_at", { ascending: false }),
     supabase.from("goals").select("*").order("target_date"),
@@ -97,6 +99,7 @@ export async function loadData() {
     supabase.from("incomes").select("*").order("day"),
     supabase.from("card_purchases").select("*").order("first_due_month"),
     loadShared(supabase, user.id),
+    loadHouse(supabase),
     allPages<Skip>((from, to) => supabase.from("date_skips").select("*").order("for_date").order("id").range(from, to)),
   ]);
   // Card purchases in instalments arrived with migration 0009.
@@ -108,6 +111,7 @@ export async function loadData() {
   if (bills.error) throw new Error(`No se pudieron leer los recibos: ${bills.error.message}`);
   if (inbox.error) throw new Error(`No se pudo leer la bandeja de Wallet: ${inbox.error.message}`);
 
+  const today = todayInBogota();
   return {
     supabase,
     user,
@@ -130,6 +134,10 @@ export async function loadData() {
     planReady: !planMissing,
     purchases: purchasesReady ? (purchases.data as CardPurchase[]) : [],
     purchasesReady,
-    today: todayInBogota(),
+    house,
+    // What of the houses is in the person's own list: this month's and the next.
+    houseNow: houseChecklist(house, sharing.shared, user.id, today.slice(0, 7), today),
+    houseNext: houseChecklist(house, sharing.shared, user.id, shiftMonth(today.slice(0, 7), 1), today),
+    today,
   };
 }

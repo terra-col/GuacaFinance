@@ -1,6 +1,7 @@
 // Pure balance logic. No framework imports, so it runs under `node --test`.
 // Dates are 'YYYY-MM-DD' strings throughout to stay clear of timezone shifts.
 import { assign, datesIn, nextDates, type Every, type Schedule } from "./recurrence.ts";
+import type { HouseReceipt } from "./house.ts";
 
 export type AccountKind = "savings" | "cash" | "credit_card" | "loan";
 export type TxKind = "income" | "expense" | "payment";
@@ -407,7 +408,12 @@ export interface Bill {
   /** How often it repeats; absent (before migration 0017) is monthly. */
   every?: Every;
   starts_on?: string | null;
+  /** From that month it is a receipt of a house (migration 0025): earlier months keep it. */
+  ended_month?: string | null;
 }
+
+/** The fixed payments still one's own. */
+export const currentBills = <T extends Pick<Bill, "ended_month">>(bills: T[]) => bills.filter((b) => !b.ended_month);
 
 export const billSchedule = (bill: Bill): Schedule => ({ every: bill.every ?? "monthly", day: bill.due_day, start: bill.starts_on ?? null });
 
@@ -463,8 +469,10 @@ export function relativeDay(days: number): string {
 }
 
 export interface ChecklistItem {
-  /** «income» rows come from incomeChecklist: «paid» then means received. */
-  type: "bill" | "debt" | "income" | "goal";
+  /** «income» rows come from incomeChecklist: «paid» then means received. «house»: see house.ts. */
+  type: "bill" | "debt" | "income" | "goal" | "house";
+  /** A receipt of a house: all it needs to be shown and paid. */
+  house?: HouseReceipt;
   id: string;
   name: string;
   /** Due date inside the month, or null for a debt with no payment day. */
@@ -524,6 +532,7 @@ export function monthlyChecklist(accounts: Account[], bills: Bill[], txs: Tx[], 
     // created_at is a UTC timestamp: read it as a date in Bogotá before comparing months.
     const schedule = billSchedule(bill);
     const monthly = schedule.every === "monthly";
+    if (bill.ended_month && month >= bill.ended_month) continue;
     if (monthly && bill.created_at && todayInBogota(new Date(bill.created_at)).slice(0, 7) > month) continue;
     const payments = txs.filter((t) => t.bill_id === bill.id && inMonth(t));
     // Monthly again after having another periodicity: earlier months show only what was paid.

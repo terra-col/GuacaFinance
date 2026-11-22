@@ -56,7 +56,7 @@ function greetingLine(today: string) {
 }
 
 async function Dashboard({ searchParams }: Props) {
-  const { supabase, accounts, txs, flows, position, shared, bills, inbox, incomes, budgets, skips, planReady, goals, deposits, user, today } = await loadData();
+  const { supabase, accounts, txs, flows, position, shared, bills, inbox, incomes, budgets, skips, planReady, goals, deposits, houseNow, houseNext, user, today } = await loadData();
   const addNow = (await searchParams).nueva === "1";
   const name = profileName(user);
   const invitations = pendingCount(await loadPending(supabase, shared, user.id));
@@ -106,11 +106,11 @@ async function Dashboard({ searchParams }: Props) {
   const previous = started.includes(lastMonth) ? lastMonth : null;
   const spending = spendingByCategory(flows, today.slice(0, 7));
   const spent = spending.reduce((sum, c) => sum + c.amount, 0);
-  const advice = advise(accounts, txs, today, bills, flows, skips);
+  const advice = advise(accounts, txs, today, bills, flows, skips, [...houseNow, ...houseNext]);
   const debts = accounts.filter(isDebt);
 
   const month = today.slice(0, 7);
-  const checklist = [...monthlyChecklist(accounts, bills, txs, month, today, skips), ...goalChecklist(goals, deposits, month, today, skips)]
+  const checklist = [...monthlyChecklist(accounts, bills, txs, month, today, skips), ...houseNow, ...goalChecklist(goals, deposits, month, today, skips)]
     .sort(byDue)
     .filter((i) => !i.skipped);
   const paid = checklist.filter((i) => i.paid).length;

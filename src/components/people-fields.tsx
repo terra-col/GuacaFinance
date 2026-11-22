@@ -27,7 +27,7 @@ interface Person {
  * Who to divide with: from the phone's contacts where the browser allows it, from the people one
  * already divides with, or typed. Sends `person`, `phone` and `known` once for each.
  */
-export function PeopleFields({ known, single = false }: { known: Known[]; single?: boolean }) {
+export function PeopleFields({ known, single = false, optional = false }: { known: Known[]; single?: boolean; optional?: boolean }) {
   const canPick = useCanPickContacts();
   const social = useSocialReady();
   const [people, setPeople] = useState<Person[]>([{ key: 0, name: "", phone: "" }]);
@@ -61,7 +61,7 @@ export function PeopleFields({ known, single = false }: { known: Known[]; single
 
   return (
     <fieldset className="flex flex-col gap-3">
-      <legend className="mb-1.5 text-sm font-medium text-ink-2">{single ? "A quién agregas" : "Con quién divides"}</legend>
+      <legend className="mb-1.5 text-sm font-medium text-ink-2">{single ? "A quién agregas" : optional ? "Quiénes viven ahí (opcional: también después)" : "Con quién divides"}</legend>
       {canPick && (
         <button type="button" className="btn-quiet h-11 gap-2 self-start" onClick={pick}>
           <Icon name="plus" className="size-4" />
@@ -97,7 +97,7 @@ export function PeopleFields({ known, single = false }: { known: Known[]; single
                     aria-label={`Nombre de la persona ${i + 1}`}
                     maxLength={60}
                     autoComplete="off"
-                    required={i === 0}
+                    required={i === 0 && !optional}
                   />
                   <input
                     className="input num"

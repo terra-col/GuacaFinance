@@ -361,12 +361,15 @@ export function EndChoice({ how, onChange, settled }: { how: End | ""; onChange:
 
 export function DeleteGroupForm({
   group,
+  back = "/compartidos",
   social,
   hasEntries,
   others,
   settled,
 }: {
   group: string;
+  /** Where one is afterwards. */
+  back?: "/compartidos" | "/pagos";
   /** Migration 0023: otherwise only an empty one can go. */
   social: boolean;
   hasEntries: boolean;
@@ -391,6 +394,7 @@ export function DeleteGroupForm({
     <form onSubmit={submit} className="flex flex-col gap-4">
       <input type="hidden" name="group" value={group} />
       {social && <input type="hidden" name="how" value={how} />}
+      <input type="hidden" name="back" value={back} />
       {canErase ? (
         <EndChoice how={how} onChange={setHow} settled={settled} />
       ) : (

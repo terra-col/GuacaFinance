@@ -5,6 +5,7 @@ import {
   addDays,
   balanceAt,
   billStatus,
+  currentBills,
   daysBetween,
   formatCOP,
   isDebt,
@@ -16,6 +17,7 @@ import {
   totals,
   type Account,
   type Bill,
+  type ChecklistItem,
   type Skip,
   type Tx,
 } from "./finance.ts";
@@ -48,12 +50,15 @@ function monthAfter(today: string, months: number): string {
   return monthLabel(`${Math.floor(total / 12)}-${String((total % 12) + 1).padStart(2, "0")}`);
 }
 
-/** `flows`: what counts as spending, when it is not simply the movements (shared expenses). */
-export function advise(accounts: Account[], txs: Tx[], today: string, bills: Bill[] = [], flows: Tx[] = txs, skips: Skip[] = []): Advice[] {
+/**
+ * `flows`: what counts as spending, when it is not simply the movements (shared expenses).
+ * `house`: the house receipts of the person's own list, this month's and the next.
+ */
+export function advise(accounts: Account[], txs: Tx[], today: string, bills: Bill[] = [], flows: Tx[] = txs, skips: Skip[] = [], house: ChecklistItem[] = []): Advice[] {
   const out: Advice[] = [];
 
   // 0. A fixed bill is overdue or due within three days and has not been paid this month.
-  for (const bill of bills) {
+  for (const bill of currentBills(bills)) {
     const status = billStatus(bill, txs, today, skips);
     // A daily one would be urgent every single day: only when one is late.
     if (status.paidThisMonth || status.days > 3 || (isFrequent(bill.every) && status.days >= 0)) continue;
@@ -62,6 +67,19 @@ export function advise(accounts: Account[], txs: Tx[], today: string, bills: Bil
       level: "urgent",
       title: status.days < 0 ? `${bill.name} ${relativeDay(status.days)}` : `${bill.name} vence ${relativeDay(status.days)}`,
       detail: `${bill.amount ? `Valor: ${formatCOP(bill.amount)}. ` : ""}Márcalo en Pagos cuando lo pagues.`,
+    });
+  }
+  const advised = new Set<string>();
+  for (const item of house) {
+    if (item.paid || item.skipped || !item.due || advised.has(item.id)) continue;
+    advised.add(item.id);
+    const days = daysBetween(today, item.due);
+    if (days > 3 || (isFrequent(item.every) && days >= 0)) continue;
+    out.push({
+      id: `house-${item.id}`,
+      level: "urgent",
+      title: days < 0 ? `${item.name} ${relativeDay(days)}` : `${item.name} vence ${relativeDay(days)}`,
+      detail: `Es de la casa y te toca a ti. ${item.expected ? `Valor: ${formatCOP(item.expected)}. ` : ""}Márcalo en Pagos cuando lo pagues.`,
     });
   }
   const debts = accounts.filter(isDebt).map((account) => ({ account, balance: balanceAt(account, txs) })).filter((d) => d.balance > 0);

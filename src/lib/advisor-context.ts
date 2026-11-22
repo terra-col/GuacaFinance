@@ -7,6 +7,7 @@ import {
   KIND_LABEL,
   balanceAt,
   billSchedule,
+  currentBills,
   formatCOP,
   holdsMoney,
   isDebt,
@@ -18,6 +19,7 @@ import {
   totals,
   type Account,
   type Bill,
+  type ChecklistItem,
   type Skip,
   type Tx,
   monthlyChecklist,
@@ -41,6 +43,9 @@ interface Snapshot {
   flows?: Tx[];
   /** Only totals: the names of the people in the groups never go to the AI. */
   position?: { owedToMe: number; iOwe: number };
+  /** The house receipts in the person's own list, this month's and the next. Never who else is there. */
+  houseNow?: ChecklistItem[];
+  houseNext?: ChecklistItem[];
   today: string;
 }
 
@@ -48,7 +53,7 @@ const month = (today: string, n: number | null) => (n === null ? "nunca con los 
 
 const MONTH_SHORT = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
 
-export function advisorContext({ accounts, txs, bills, goals, deposits, incomes = [], budgets = [], skips = [], purchases = [], flows = txs, position, today }: Snapshot): string {
+export function advisorContext({ accounts, txs, bills, goals, deposits, incomes = [], budgets = [], skips = [], purchases = [], flows = txs, position, houseNow = [], houseNext = [], today }: Snapshot): string {
   const lines: string[] = [];
   const t = totals(accounts, txs);
   lines.push(`Fecha de hoy: ${today} (Colombia). Montos en pesos colombianos.`);
@@ -105,9 +110,18 @@ export function advisorContext({ accounts, txs, bills, goals, deposits, incomes 
     }
   }
 
-  if (bills.length) {
+  if (houseNow.length) {
+    lines.push("\n## Recibos de la casa de este mes que le tocan o que pagó");
+    for (const i of houseNow) {
+      const state = i.paid ? (i.paidAmount ? `pagó ${formatCOP(i.paidAmount)}` : "ya lo pagó otra persona") : i.skipped ? "no aplica este mes" : `pendiente para el ${i.due}: ${i.expected ? formatCOP(i.expected) : "valor variable"}`;
+      lines.push(`- ${i.name}: ${state}`);
+    }
+  }
+
+  const ownBills = currentBills(bills);
+  if (ownBills.length) {
     lines.push("\n## Pagos fijos (el valor es por cada vez)");
-    for (const b of bills) lines.push(`- ${b.name}: ${b.amount ? formatCOP(b.amount) : "valor variable"}, ${cadenceText(billSchedule(b))}`);
+    for (const b of ownBills) lines.push(`- ${b.name}: ${b.amount ? formatCOP(b.amount) : "valor variable"}, ${cadenceText(billSchedule(b))}`);
   }
 
   const months = lastMonths(today, 3);
@@ -135,7 +149,7 @@ export function advisorContext({ accounts, txs, bills, goals, deposits, incomes 
     for (const k of monthSkips) lines.push(`- ${names[k.item_id] ?? "ítem"}${k.note ? `: ${k.note}` : ""}`);
   }
   if (incomes.length) {
-    const plan = monthPlan(incomeChecklist(incomes, txs, current, today, skips), [...monthlyChecklist(accounts, bills, txs, current, today, skips), ...goalChecklist(goals, deposits, current, today, skips)], budgets);
+    const plan = monthPlan(incomeChecklist(incomes, txs, current, today, skips), [...monthlyChecklist(accounts, bills, txs, current, today, skips), ...houseNow, ...goalChecklist(goals, deposits, current, today, skips)], budgets);
     lines.push(
       `\nReparto del mes (calculado por la app): ingresos ${formatCOP(plan.income)} − obligaciones ${formatCOP(plan.obligations)}${plan.unknownObligations ? ` (+${plan.unknownObligations} de valor variable)` : ""} − presupuestos ${formatCOP(plan.budgets)} = ${plan.free >= 0 ? "libre" : "faltante"} ${formatCOP(Math.abs(plan.free))}.`,
     );
@@ -169,7 +183,7 @@ export function advisorContext({ accounts, txs, bills, goals, deposits, incomes 
     }
   }
 
-  const alerts = advise(accounts, txs, today, bills, flows, skips);
+  const alerts = advise(accounts, txs, today, bills, flows, skips, [...houseNow, ...houseNext]);
   if (alerts.length) {
     lines.push("\n## Alertas de la app");
     for (const a of alerts) lines.push(`- ${a.title}. ${a.detail}`);

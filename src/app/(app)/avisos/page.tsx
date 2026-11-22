@@ -3,7 +3,7 @@ import { MarkRead } from "@/components/mark-read";
 import { PendingCards } from "@/components/pending-cards";
 import { loadData } from "@/lib/data";
 import { formatDate, todayInBogota } from "@/lib/finance";
-import { noticeText, type Notice } from "@/lib/notices";
+import { isHouseNotice, noticeText, type Notice } from "@/lib/notices";
 import { loadPending, pendingCount } from "@/lib/pending";
 import { groupTitle } from "@/lib/people";
 
@@ -52,7 +52,7 @@ export default async function NoticesPage() {
             return (
               <li key={notice.id}>
                 {group ? (
-                  <Link href={`/compartidos/${group.id}`} className="flex gap-3 py-3">
+                  <Link href={group.house && isHouseNotice(notice.kind) ? `/pagos/casa/${group.id}` : `/compartidos/${group.id}`} className="flex gap-3 py-3">
                     {body}
                   </Link>
                 ) : (

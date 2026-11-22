@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { deleteContact, removePerson, restorePerson } from "@/app/shared-actions";
+import { deleteContact, leaveGroup, removePerson, restorePerson } from "@/app/shared-actions";
 import { formatCOP } from "@/lib/finance";
 import { useCloseModal } from "./modal";
 import { EndChoice, Problem, Send, useSave, type End } from "./shared-forms";
@@ -141,6 +141,49 @@ export function DeleteContactForm({
       <Send pending={pending} disabled={!how}>
         Sí, eliminar
       </Send>
+    </form>
+  );
+}
+
+/** «Salir»: it does it, or says what is missing first. */
+export function LeaveGroupForm({
+  group,
+  back,
+  house,
+  net,
+  alone,
+  handsOver,
+}: {
+  group: string;
+  back: "/compartidos" | "/pagos";
+  house: boolean;
+  net: number;
+  /** Nobody else joined with an account. */
+  alone: boolean;
+  /** One created it: someone else stays in charge. */
+  handsOver: boolean;
+}) {
+  const { pending, error, submit } = useSave(leaveGroup);
+  if (alone) return <p className="text-sm text-ink-2">Nadie más se ha unido con su cuenta, así que no hay a quién dejárselo. En vez de salir, elimínalo con el botón de al lado.</p>;
+  if (net !== 0) {
+    return (
+      <p className="text-sm text-ink-2">
+        Todavía {net > 0 ? "te deben" : "debes"} <strong className="num text-ink">{formatCOP(Math.abs(net))}</strong> ahí. Regístralo con «Saldar» en Compartidos y vuelve a salir.
+      </p>
+    );
+  }
+  return (
+    <form onSubmit={submit} className="flex flex-col gap-4">
+      <input type="hidden" name="group" value={group} />
+      <input type="hidden" name="back" value={back} />
+      <p className="text-sm text-ink-2">
+        Dejas de ver lo que anoten de aquí en adelante y a los demás les llega un aviso. Tus movimientos, saldos y lo que ya gastaste no cambian.
+        {house && " Sus recibos salen de tu Pagos, y los que tenías a tu cargo quedan sin responsable."}
+      </p>
+      {handsOver && <p className="text-sm text-ink-2">Como lo creaste tú, queda a cargo la persona con cuenta que lleve más tiempo ahí.</p>}
+      <p className="text-sm text-ink-2">Para volver te tienen que invitar.</p>
+      <Problem error={error} />
+      <Send pending={pending}>Sí, salir</Send>
     </form>
   );
 }

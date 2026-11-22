@@ -1,12 +1,18 @@
 import Link from "next/link";
 import { BillForm, IncomeForm } from "@/components/bill-forms";
+import { HouseCard } from "@/components/house-card";
+import { AddPayment, type HouseOption, type HouseSetup } from "@/components/house-forms";
+import { profileName } from "@/lib/brand";
+import { knownPeople } from "@/lib/contacts";
+import { houseChecklist, houseMonth, houseSummary, housesOf } from "@/lib/house";
+import { memberOf } from "@/lib/shared";
 import { ChecklistRow } from "@/components/checklist-row";
 import { Modal } from "@/components/modal";
 import { PaidGroup } from "@/components/paid-group";
 import { MonthPlanCard } from "@/components/month-plan";
 import { incomeChecklist, incomeRow, monthPlan, nextIncomeDate } from "@/lib/budget";
 import { loadData } from "@/lib/data";
-import { byDue, favoriteFirst, formatCOP, monthName, monthlyChecklist, nextBillDate, pendingFirst, rowKey, shiftMonth } from "@/lib/finance";
+import { byDue, currentBills, favoriteFirst, formatCOP, monthName, monthlyChecklist, nextBillDate, pendingFirst, rowKey, shiftMonth } from "@/lib/finance";
 import { isFrequent } from "@/lib/recurrence";
 import { ScheduledList, type ScheduledRow } from "@/components/scheduled-list";
 import { goalChecklist } from "@/lib/goals";
@@ -25,7 +31,7 @@ function Chevron({ dir }: { dir: "left" | "right" }) {
 const MONTH = /^\d{4}-(0[1-9]|1[0-2])$/;
 
 export default async function PaymentsPage({ searchParams }: { searchParams: Promise<{ mes?: string; vista?: string }> }) {
-  const { accounts, txs, bills, incomes, budgets, skips, planReady, goals, deposits, today } = await loadData();
+  const { accounts, txs, bills, incomes, budgets, skips, planReady, goals, deposits, shared, house, user, today } = await loadData();
   const current = today.slice(0, 7);
   const { mes: asked, vista } = await searchParams;
   const view: PaymentsView = vista === "calendario" ? "calendario" : "lista";
@@ -47,8 +53,25 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
   const ahead = month === nextMonth;
   const hrefFor = (m: string, v: PaymentsView) => `/pagos?${v === "calendario" ? "vista=calendario&" : ""}mes=${m}`;
 
-  // Bills, card and loan payments, and the monthly saving of goals with a plan.
-  const items = [...monthlyChecklist(accounts, bills, txs, month, today, skips), ...goalChecklist(goals, deposits, month, today, skips)].sort(byDue);
+  // Bills, card and loan payments, the monthly saving of goals with a plan, and what of the houses is one's own.
+  const items = [
+    ...monthlyChecklist(accounts, bills, txs, month, today, skips),
+    ...houseChecklist(house, shared, user.id, month, today),
+    ...goalChecklist(goals, deposits, month, today, skips),
+  ].sort(byDue);
+  const houses: HouseOption[] = housesOf(shared).map((g) => ({
+    id: g.id,
+    name: g.name,
+    me: memberOf(g.id, shared, user.id)!.id,
+    members: shared.members.filter((m) => m.group_id === g.id && !m.removed_at).map(({ id, name }) => ({ id, name })),
+  }));
+  const setup: HouseSetup = {
+    myName: profileName(user),
+    known: knownPeople(shared, user.id),
+    groups: shared.groups.filter((g) => !g.house && !g.direct).map(({ id, name }) => ({ id, name })),
+  };
+  const ownBills = currentBills(bills);
+  const addPayment = house.ready ? <AddPayment houses={houses} setup={setup} ownBills={ownBills} /> : <BillForm inModal />;
   const incomeItems = incomeChecklist(incomes, txs, month, today, skips);
   // Where a payment can come from: cards and savings for a bill, savings and cash for the rest.
   const spendable = favoriteFirst(accounts.filter((a) => a.kind !== "loan")).map(({ id, name }) => ({ id, name }));
@@ -145,7 +168,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
     // Incomes and fixed bills with their next date (even in a coming month), soonest first.
     const scheduled: ScheduledRow[] = [
       ...visibleIncomes.map((income) => ({ kind: "income" as const, income, next: nextIncomeDate(income, today) })),
-      ...bills.map((bill) => ({ kind: "bill" as const, bill, next: nextBillDate(bill, today) })),
+      ...ownBills.map((bill) => ({ kind: "bill" as const, bill, next: nextBillDate(bill, today) })),
     ].sort((a, b) => (a.next ?? "9999").localeCompare(b.next ?? "9999"));
     // What repeats every day or two shows up to today plus the next one; the rest folds away.
     const later = new Set<string>();
@@ -172,6 +195,10 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
         </p>
 
         {planReady && (incomes.length > 0 || budgets.length > 0) && <MonthPlanCard plan={plan} />}
+
+        {houses.map((h) => (
+          <HouseCard key={h.id} id={h.id} name={h.name} month={month} people={h.members} summary={houseSummary(houseMonth(house, shared, user.id, h.id, month, today))} />
+        ))}
 
         {(incomeItems.length > 0 || (editable && planReady)) && (
           <section className="card" aria-label="Ingresos del mes">
@@ -221,8 +248,8 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
             <div className="flex items-center justify-between gap-3">
               <p className="font-medium">No hay pagos obligatorios {month === current ? "este mes" : "en ese mes"}.</p>
               {editable && (
-                <Modal label="+ Agregar" title="Nuevo pago fijo" buttonClass="btn-quiet h-9 shrink-0 px-3 text-sm">
-                  <BillForm inModal />
+                <Modal label="+ Agregar" title={house.ready ? "Nuevo pago" : "Nuevo pago fijo"} buttonClass="btn-quiet h-9 shrink-0 px-3 text-sm">
+                  {addPayment}
                 </Modal>
               )}
             </div>
@@ -235,8 +262,8 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
                 {done} de {counted.length} pagados
               </p>
               {editable && (
-                <Modal label="+ Agregar" title="Nuevo pago fijo" buttonClass="btn-quiet h-9 shrink-0 px-3 text-sm">
-                  <BillForm inModal />
+                <Modal label="+ Agregar" title={house.ready ? "Nuevo pago" : "Nuevo pago fijo"} buttonClass="btn-quiet h-9 shrink-0 px-3 text-sm">
+                  {addPayment}
                 </Modal>
               )}
             </div>
@@ -262,17 +289,17 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
             )}
             <ul className="mt-3 divide-y divide-line">
               {sorted.filter((i) => !i.paid && !later.has(rowKey(i))).map((item) => (
-                <ChecklistRow key={rowKey(item)} item={item} month={month} today={today} editable={editable} accounts={item.type === "bill" ? spendable : savings} />
+                <ChecklistRow key={rowKey(item)} item={item} month={month} today={today} editable={editable} accounts={item.type === "bill" || item.type === "house" ? spendable : savings} />
               ))}
             </ul>
             <PaidGroup id="pagos-despues" label="Más adelante este mes" count={later.size}>
               {sorted.filter((i) => later.has(rowKey(i))).map((item) => (
-                <ChecklistRow key={rowKey(item)} item={item} month={month} today={today} editable={editable} accounts={item.type === "bill" ? spendable : savings} />
+                <ChecklistRow key={rowKey(item)} item={item} month={month} today={today} editable={editable} accounts={item.type === "bill" || item.type === "house" ? spendable : savings} />
               ))}
             </PaidGroup>
             <PaidGroup id="pagos" label="Ya pagados" count={sorted.filter((i) => i.paid).length}>
               {sorted.filter((i) => i.paid).map((item) => (
-                <ChecklistRow key={rowKey(item)} item={item} month={month} today={today} editable={editable} accounts={item.type === "bill" ? spendable : savings} />
+                <ChecklistRow key={rowKey(item)} item={item} month={month} today={today} editable={editable} accounts={item.type === "bill" || item.type === "house" ? spendable : savings} />
               ))}
             </PaidGroup>
           </section>

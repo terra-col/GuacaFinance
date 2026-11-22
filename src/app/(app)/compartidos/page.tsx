@@ -160,7 +160,7 @@ export default async function SharedPage({ searchParams }: { searchParams: Promi
                       <Link href={`/compartidos/${group.id}${query}`} className="flex items-center justify-between gap-3 py-4">
                         <span className="min-w-0">
                           <span className="block truncate font-semibold">{group.name}</span>
-                          <span className="block text-sm text-ink-3">{count === 1 ? "Solo tú" : count === 2 ? "Solo ustedes dos" : `${count} personas`}</span>
+                          <span className="block text-sm text-ink-3">{group.house ? "Casa · " : ""}{count === 1 ? "Solo tú" : count === 2 ? "Solo ustedes dos" : `${count} personas`}</span>
                         </span>
                         {tx ? <Pick /> : <Balance net={position.byGroup.get(group.id) ?? 0} />}
                       </Link>

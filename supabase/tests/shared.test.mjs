@@ -696,3 +696,257 @@ test("contact: closes the account between two, all or nothing", async () => {
   await as(ANA, "select shared_delete_contact($1, $2, false)", [[gina], [id]]);
   assert.equal((await as(ANA, "select * from shared_groups where id = $1", [id])).length, 0);
 });
+
+// ---- 0025: the house, and leaving a group
+
+const MONTH = await value(ANA, "select to_char(now() at time zone 'America/Bogota', 'YYYY-MM')");
+const DAY = MONTH + "-05";
+
+/** Ana's group with Beto joined and Caro without an account, as a house. */
+async function house() {
+  const g = await group();
+  await as(ANA, "select house_set($1, true)", [g.id]);
+  return g;
+}
+const receipt = (user, g, { name = "Internet", amount = 95000, responsible = g.Ana, every = "monthly", starts = null, from = null, id = null } = {}) =>
+  value(user, "select house_save_bill($1, $2, $3, $4, 'Hogar', 5, $5, $6, $7, false, $8)", [id, g.id, name, amount, every, starts, responsible, from]);
+const pay = (user, bill, { by, amount = 95000, settles = true, account: acct = null, month = MONTH, date = null, shares = null } = {}) =>
+  value(user, "select house_pay($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)", [
+    bill, month, date, by, amount, DAY, settles, acct,
+    shares && JSON.stringify(shares),
+    shares && JSON.stringify({ mode: "exact", parts: shares.map((s) => ({ id: s.member_id, value: s.amount })) }),
+  ]);
+const movementCount = (user, acct) => value(user, "select count(*)::int from transactions where account_id = $1", [acct]);
+const payments = (user, bill) => value(user, "select count(*)::int from house_payments where bill_id = $1", [bill]);
+
+test("house: an outsider sees nothing and can do nothing", async () => {
+  const g = await house();
+  const bill = await receipt(ANA, g);
+  const payment = await pay(ANA, bill, { by: g.Ana });
+  for (const table of ["house_bills", "house_payments", "house_skips", "house_links"]) {
+    assert.equal((await as(EVA, "select * from " + table)).length, 0, table);
+    await assert.rejects(as(null, "select * from " + table), /permission denied/, table);
+    await assert.rejects(as(ANA, "delete from " + table), /permission denied/, table);
+  }
+  const calls = [
+    ["select house_set($1, false)", [g.id]],
+    ["select house_save_bill($1, null, 'X', null, null, 5, 'monthly', null, null, false, null)", [bill]],
+    ["select house_end_bill($1)", [bill]],
+    ["select house_pay($1, $2, null, $3, 1000, '2026-11-22', true)", [bill, MONTH, g.Ana]],
+    ["select house_update_payment($1, 1000, '2026-11-22', true)", [payment]],
+    ["select house_record($1, $2)", [payment, await account(EVA)]],
+    ["select house_unpay($1)", [payment]],
+    ["select house_skip($1, $2, null, null)", [bill, MONTH]],
+    ["select shared_leave($1)", [g.id]],
+  ];
+  for (const [sql, params] of calls) {
+    await assert.rejects(as(EVA, sql, params), /No haces parte/, sql);
+    await assert.rejects(as(null, sql, params), /permission denied/, sql);
+  }
+});
+
+test("house: alone or with people, and never an account between two", async () => {
+  const alone = await value(ANA, "select house_create('La casa', 'Ana', '[]')");
+  assert.equal(await value(ANA, "select count(*)::int from shared_members where group_id = $1", [alone]), 1);
+  assert.equal(await value(ANA, "select house from shared_groups where id = $1", [alone]), true);
+  const withPeople = await value(ANA, "select house_create('La casa', 'Ana', $1)", [JSON.stringify([{ name: "Hugo", phone: null, known: null }])]);
+  assert.equal(await value(ANA, "select count(*)::int from shared_members where group_id = $1", [withPeople]), 2);
+  const two = await value(ANA, "select shared_create_direct('Ana', 'Ines', null, null)");
+  await assert.rejects(as(ANA, "select house_set($1, true)", [two]), /entre dos no puede ser casa/);
+  const plain = await group();
+  await assert.rejects(receipt(ANA, plain), /no es una casa/);
+});
+
+test("house: anyone notes who paid, and nobody moves someone else's money", async () => {
+  const g = await house();
+  const bill = await receipt(BETO, g, { responsible: g.Beto });
+  const [anas, betos] = [await account(ANA), await account(BETO)];
+  await assert.rejects(pay(ANA, bill, { by: g.Beto, account: anas }), /Solo quien pagó/);
+  await assert.rejects(pay(BETO, bill, { by: g.Beto, account: anas }), /cuentas válidas/);
+  assert.equal(await payments(ANA, bill), 0, "a failed one leaves nothing");
+
+  const payment = await pay(ANA, bill, { by: g.Beto });
+  assert.deepEqual([await movementCount(ANA, anas), await movementCount(BETO, betos)], [0, 0]);
+  await assert.rejects(as(ANA, "select house_record($1, $2)", [payment, anas]), /Solo quien pagó/);
+  await as(BETO, "select house_record($1, $2)", [payment, betos]);
+  assert.equal(await movementCount(BETO, betos), 1);
+  assert.equal((await as(ANA, "select * from house_links where payment_id = $1", [payment])).length, 0, "the link is the payer's alone");
+  await assert.rejects(as(BETO, "select house_record($1, $2)", [payment, betos]), /Ya lo registraste/);
+  await assert.rejects(as(ANA, "select house_unpay($1)", [payment]), /solo esa persona lo desmarca/);
+  await assert.rejects(as(ANA, "select house_update_payment($1, 1000, $2, true)", [payment, DAY]), /solo esa persona cambia el valor/);
+  await as(BETO, "select house_unpay($1)", [payment]);
+  assert.deepEqual([await payments(ANA, bill), await movementCount(BETO, betos)], [0, 0]);
+});
+
+test("house: several can pay one receipt, and nobody pays it twice", async () => {
+  const g = await house();
+  const bill = await receipt(ANA, g);
+  await pay(ANA, bill, { by: g.Ana, amount: 40000, settles: false });
+  await pay(BETO, bill, { by: g.Beto, amount: 55000 });
+  await assert.rejects(pay(ANA, bill, { by: g.Ana }), /Ya está marcado como pagado \(pagó Beto\)/);
+  const dated = await receipt(ANA, g, { name: "Aseo", every: "w1", starts: MONTH + "-01" });
+  await assert.rejects(pay(ANA, dated, { by: g.Ana }), /Falta la fecha/);
+  await pay(ANA, dated, { by: g.Ana, date: MONTH + "-01" });
+  await pay(ANA, dated, { by: g.Ana, date: MONTH + "-08" });
+  await assert.rejects(pay(ANA, dated, { by: g.Ana, date: MONTH + "-08" }), /Ya está marcado/);
+  await assert.rejects(pay(ANA, bill, { by: g.Ana, date: "2030-01-01" }), /no es de ese mes/);
+});
+
+test("house: seeing is not owing; dividing is a shared expense and follows it", async () => {
+  const g = await house();
+  const bill = await receipt(ANA, g);
+  await pay(ANA, bill, { by: g.Ana });
+  assert.equal(await value(ANA, "select count(*)::int from shared_entries where group_id = $1", [g.id]), 0, "no debts");
+
+  const other = await receipt(ANA, g, { name: "Luz", amount: 100000 });
+  const acct = await account(ANA);
+  const shares = [g.Ana, g.Beto].map((member_id) => ({ member_id, amount: 50000 }));
+  const payment = await pay(ANA, other, { by: g.Ana, amount: 100000, account: acct, shares });
+  const entry = await value(ANA, "select entry_id from house_payments where id = $1", [payment]);
+  assert.ok(entry);
+  assert.equal(await movementCount(ANA, acct), 1);
+  await assert.rejects(as(ANA, "select house_update_payment($1, 1000, $2, true)", [payment, DAY]), /edítalo en Compartidos/);
+  const changed = JSON.stringify([g.Ana, g.Beto].map((member_id) => ({ member_id, amount: 60000 })));
+  await as(ANA, "select shared_update_entry($1, 'Luz', 'Hogar', 120000, $2, $3, $4)", [entry, g.Ana, DAY, changed]);
+  assert.equal(Number(await value(ANA, "select amount from house_payments where id = $1", [payment])), 120000);
+  await as(ANA, "select shared_delete_entry($1)", [entry]);
+  assert.deepEqual([await payments(ANA, other), await movementCount(ANA, acct)], [0, 0]);
+});
+
+test("house: the payer's movement and the payment stay the same", async () => {
+  const g = await house();
+  const acct = await account(ANA);
+  const bill = await receipt(ANA, g);
+  const payment = await pay(ANA, bill, { by: g.Ana, account: acct });
+  const [tx] = await as(ANA, "select id, created_at from transactions where account_id = $1", [acct]);
+  await as(ANA, "update transactions set amount = 90000 where id = $1", [tx.id]);
+  assert.equal(Number(await value(ANA, "select amount from house_payments where id = $1", [payment])), 90000);
+  await assert.rejects(as(ANA, "update transactions set kind = 'income' where id = $1", [tx.id]), /pago de la casa/);
+  await as(ANA, "select house_update_payment($1, 98000, $2, true)", [payment, DAY]);
+  const [after] = await as(ANA, "select amount, created_at from transactions where id = $1", [tx.id]);
+  assert.equal(Number(after.amount), 98000);
+  assert.equal(String(after.created_at), String(tx.created_at), "checkpoints read when it was written");
+  await as(ANA, "delete from transactions where id = $1", [tx.id]);
+  assert.equal(await payments(BETO, bill), 0, "deleting the movement unticks");
+});
+
+test("house: deleting the bank account does not untick it for the others", async () => {
+  const g = await house();
+  const acct = await account(ANA);
+  const bill = await receipt(ANA, g);
+  await pay(ANA, bill, { by: g.Ana, account: acct });
+  await as(ANA, "delete from accounts where id = $1", [acct]);
+  assert.equal(await payments(BETO, bill), 1);
+});
+
+test("house: deleting someone's Guaca account does not untick what they paid", async () => {
+  const gone = "00000000-0000-0000-0000-000000000006";
+  await db.query("insert into auth.users (id) values ($1)", [gone]);
+  const g = await house();
+  await db.query("update shared_members set user_id = $1 where id = $2", [gone, g.Caro]);
+  const bill = await receipt(ANA, g);
+  await pay(gone, bill, { by: g.Caro, account: await account(gone) });
+  await db.query("delete from auth.users where id = $1", [gone]);
+  assert.equal(await payments(ANA, bill), 1);
+});
+
+test("house: what did not apply this month still does not, moved to the house", async () => {
+  const g = await house();
+  const own = await value(ANA, "insert into bills (name, due_day) values ('Gas', 5) returning id");
+  await as(ANA, "insert into checklist_skips (item_type, item_id, month) values ('bill', $1, $2)", [own, MONTH]);
+  const bill = await receipt(ANA, g, { name: "Gas", from: own });
+  assert.equal(await value(BETO, "select count(*)::int from house_skips where bill_id = $1", [bill]), 1);
+});
+
+test("house: one's own fixed payment moves in without repeating any money", async () => {
+  const g = await house();
+  const acct = await account(ANA);
+  const own = await value(ANA, "insert into bills (name, amount, due_day) values ('Internet', 95000, 5) returning id");
+  const insert = (date) => as(ANA, "insert into transactions (account_id, kind, amount, occurred_on, bill_id) values ($1, 'expense', 95000, $2, $3)", [acct, date, own]);
+  await insert(DAY);
+  await insert("2025-01-05");
+  await assert.rejects(receipt(BETO, g, { from: own }), /no es tuyo/);
+  const bill = await receipt(ANA, g, { from: own });
+  assert.equal(await payments(BETO, bill), 1, "only from this month on");
+  assert.equal(await movementCount(ANA, acct), 2, "no movement created nor deleted");
+  assert.equal(await value(ANA, "select ended_month from bills where id = $1", [own]), MONTH);
+  await assert.rejects(pay(BETO, bill, { by: g.Beto }), /Ya está marcado/);
+  await assert.rejects(receipt(ANA, g, { from: own }), /ya pasó a una casa/);
+
+  const mine = await value(BETO, "insert into bills (name, amount, due_day) values ('Internet', 95000, 5) returning id");
+  await assert.rejects(as(ANA, "select house_merge_bill($1, $2)", [mine, bill]), /no es tuyo/);
+  await as(BETO, "select house_merge_bill($1, $2)", [mine, bill]);
+  assert.equal(await value(BETO, "select ended_month from bills where id = $1", [mine]), MONTH);
+  assert.equal(await payments(ANA, bill), 1);
+});
+
+test("leave: who leaves stops reading the house, and their money stays theirs", async () => {
+  const g = await house();
+  const acct = await account(BETO);
+  const bill = await receipt(ANA, g, { responsible: g.Beto });
+  await pay(BETO, bill, { by: g.Beto, account: acct });
+  await as(BETO, "select shared_leave($1)", [g.id]);
+  for (const table of ["house_bills", "house_payments"]) assert.equal((await as(BETO, "select * from " + table + " where group_id = $1", [g.id])).length, 0, table);
+  assert.equal(await movementCount(BETO, acct), 1);
+  assert.equal(await payments(ANA, bill), 1, "the others keep the history");
+  assert.equal(await value(ANA, "select responsible from house_bills where id = $1", [bill]), null);
+  assert.equal(await value(ANA, "select count(*)::int from shared_notices where group_id = $1 and kind = 'member_left'", [g.id]), 1);
+  await as(BETO, "delete from transactions where account_id = $1", [acct]);
+  assert.equal(await payments(ANA, bill), 1, "nor can they untick it from outside");
+});
+
+test("leave: not owing, not alone, and someone stays in charge", async () => {
+  const g = await group();
+  await add(ANA, g);
+  await assert.rejects(as(BETO, "select shared_leave($1)", [g.id]), /Primero salda/);
+
+  const h = await group();
+  await as(ANA, "select shared_leave($1)", [h.id]);
+  assert.equal(await value(BETO, "select created_by from shared_groups where id = $1", [h.id]), BETO);
+  assert.equal((await as(ANA, "select * from shared_groups where id = $1", [h.id])).length, 0);
+  await assert.rejects(as(BETO, "select shared_leave($1)", [h.id]), /elimínalo/);
+  const two = await value(ANA, "select shared_create_direct('Ana', 'Jaime', null, null)");
+  await assert.rejects(as(ANA, "select shared_leave($1)", [two]), /entre dos/);
+});
+
+test("house: removing someone who paid keeps the payment as it was", async () => {
+  const g = await house();
+  const bill = await receipt(ANA, g, { responsible: g.Caro });
+  const payment = await pay(ANA, bill, { by: g.Caro });
+  await as(ANA, "select shared_remove_person($1)", [g.Caro]);
+  assert.equal(await payments(ANA, bill), 1);
+  assert.equal(await value(ANA, "select responsible from house_bills where id = $1", [bill]), null);
+  await assert.rejects(as(ANA, "select house_unpay($1)", [payment]), /ya no es del grupo/);
+});
+
+test("house: deleting keeps the history, and a test is erased whole", async () => {
+  const g = await house();
+  const bill = await receipt(ANA, g);
+  await pay(ANA, bill, { by: g.Ana });
+  await assert.rejects(as(ANA, "select shared_delete_group($1)", [g.id]), /tiene gastos/);
+  await as(ANA, "select shared_remove_group($1, false)", [g.id]);
+  assert.equal(await payments(BETO, bill), 1);
+
+  const id = await value(ANA, "select house_create('Prueba', 'Ana', '[]')");
+  const me = await value(ANA, "select id from shared_members where group_id = $1", [id]);
+  const acct = await account(ANA);
+  const test = await receipt(ANA, { id }, { responsible: me });
+  await pay(ANA, test, { by: me, account: acct });
+  await as(ANA, "select shared_remove_group($1, true)", [id]);
+  assert.equal(await movementCount(ANA, acct), 0);
+  assert.equal((await as(ANA, "select * from shared_groups where id = $1", [id])).length, 0);
+});
+
+test("house: the subscribed calendar has what one is responsible for, not what moved in", async () => {
+  await db.query("insert into auth.users (id) values ('00000000-0000-0000-0000-000000000009') on conflict do nothing");
+  const user = "00000000-0000-0000-0000-000000000009";
+  const id = await value(user, "select house_create('La casa', 'Nora', '[]')");
+  const me = await value(user, "select id from shared_members where group_id = $1", [id]);
+  await receipt(user, { id }, { name: "Recibo de Nora", responsible: me });
+  await receipt(user, { id }, { name: "Sin responsable", responsible: null });
+  const own = await value(user, "insert into bills (name, due_day) values ('Pasó a la casa', 5) returning id");
+  await receipt(user, { id }, { name: "Adoptado", responsible: me, from: own });
+  await db.query("insert into api_tokens (user_id, kind, token_hash) values ($1, 'calendar', encode(sha256(convert_to('feed-nora', 'UTF8')), 'hex'))", [user]);
+  const names = (await as(null, "select name from calendar_feed('feed-nora')")).map((r) => r.name).sort();
+  assert.deepEqual(names, ["Adoptado", "Recibo de Nora"]);
+});

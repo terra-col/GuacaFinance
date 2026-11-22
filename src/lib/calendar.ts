@@ -7,7 +7,7 @@ export type EntryStatus = "paid" | "pending" | "overdue" | "skipped";
 
 export interface CalendarEntry {
   date: string;
-  type: "bill" | "debt" | "income" | "goal";
+  type: "bill" | "debt" | "income" | "goal" | "house";
   id: string;
   name: string;
   /** Expected amount, or what was paid/received once it was; null when it varies. */
@@ -41,7 +41,7 @@ export function calendarEntries(items: ChecklistItem[], incomes: IncomeItem[]): 
       type: i.type,
       id: i.id,
       name: i.name,
-      amount: i.paid ? i.paidAmount : i.expected,
+      amount: i.paid ? (i.house?.total ?? i.paidAmount) : i.expected,
       status: (i.paid ? "paid" : i.skipped ? "skipped" : i.overdue ? "overdue" : "pending") as EntryStatus,
     })),
     ...incomes.map((i) => ({

@@ -2,11 +2,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Icon, txIconName } from "@/components/icons";
 import { Modal } from "@/components/modal";
-import { PeopleSection } from "@/components/people-section";
-import { RemovePersonForm, RestorePersonButton } from "@/components/remove-forms";
+import { GroupExit } from "@/components/group-exit";
+import { GroupPeople } from "@/components/group-people";
 import { ExpenseForm } from "@/components/expense-form";
-import { AddPersonForm, DeleteEntryForm, DeleteGroupForm, EditPersonForm, InviteForm, RecordForm, RenameGroupForm, SettlementForm, type EditableEntry } from "@/components/shared-forms";
-import { knownPeople } from "@/lib/contacts";
+import { DeleteEntryForm, RecordForm, RenameGroupForm, SettlementForm, type EditableEntry } from "@/components/shared-forms";
 import { loadData } from "@/lib/data";
 import { favoriteAccountId, favoriteFirst, formatCOP, formatDate, holdsMoney, isAdjustment } from "@/lib/finance";
 import { groupTitle } from "@/lib/people";
@@ -17,7 +16,7 @@ const SMALL = "text-xs font-semibold text-brand";
 
 export default async function GroupPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ dividir?: string }> }) {
   const { id } = await params;
-  const { supabase, shared, accounts, txs, user, today } = await loadData();
+  const { supabase, shared, house, accounts, txs, user, today } = await loadData();
   const group = shared.groups.find((g) => g.id === id);
   const me = memberOf(id, shared, user.id);
   if (!group || !me) notFound();
@@ -37,8 +36,7 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
   const direct = Boolean(group.direct);
   const title = groupTitle(group, shared, user.id);
   const other = direct ? members.find((m) => m.id !== me.id) : undefined;
-  const canRemove = direct || group.created_by === null || group.created_by === user.id;
-  const creator = members.find((m) => m.user_id && m.user_id === group.created_by);
+  const housePayments = house.payments.filter((p) => p.group_id === id);
 
   const option = (a: { id: string; name: string; favorite?: boolean }) => ({ value: a.id, label: a.name, star: Boolean(a.favorite) });
   const payable = favoriteFirst(accounts.filter((a) => a.kind !== "loan")).map(option);
@@ -52,14 +50,7 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
   const dividing = dividir && !alreadyLinked ? txs.find((t) => t.id === dividir && t.kind === "expense" && !isAdjustment(t)) : undefined;
   const form = { group: id, members: people, me: me.id, favorite, today };
 
-  const known = shared.editable ? knownPeople(shared, user.id) : null;
-  const pending = new Map(shared.requests?.filter((r) => r.group_id === id).map((r) => [r.member_id, r.user_id]));
-  // Offered to add: whoever is neither in the group nor invited to it.
-  const addable = known?.filter(
-    (k) =>
-      !members.some((m) => (k.userId ? m.user_id === k.userId : k.phone ? m.phone === k.phone : m.name.toLocaleLowerCase("es") === k.name.toLocaleLowerCase("es"))) &&
-      !(k.userId && [...pending.values()].includes(k.userId)),
-  );
+  const known = shared.editable;
   // Other people's links are theirs alone, so whether anyone else recorded it is asked to the database.
   const { data: recorded } = shared.editable && entries.length ? await supabase.rpc("shared_recorded_by_others", { p_group: id }) : { data: null };
   const recordedByOthers = new Set<string>((recorded as string[] | null) ?? []);
@@ -76,6 +67,11 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
             {other && (
               <Link href={`/compartidos/persona/${other.id}`} className={SMALL}>
                 Solo ustedes dos · ver todo con {other.name}
+              </Link>
+            )}
+            {group.house && (
+              <Link href={`/pagos/casa/${id}`} className={`${SMALL} mr-3`}>
+                Ver los recibos de la casa
               </Link>
             )}
             {known && !direct && (
@@ -102,88 +98,7 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
         </div>
       </div>
 
-      <PeopleSection
-        people={active.map((m) => ({ id: m.id, name: m.name, me: m.id === me.id }))}
-        waiting={active.filter((m) => !m.user_id).length}
-        action={
-          !direct && (
-            <div className="flex flex-col items-start gap-3">
-              <Modal label="+ Agregar" title="Agregar persona" buttonClass="btn-quiet h-9 px-3 text-sm">
-                <AddPersonForm group={id} known={addable ?? null} />
-              </Modal>
-              {gone.length > 0 && (
-                <div className="w-full border-t border-line pt-2" data-gone>
-                  <p className="eyebrow">Ya no están</p>
-                  <ul>
-                    {gone.map((m) => (
-                      <li key={m.id} className="flex items-center justify-between gap-3 py-1.5 text-sm text-ink-3">
-                        <span className="min-w-0 truncate">{m.name}</span>
-                        {pending.has(m.id) ? (
-                          <span className="shrink-0 text-xs">Invitación enviada</span>
-                        ) : (
-                          (!m.user_id || canRemove) && <RestorePersonButton member={m.id} />
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
-          )
-        }
-      >
-        {[me, ...active.filter((m) => m.id !== me.id)].map((m) => {
-          const net = nets.get(m.id) ?? 0;
-          const inHistory = entries.some((e) => e.paid_by === m.id) || shares.some((s) => s.member_id === m.id);
-          const canQuit = !direct && m.id !== me.id && Boolean(shared.removable);
-          // Before migration 0024, only who has no history, from its «Editar».
-          const removable = !shared.removable && !direct && !m.user_id && !inHistory;
-          return (
-            <li key={m.id} className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5 py-2 text-sm">
-              <div className="min-w-0">
-                <p className="truncate font-semibold">
-                  {m.name}
-                  {m.id === me.id ? " (tú)" : ""}
-                </p>
-                <p className="num text-xs text-ink-3">
-                  {net > 0 ? `le deben ${formatCOP(net)}` : net < 0 ? `debe ${formatCOP(-net)}` : "al día"}
-                  {!m.user_id && ` · ${pending.has(m.id) ? "Invitación enviada" : "Sin unirse"}`}
-                </p>
-              </div>
-              <div className="ml-auto flex shrink-0 gap-3">
-                {!m.user_id && (
-                  <Modal label="Invitar" title={`Invitar a ${m.name}`} buttonClass={SMALL}>
-                    <InviteForm member={{ id: m.id, name: m.name }} groupName={group.name} phone={m.phone ?? ""} removable={!known && removable} />
-                  </Modal>
-                )}
-                {known && (
-                  <Modal label="Editar" title={m.id === me.id ? "Tu nombre aquí" : `Editar a ${m.name}`} buttonClass={SMALL}>
-                    <EditPersonForm
-                      member={{ id: m.id, name: m.name, phone: m.phone ?? "" }}
-                      who={m.id === me.id ? "me" : m.user_id ? "joined" : "guest"}
-                      known={addable ?? []}
-                      removable={removable}
-                    />
-                  </Modal>
-                )}
-                {canQuit && (
-                  <Modal label="Quitar" title={`Quitar a ${m.name}`} buttonClass="text-xs font-medium text-ink-3 hover:text-debt">
-                    <RemovePersonForm
-                      member={m.id}
-                      name={m.name}
-                      net={net}
-                      hasHistory={inHistory}
-                      joined={Boolean(m.user_id)}
-                      allowed={!m.user_id || canRemove}
-                      creator={creator?.name ?? "quien lo creó"}
-                    />
-                  </Modal>
-                )}
-              </div>
-            </li>
-          );
-        })}
-      </PeopleSection>
+      <GroupPeople group={group} shared={shared} userId={user.id} paidHere={new Set(housePayments.map((p) => p.paid_by))} />
 
       {dividing && (
         <section className="card flex flex-col gap-4" aria-labelledby="split-title">
@@ -328,21 +243,7 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
         )}
       </section>
 
-      <div className="flex justify-center">
-        {canRemove ? (
-          <Modal label={direct ? "Eliminar esta cuenta" : "Eliminar grupo"} title={direct ? "Eliminar esta cuenta" : "Eliminar grupo"} buttonClass="btn-quiet h-11 gap-2 px-4 text-sm hover:text-debt">
-            <DeleteGroupForm
-              group={id}
-              social={Boolean(shared.social)}
-              hasEntries={entries.length > 0}
-              others={members.some((m) => m.user_id && m.id !== me.id)}
-              settled={[...nets.values()].every((net) => net === 0)}
-            />
-          </Modal>
-        ) : (
-          <p className="text-center text-xs text-ink-3">Este grupo lo puede eliminar {creator?.name ?? "quien lo creó"}, que lo creó.</p>
-        )}
-      </div>
+      <GroupExit group={group} shared={shared} userId={user.id} hasPayments={housePayments.length > 0} canLeave={house.ready} />
     </>
   );
 }

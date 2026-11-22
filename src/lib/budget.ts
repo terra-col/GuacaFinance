@@ -199,8 +199,13 @@ export function monthPlan(incomes: IncomeItem[], checklist: ChecklistItem[], bud
   let unknownObligations = 0;
   for (const item of checklist) {
     if (item.skipped) continue;
-    if (item.paid) obligations += item.paidAmount;
-    else if (item.expected) {
+    if (item.paid) {
+      obligations += item.paidAmount;
+      continue;
+    }
+    // What one already put of a receipt still open (a house's, paid in parts).
+    obligations += item.paidAmount;
+    if (item.expected) {
       obligations += item.expected;
       obligationsPending += item.expected;
     } else unknownObligations += 1;

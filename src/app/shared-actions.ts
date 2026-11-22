@@ -10,6 +10,7 @@ import { parsePesos } from "@/lib/finance";
 import { requestOrigin } from "@/lib/request-origin";
 import { PENDING_ME, PENDING_OTHER, peopleWith, placesOf, splitTargets, type SplitTarget } from "@/lib/people";
 import { INVITE_COOKIE, memberOf } from "@/lib/shared";
+import { problem, readPeople, type PersonInput as Person } from "@/lib/shared-input";
 import { loadShared } from "@/lib/shared-data";
 import { computeShares, parseSplit } from "@/lib/split";
 import { createClient } from "@/lib/supabase/server";
@@ -25,45 +26,12 @@ export interface SharedResult {
 const text = (form: FormData, name: string) => String(form.get(name) ?? "").trim();
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
-/** The functions raise in Spanish (P0001); anything else gets a plain answer. */
-function problem(error: { code?: string; message: string }): string {
-  if (error.code === "P0001") return error.message;
-  if (error.code === "23505") return "Ya hay alguien con ese nombre en el grupo, o eso ya quedó registrado.";
-  if (error.code === "PGRST202") return "Falta ejecutar en Supabase una migración de Compartidos (0016, 0020, 0023 o 0024).";
-  if (error.code === "23514") return "Revisa los datos: hay un nombre, monto o texto que no es válido.";
-  return "No se pudo guardar. Intenta de nuevo.";
-}
-
 async function call(fn: string, args: Record<string, unknown>): Promise<SharedResult> {
   const supabase = await createClient();
   const { data, error } = await supabase.rpc(fn, args);
   if (error) return { error: problem(error) };
   revalidatePath("/", "layout");
   return typeof data === "string" ? { id: data } : {};
-}
-
-interface Person {
-  name: string;
-  phone: string | null;
-  known: string | null;
-}
-
-/** The people of a form: `person`, `phone` and `known`, once for each. */
-function readPeople(form: FormData): { error: string } | { people: Person[] } {
-  const all = (name: string) => form.getAll(name).map((v) => String(v).trim());
-  const [names, phones, known] = [all("person"), all("phone"), all("known")];
-  const people: Person[] = [];
-  for (const [i, name] of names.entries()) {
-    if (!name) {
-      if (phones[i]) return { error: "Escribe el nombre de cada persona." };
-      continue;
-    }
-    const phone = contactPhone(phones[i] ?? "");
-    if (phone === "invalid") return { error: `Revisa el celular de ${name}: 10 dígitos que empiecen por 3, o con + y el código del país.` };
-    if (phone && people.some((p) => p.phone === phone)) return { error: `El celular de ${name} está repetido.` };
-    people.push({ name, phone, known: known[i] || null });
-  }
-  return people.length ? { people } : { error: "Agrega al menos una persona." };
 }
 
 export async function createGroup(form: FormData): Promise<SharedResult> {
@@ -125,7 +93,7 @@ export async function deleteGroup(form: FormData): Promise<SharedResult> {
   const result = await (how ? call("shared_remove_group", { p_group, p_erase: how === "erase" }) : call("shared_delete_group", { p_group }));
   if (result.error) return result;
   // From here, so the deleted group's page is never drawn again.
-  redirect("/compartidos");
+  redirect(text(form, "back") === "/pagos" ? "/pagos" : "/compartidos");
 }
 
 /** A one-use link for one person's place; only its hash is kept. */
@@ -305,6 +273,13 @@ export async function divideMovement(form: FormData): Promise<SharedResult> {
 
 export async function removePerson(form: FormData): Promise<SharedResult> {
   return call("shared_remove_person", { p_member: text(form, "member") });
+}
+
+export async function leaveGroup(form: FormData): Promise<SharedResult> {
+  const result = await call("shared_leave", { p_group: text(form, "group") });
+  if (result.error) return result;
+  // From here, so the page of the group one left is never drawn again.
+  redirect(text(form, "back") === "/pagos" ? "/pagos" : "/compartidos");
 }
 
 export async function restorePerson(form: FormData): Promise<SharedResult> {

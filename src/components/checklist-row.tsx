@@ -5,6 +5,7 @@ import { deleteBill, deleteIncome, markPaid, skipItem, unmarkPaid, unskipItem, u
 import { daysBetween, formatCOP, formatDate, relativeDay, type ChecklistItem } from "@/lib/finance";
 import { everyShort } from "@/lib/recurrence";
 import { DateField } from "./date-field";
+import { HouseReceiptRow } from "./house-receipt";
 import { MoneyInput } from "./money-input";
 import { SelectField } from "./pickers";
 
@@ -30,12 +31,20 @@ function buzz() {
 }
 
 /**
+ * One row of the month. A house's receipt is the same one its screen has: ticked in either place.
+ */
+export function ChecklistRow(props: Props) {
+  if (props.item.house) return <HouseReceiptRow receipt={props.item.house} own={props.item} today={props.today} editable={props.editable} accounts={props.accounts} />;
+  return <OwnRow {...props} />;
+}
+
+/**
  * One obligatory payment of the month. Ticking it records the payment at once
  * (the tick shows before the server answers), celebrates briefly, and offers
  * a few seconds to undo. Unticking an older payment asks first, because it
  * deletes the recorded movement.
  */
-export function ChecklistRow({ item, month, today, editable, accounts }: Props) {
+function OwnRow({ item, month, today, editable, accounts }: Props) {
   const [paid, setOptimisticPaid] = useOptimistic(item.paid);
   const [pending, startTransition] = useTransition();
   const [panel, setPanel] = useState<"none" | "form" | "edit" | "skip" | "unskip" | "delete" | "recurring">("none");

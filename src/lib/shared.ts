@@ -11,6 +11,8 @@ export interface SharedGroup {
   /** An account between two, rather than a group (migration 0023). */
   direct?: boolean;
   deleted_at?: string | null;
+  /** Also a house, with its receipts in Pagos (migration 0025). */
+  house?: boolean;
 }
 
 export interface SharedMember {
