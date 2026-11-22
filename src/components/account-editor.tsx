@@ -442,6 +442,22 @@ export function AccountHero({
               ✓ Cambios guardados
             </p>
           )}
+          {/* Apart from the balance and the data: deleting is its own decision, asked twice. */}
+          <details className="group w-full max-w-md text-sm">
+            <summary className="flex cursor-pointer list-none items-center gap-2 rounded-xl px-1 py-2 font-medium text-ink-3 hover:text-debt [&::-webkit-details-marker]:hidden">
+              <Icon name="trash" className="size-4" />
+              Eliminar {noun}
+            </summary>
+            <form action={deleteAccount} className="rise mt-1 flex flex-col gap-3 rounded-2xl border border-debt/30 bg-debt/8 p-4">
+              <input type="hidden" name="id" value={account.id} />
+              <p className="text-ink-2">
+                Se borran también sus {movements} movimientos y deja de contar en tu balance. No se puede deshacer.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <SubmitButton className="btn-quiet border-debt/50 text-ink">Sí, eliminar</SubmitButton>
+              </div>
+            </form>
+          </details>
         </>
       )}
 
@@ -461,15 +477,6 @@ export function AccountHero({
           ) : (
             <BalanceAdjuster id={account.id} current={balance} debt={false} today={today} defaultOpen onCancel={close} />
           )}
-
-          <details className="border-t border-line pt-4 text-sm">
-            <summary className="cursor-pointer font-medium text-ink-3 hover:text-ink">Eliminar {noun}</summary>
-            <form action={deleteAccount} className="mt-3 flex flex-wrap items-center gap-3">
-              <input type="hidden" name="id" value={account.id} />
-              <p className="text-ink-2">Se borran también sus {movements} movimientos. No se puede deshacer.</p>
-              <SubmitButton className="btn-quiet border-debt/40 text-ink">Sí, eliminar</SubmitButton>
-            </form>
-          </details>
         </div>
       )}
     </div>
