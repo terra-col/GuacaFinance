@@ -98,9 +98,9 @@ export function TxList({ txs, accounts, today }: { txs: Tx[]; accounts: Pick<Acc
           })}
         </div>
         <input
-          className="input sm:max-w-60"
+          className="input min-w-0 sm:max-w-80"
           type="search"
-          placeholder="Buscar comercio o categoría"
+          placeholder="Buscar movimientos"
           aria-label="Buscar movimientos"
           value={query}
           onChange={(e) => { setQuery(e.target.value); setLimit(PAGE); }}

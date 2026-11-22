@@ -7,7 +7,9 @@ import { FormSplash } from "@/components/splash";
 import { ScalePicker, ThemePicker } from "@/components/theme-toggle";
 import { TokenCard } from "@/components/token-card";
 import { WalletGuide } from "@/components/wallet-guide";
-import { cardColor } from "@/lib/banks";
+import { BankLogo } from "@/components/bank-logo";
+import { Icon } from "@/components/icons";
+import { bankKey, bankLogoUrl } from "@/lib/banks";
 import { loadData } from "@/lib/data";
 import { SCALE_COOKIE, THEME_COOKIE, parseScale, parseTheme } from "@/lib/theme";
 import { SubmitButton } from "@/components/submit-button";
@@ -75,7 +77,16 @@ export default async function SettingsPage() {
             <ul className="divide-y divide-line">
               {linked.map((a) => (
                 <li key={a.id} className="flex items-center gap-3 py-2.5 text-sm">
-                  <span aria-hidden="true" className="h-6 w-9 shrink-0 rounded-md shadow-sm" style={{ background: cardColor(a) }} />
+                  {/* The bank's logo (uploaded or automatic); a grey card icon when there is none. */}
+                  {(() => {
+                    const plain = (
+                      <span aria-hidden="true" className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-line/70 text-ink-3">
+                        <Icon name="card" className="size-5" />
+                      </span>
+                    );
+                    const bank = bankKey(a.institution);
+                    return a.logo ? <BankLogo src={a.logo} fallback={plain} /> : bank ? <BankLogo src={bankLogoUrl(bank)} fallback={plain} /> : plain;
+                  })()}
                   <span className="min-w-0 flex-1">
                     <span className="block truncate font-medium">«{a.wallet_card_name}»</span>
                     <span className="block truncate text-xs text-ink-3">se registra en {a.name}</span>

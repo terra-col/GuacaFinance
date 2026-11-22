@@ -77,11 +77,7 @@ export function TxForm({
           {KIND_OPTIONS.map((option) => (
             <label
               key={option.kind}
-              className={`cursor-pointer rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors ${
-                kind === option.kind
-                  ? "border-transparent bg-brand text-white"
-                  : "border-line text-ink-2"
-              }`}
+              className="month-chip px-3.5"
             >
               <input
                 className="sr-only"
