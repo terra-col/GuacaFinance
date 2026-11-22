@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { BillForm, IncomeForm } from "@/components/bill-forms";
 import { ChecklistRow } from "@/components/checklist-row";
+import { Modal } from "@/components/modal";
+import { PaidGroup } from "@/components/paid-group";
 import { MonthPlanCard } from "@/components/month-plan";
 import { incomeChecklist, incomeRow, monthPlan, nextIncomeDate } from "@/lib/budget";
 import { loadData } from "@/lib/data";
@@ -124,6 +126,9 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
     );
   }
   const plan = monthPlan(incomeItems, items, budgets);
+  // Pending first (late ones by date), then skipped; paid ones go to the folded group at the end.
+  const sorted = [...items].sort(pendingFirst);
+  const incomeRows = incomeItems.map(incomeRow).sort(pendingFirst);
 
   // One-time extras drop off the list once their month is over.
   const visibleIncomes = incomes.filter((i) => !i.once_month || i.once_month >= current);
@@ -150,39 +155,69 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
 
       {planReady && (incomes.length > 0 || budgets.length > 0) && <MonthPlanCard plan={plan} />}
 
-      {incomeItems.length > 0 && (
+      {(incomeItems.length > 0 || (editable && planReady)) && (
         <section className="card" aria-label="Ingresos del mes">
-          <div className="flex items-baseline justify-between gap-3">
+          <div className="flex items-center justify-between gap-3">
             <h2 className="display text-2xl">Ingresos</h2>
-            <p className="text-sm text-ink-3">
-              {plan.incomePending > 0 ? (
-                <>
-                  Por llegar <span className="num font-medium text-ink">{formatCOP(plan.incomePending)}</span>
-                </>
-              ) : (
-                "Todo recibido"
-              )}
-            </p>
+            {editable && planReady && (
+              <Modal label="+ Agregar" title="Nuevo ingreso" buttonClass="btn-quiet h-9 px-3 text-sm">
+                <IncomeForm accounts={savings} currentMonth={current} inModal />
+              </Modal>
+            )}
           </div>
-          <ul className="mt-2 divide-y divide-line">
-            {[...incomeItems].sort((a, b) => pendingFirst(incomeRow(a), incomeRow(b))).map((i) => (
-              <ChecklistRow key={`income-${i.id}`} item={incomeRow(i)} month={month} today={today} editable={editable} accounts={savings} />
-            ))}
-          </ul>
+          {incomeItems.length === 0 ? (
+            <p className="mt-1 text-sm text-ink-3">Agrega tu salario, la prima o un extra y aquí verás qué te llega este mes y cuándo.</p>
+          ) : (
+            <>
+              <p className="mt-1 text-sm text-ink-3">
+                {plan.incomePending > 0 ? (
+                  <>
+                    Por llegar <span className="num font-medium text-ink">{formatCOP(plan.incomePending)}</span>
+                  </>
+                ) : (
+                  "Todo recibido"
+                )}
+              </p>
+              <ul className="mt-2 divide-y divide-line">
+                {incomeRows.filter((r) => !r.paid).map((row) => (
+                  <ChecklistRow key={`income-${row.id}`} item={row} month={month} today={today} editable={editable} accounts={savings} />
+                ))}
+              </ul>
+              <PaidGroup id="ingresos" label="Ya recibidos" count={incomeRows.filter((r) => r.paid).length}>
+                {incomeRows.filter((r) => r.paid).map((row) => (
+                  <ChecklistRow key={`income-${row.id}`} item={row} month={month} today={today} editable={editable} accounts={savings} />
+                ))}
+              </PaidGroup>
+            </>
+          )}
         </section>
       )}
 
       {items.length === 0 ? (
         <section className="card">
-          <p className="font-medium">No hay pagos obligatorios {editable ? "este mes" : "en ese mes"}.</p>
-          <p className="mt-1 text-sm text-ink-2">Agrega tus pagos fijos aquí abajo. Las tarjetas y préstamos con saldo aparecen solos.</p>
+          <div className="flex items-center justify-between gap-3">
+            <p className="font-medium">No hay pagos obligatorios {editable ? "este mes" : "en ese mes"}.</p>
+            {editable && (
+              <Modal label="+ Agregar" title="Nuevo pago fijo" buttonClass="btn-quiet h-9 shrink-0 px-3 text-sm">
+                <BillForm inModal />
+              </Modal>
+            )}
+          </div>
+          <p className="mt-1 text-sm text-ink-2">Agrega tus pagos fijos (arriendo, servicios, suscripciones). Las tarjetas y préstamos con saldo aparecen solos.</p>
         </section>
       ) : (
         <section className="card" aria-label="Lista de pagos del mes">
-          <div className="flex items-baseline justify-between gap-3">
+          <div className="flex items-center justify-between gap-3">
             <p className="display text-2xl">
               {done} de {counted.length} pagados
             </p>
+            {editable && (
+              <Modal label="+ Agregar" title="Nuevo pago fijo" buttonClass="btn-quiet h-9 shrink-0 px-3 text-sm">
+                <BillForm inModal />
+              </Modal>
+            )}
+          </div>
+          <div className="mt-1 flex items-baseline justify-between gap-3">
             <p className="text-right text-sm text-ink-2">
               {done === counted.length ? (
                 <span className="pill pill-idea text-sm">🎉 Mes al día</span>
@@ -203,39 +238,20 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
             </p>
           )}
           <ul className="mt-3 divide-y divide-line">
-            {[...items].sort(pendingFirst).map((item) => (
-              <ChecklistRow
-                key={`${item.type}-${item.id}`}
-                item={item}
-                month={month}
-                today={today}
-                editable={editable}
-                accounts={item.type === "bill" ? spendable : savings}
-              />
+            {sorted.filter((i) => !i.paid).map((item) => (
+              <ChecklistRow key={`${item.type}-${item.id}`} item={item} month={month} today={today} editable={editable} accounts={item.type === "bill" ? spendable : savings} />
             ))}
           </ul>
+          <PaidGroup id="pagos" label="Ya pagados" count={sorted.filter((i) => i.paid).length}>
+            {sorted.filter((i) => i.paid).map((item) => (
+              <ChecklistRow key={`${item.type}-${item.id}`} item={item} month={month} today={today} editable={editable} accounts={item.type === "bill" ? spendable : savings} />
+            ))}
+          </PaidGroup>
         </section>
       )}
 
       {editable && (
         <>
-          <div className="flex flex-wrap gap-2">
-            <details className="group w-full" open={bills.length === 0}>
-              <summary className="btn-quiet inline-flex cursor-pointer list-none">Agregar un pago fijo</summary>
-              <div className="mt-3">
-                <BillForm />
-              </div>
-            </details>
-            {planReady && (
-              <details className="group w-full" open={incomes.length === 0 && bills.length > 0}>
-                <summary className="btn-quiet inline-flex cursor-pointer list-none">Programar un ingreso o un extra</summary>
-                <div className="mt-3">
-                  <IncomeForm accounts={savings} currentMonth={current} />
-                </div>
-              </details>
-            )}
-          </div>
-
           {scheduled.length > 0 && (
             <section className="card" aria-labelledby="scheduled-title">
               <h2 id="scheduled-title" className="display text-2xl">

@@ -14,17 +14,25 @@ import { MoneyInput } from "./money-input";
 import { SubmitButton } from "./submit-button";
 import { SelectField, CategoryField } from "./pickers";
 
-/** A fixed bill, new or (with `bill`) edited in place. `onDone` runs once it is saved. */
-export function BillForm({ bill, onDone }: { bill?: Bill; onDone?: () => void } = {}) {
+/**
+ * A fixed bill, new or (with `bill`) edited in place. `onDone` runs once it is saved; `inModal`:
+ * inside a Modal, which has its own title and closes on save.
+ */
+export function BillForm({ bill, onDone, inModal = false }: { bill?: Bill; onDone?: () => void; inModal?: boolean } = {}) {
   const editing = Boolean(bill);
+  const bare = editing || inModal;
+  const closeModal = useCloseModal();
   const [state, action] = useActionState<FormState, FormData>(async (prev: FormState, form: FormData) => {
     const result = await saveBill(prev, form);
-    if (!result.error) onDone?.();
+    if (!result.error) {
+      onDone?.();
+      if (inModal) closeModal();
+    }
     return result;
   }, {});
   return (
-    <form action={action} className={editing ? "flex flex-col gap-4" : "card flex flex-col gap-4"}>
-      {!editing && <h2 className="display text-2xl">Nuevo pago fijo</h2>}
+    <form action={action} className={bare ? "flex flex-col gap-4" : "card flex flex-col gap-4"}>
+      {!bare && <h2 className="display text-2xl">Nuevo pago fijo</h2>}
       {bill && <input type="hidden" name="id" value={bill.id} />}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <label className="field">
@@ -77,22 +85,29 @@ export function IncomeForm({
   currentMonth,
   income,
   onDone,
+  inModal = false,
 }: {
   accounts: { id: string; name: string }[];
   currentMonth: string;
   income?: Income;
   onDone?: () => void;
+  inModal?: boolean;
 }) {
   const editing = Boolean(income);
+  const bare = editing || inModal;
+  const closeModal = useCloseModal();
   const [state, action] = useActionState<FormState, FormData>(async (prev: FormState, form: FormData) => {
     const result = await saveIncome(prev, form);
-    if (!result.error) onDone?.();
+    if (!result.error) {
+      onDone?.();
+      if (inModal) closeModal();
+    }
     return result;
   }, {});
   const [repeat, setRepeat] = useState<"monthly" | "some" | "once">(income?.once_month ? "once" : income?.months ? "some" : "monthly");
   return (
-    <form action={action} className={editing ? "flex flex-col gap-4" : "card flex flex-col gap-4"}>
-      {!editing && <h2 className="display text-2xl">Nuevo ingreso</h2>}
+    <form action={action} className={bare ? "flex flex-col gap-4" : "card flex flex-col gap-4"}>
+      {!bare && <h2 className="display text-2xl">Nuevo ingreso</h2>}
       {income && <input type="hidden" name="id" value={income.id} />}
       <fieldset className="flex flex-wrap gap-2">
         <legend className="sr-only">Cada cuánto llega</legend>
