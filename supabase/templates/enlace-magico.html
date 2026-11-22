@@ -1,0 +1,55 @@
+<!-- Asunto: Tu enlace para entrar a Guaca -->
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light only">
+  <title>Tu enlace para entrar a Guaca</title>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@600;700&family=Plus+Jakarta+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+</head>
+<body style="margin:0;padding:0;background:#f4f2ff;">
+  <div style="display:none;max-height:0;overflow:hidden;opacity:0;">Entra sin contraseña con un toque.</div>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f4f2ff" style="background:#f4f2ff;background-image:linear-gradient(160deg,#e9e3ff 0%,#f4f2ff 45%,#fcf0f6 100%);">
+    <tr>
+      <td align="center" style="padding:32px 14px;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#ffffff" style="max-width:520px;background:#ffffff;border:1px solid #e2def5;border-radius:28px;overflow:hidden;box-shadow:0 24px 60px -24px rgba(30,20,90,0.35);">
+          <tr>
+            <td style="padding:0;line-height:0;">
+              <img src="{{ .SiteURL }}/email/encabezado.png" width="520" alt="Guaca" style="display:block;width:100%;max-width:520px;height:auto;border:0;">
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:36px 36px 0;font-family:'Plus Jakarta Sans','Segoe UI',Helvetica,Arial,sans-serif;">
+              <p style="margin:0 0 10px;font-size:12px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#6d4aff;">Entrar</p>
+              <h1 style="margin:0 0 14px;font-family:Outfit,'Segoe UI',Helvetica,Arial,sans-serif;font-size:28px;font-weight:700;line-height:1.15;color:#14112e;">Tu enlace para entrar</h1>
+              <p style="margin:0;font-size:16px;line-height:1.6;color:#4a4670;">Toca el botón para entrar a Guaca sin escribir la contraseña.</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:28px 36px 0;">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <td align="center" bgcolor="#6d4aff" style="border-radius:999px;background:#6d4aff;background-image:linear-gradient(135deg,#6d4aff 0%,#9a34e6 100%);box-shadow:0 14px 28px -12px rgba(109,74,255,0.75);">
+                  <a href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email&next=/" target="_blank" style="display:inline-block;padding:16px 34px;font-family:'Plus Jakarta Sans','Segoe UI',Helvetica,Arial,sans-serif;font-size:16px;font-weight:700;line-height:1;color:#ffffff;text-decoration:none;border-radius:999px;">Entrar a Guaca&nbsp;&rarr;</a>
+                </td>
+              </tr>
+            </table>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:24px 36px 36px;font-family:'Plus Jakarta Sans','Segoe UI',Helvetica,Arial,sans-serif;">
+              <p style="margin:0;font-size:13px;line-height:1.6;color:#68648c;">El enlace sirve una sola vez. Si no intentaste entrar, ignora este correo: nadie puede usar tu cuenta sin él.</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:20px 36px;background:#f8f6ff;border-top:1px solid #ece8fb;font-family:'Plus Jakarta Sans','Segoe UI',Helvetica,Arial,sans-serif;">
+              <p style="margin:0;font-size:12px;line-height:1.6;color:#8a86ad;"><strong style="color:#6d4aff;">Guaca</strong> &middot; Tu plata, clara y en movimiento.<br>Este correo se envió a {{ .Email }}.</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
