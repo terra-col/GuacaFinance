@@ -32,11 +32,15 @@ export function Carousel({ label, children }: { label: string; children: React.R
 
   return (
     // min-w-0: inside a flex column, the row of slides must not widen its container.
+    // A scrolling row clips what spills out of it: the extra padding (given back with negative
+    // margins) leaves room for the cards' shadow and their lift on hover.
     <div className="relative min-w-0">
       <ul
         ref={track}
         aria-label={label}
-        className="-mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto scroll-px-4 px-4 pb-4 pt-1 [scrollbar-width:none] sm:-mx-6 sm:scroll-px-6 sm:px-6 [&::-webkit-scrollbar]:hidden"
+        // Where more cards wait, the edge fades instead of cutting the next card and its shadow.
+        style={{ maskImage: fade(edges), WebkitMaskImage: fade(edges) }}
+        className="-mx-4 -mb-6 -mt-2 flex snap-x snap-mandatory gap-4 overflow-x-auto scroll-px-4 px-4 pb-10 pt-3 [scrollbar-width:none] sm:-mx-6 sm:scroll-px-6 sm:px-6 [&::-webkit-scrollbar]:hidden"
       >
         {children}
       </ul>
@@ -53,6 +57,10 @@ export function Carousel({ label, children }: { label: string; children: React.R
     </div>
   );
 }
+
+const EDGE = "24px";
+const fade = ({ start, end }: { start: boolean; end: boolean }) =>
+  start && end ? undefined : `linear-gradient(to right, ${start ? "#000" : "transparent"}, #000 ${EDGE}, #000 calc(100% - ${EDGE}), ${end ? "#000" : "transparent"})`;
 
 /** One slide: about one card wide on phones, a fixed width on larger screens. */
 export function Slide({ children, index = 0 }: { children: React.ReactNode; index?: number }) {

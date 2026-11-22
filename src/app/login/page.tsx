@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { AuthShell } from "@/components/auth-shell";
 import { APP_TAGLINE } from "@/lib/brand";
+import { phoneLoginReady } from "@/lib/phone-login";
 import { isSupabaseConfigured } from "@/lib/supabase/server";
 import { LoginForm } from "./login-form";
 
@@ -22,10 +23,10 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
           )}
           {registro && (
             <p role="status" className="card text-sm text-ink-2">
-              <span className="font-semibold text-ink">Te invitaron a Guaca.</span> Escribe tu nombre, tu correo y una contraseña nueva. Te llegará un correo para confirmar.
+              <span className="font-semibold text-ink">Te invitaron a Guaca.</span> Escribe tu nombre, tu correo y una contraseña nueva. Te llegará un correo para confirmar (si no aparece, revisa la carpeta de spam).
             </p>
           )}
-          <LoginForm startWithSignup={Boolean(registro)} />
+          <LoginForm startWithSignup={Boolean(registro)} phoneLogin={phoneLoginReady()} />
           <Link href="/recuperar" className="text-center text-sm font-medium text-brand">
             ¿Olvidaste tu contraseña?
           </Link>

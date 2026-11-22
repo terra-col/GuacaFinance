@@ -186,7 +186,9 @@ export function TxList({ txs, accounts, today }: { txs: Tx[]; accounts: Pick<Acc
                           </button>
                         ) : (
                           // Adjustments are not edited, but keep the room so every amount lines up.
-                          <span className="row-tool invisible" aria-hidden="true" />
+                          <span className="row-tool invisible" aria-hidden="true">
+                            <Icon name="edit" className="size-4" />
+                          </span>
                         )}
                         {armed === tx.id ? (
                           <form action={deleteTx} className="rise">

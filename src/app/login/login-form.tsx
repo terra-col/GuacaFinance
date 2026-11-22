@@ -9,7 +9,7 @@ import { authenticate, type FormState } from "../actions";
  * Entrar, or create an account (which asks for the name the app greets you by). Signing in can
  * keep the session (the default) or end it when the browser closes.
  */
-export function LoginForm({ startWithSignup = false }: { startWithSignup?: boolean }) {
+export function LoginForm({ startWithSignup = false, phoneLogin = false }: { startWithSignup?: boolean; phoneLogin?: boolean }) {
   const [state, action] = useActionState<FormState, FormData>(authenticate, {});
   const [mode, setMode] = useState<"login" | "signup">(startWithSignup ? "signup" : "login");
   const signup = mode === "signup";
@@ -46,10 +46,18 @@ export function LoginForm({ startWithSignup = false }: { startWithSignup?: boole
           </label>
         </div>
       )}
-      <label className="field">
-        Correo
-        <input className="input" type="email" name="email" autoComplete="email" required />
-      </label>
+      {signup || !phoneLogin ? (
+        <label className="field">
+          Correo
+          <input key="email" className="input" type="email" name="email" autoComplete="email" required />
+        </label>
+      ) : (
+        <label className="field">
+          Correo o celular
+          <input key="login" className="input" type="text" name="email" inputMode="email" autoComplete="username" autoCapitalize="none" spellCheck={false} placeholder="tu@correo.com o 300 123 4567" required />
+          <span className="text-xs font-normal text-ink-3">Con el celular puedes entrar después de confirmar tu correo.</span>
+        </label>
+      )}
       <label className="field">
         Contraseña
         <input className="input" type="password" name="password" autoComplete={signup ? "new-password" : "current-password"} minLength={6} required />
@@ -64,7 +72,11 @@ export function LoginForm({ startWithSignup = false }: { startWithSignup?: boole
         </label>
       )}
       {state.error && <p role="alert" className="alert">{state.error}</p>}
-      {state.message && <p role="status" className="text-sm text-ink-2">{state.message}</p>}
+      {state.message && (
+        <p role="status" className="rise rounded-2xl bg-brand/10 p-3 text-sm font-medium text-ink">
+          {state.message}
+        </p>
+      )}
       <SubmitButton className="btn h-11">{signup ? "Crear cuenta" : "Entrar"}</SubmitButton>
       {/* Stays up through the redirect, until the first screen of the app arrives. */}
       <FormSplash text={signup ? "Creando tu cuenta…" : "Abriendo tus finanzas…"} />

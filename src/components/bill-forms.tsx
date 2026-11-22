@@ -13,6 +13,7 @@ import { useCloseModal } from "./modal";
 import { MoneyInput } from "./money-input";
 import { SubmitButton } from "./submit-button";
 import { SelectField, CategoryField } from "./pickers";
+import { MonthField } from "./month-field";
 
 /**
  * A fixed bill, new or (with `bill`) edited in place. `onDone` runs once it is saved; `inModal`:
@@ -151,7 +152,7 @@ export function IncomeForm({
       {repeat === "once" && (
         <label className="field sm:max-w-60">
           Mes en que llega
-          <input className="input" type="month" name="once_month" min={currentMonth} defaultValue={income?.once_month ?? currentMonth} required />
+          <MonthField name="once_month" min={currentMonth} defaultValue={income?.once_month ?? currentMonth} required />
         </label>
       )}
       {repeat === "some" && (

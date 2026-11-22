@@ -7,6 +7,22 @@ const EVENT = "guaca:privacy";
 const isOn = () => document.documentElement.dataset.privacy === "on";
 
 /**
+ * Chrome can leave a stale strip behind a frosted card when many texts in it change at once (the
+ * eye masking every amount); it goes away only when something repaints that spot, like the mouse
+ * passing over. Adding a filter that changes nothing (brightness 1) for one frame makes it
+ * recompute the frosted glass of every card, with no visible flicker.
+ */
+function repaintGlass() {
+  requestAnimationFrame(() => {
+    const glass = [...document.querySelectorAll<HTMLElement>(".card, .liquid")]
+      .map((el) => ({ el, filter: getComputedStyle(el).backdropFilter }))
+      .filter((g) => g.filter && g.filter !== "none");
+    for (const { el, filter } of glass) el.style.setProperty("backdrop-filter", `${filter} brightness(1)`);
+    requestAnimationFrame(() => glass.forEach(({ el }) => el.style.removeProperty("backdrop-filter")));
+  });
+}
+
+/**
  * Modo privado at work: while it is on, every amount of money in the page's text becomes
  * "$ •••••", also what arrives later (a new screen, an animated number, a chart's tooltip). The
  * real text is kept aside and comes back when it is turned off. Fields where amounts are typed
@@ -55,6 +71,7 @@ export function PrivacyMask() {
       } else restore();
       // The first paint was blurred until now (see globals.css).
       document.documentElement.dataset.masked = "";
+      repaintGlass();
     };
     apply();
     window.addEventListener(EVENT, apply);

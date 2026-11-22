@@ -8,6 +8,7 @@ import { passwordProblem } from "@/lib/auth-links";
 import { ADJUSTMENT, allowedTxKinds, balanceAt, isDebt, paidMonth, parsePesos, todayInBogota, type Account, type AccountKind, type Tx, type TxKind } from "@/lib/finance";
 import { firstMonthFor } from "@/lib/installments";
 import { normalizePhone } from "@/lib/phone";
+import { PHONE_TAKEN, emailForPhone, phoneLoginReady, phoneTaken } from "@/lib/phone-login";
 import { requestOrigin } from "@/lib/request-origin";
 import { REMEMBER_COOKIE, createClient, isSupabaseConfigured } from "@/lib/supabase/server";
 
@@ -37,9 +38,10 @@ async function signedIn() {
 
 export async function authenticate(_prev: FormState, form: FormData): Promise<FormState> {
   if (!isSupabaseConfigured) return { error: "Falta configurar Supabase en .env.local." };
-  const email = text(form, "email");
+  // At sign-in the field takes the email or, once the email is verified, the phone.
+  const login = text(form, "email");
   const password = String(form.get("password") ?? "");
-  if (!email || !password) return { error: "Escribe tu correo y tu contraseña." };
+  if (!login || !password) return { error: "Escribe tu correo y tu contraseña." };
 
   // «Mantener la sesión iniciada» (on unless unchecked): remembered for later refreshes of the session.
   const remember = form.get("remember") !== null || form.get("intent") === "signup";
@@ -50,17 +52,27 @@ export async function authenticate(_prev: FormState, form: FormData): Promise<Fo
     if (!name) return { error: "Escribe tu nombre: así te saludamos en la app." };
     const phone = normalizePhone(text(form, "phone"));
     if (phone === "invalid") return { error: "Escribe un celular de Colombia de 10 dígitos (empieza por 3), o déjalo vacío." };
+    if (phone && (await phoneTaken(supabase, phone))) return { error: PHONE_TAKEN };
     // The confirmation link comes back through /auth/confirm, which opens the session.
     const { data, error } = await supabase.auth.signUp({
-      email,
+      email: login,
       password,
       options: { emailRedirectTo: `${await requestOrigin()}/auth/confirm?next=/`, data: phone ? { name, phone } : { name } },
     });
     if (error) return { error: error.message };
-    if (!data.session) return { message: "Cuenta creada. Abre el enlace que te enviamos al correo para entrar." };
+    if (!data.session) return { message: "Cuenta creada. Abre el enlace que te enviamos al correo para entrar. Si no lo ves en unos minutos, revisa la carpeta de spam o correo no deseado." };
   } else {
+    let email = login;
+    if (!login.includes("@")) {
+      const phone = normalizePhone(login);
+      if (!phoneLoginReady() || !phone || phone === "invalid") return { error: "Escribe tu correo completo (con @)." };
+      // The same answer for an unknown phone and a wrong password: it does not tell who has an account.
+      const found = await emailForPhone(supabase, phone);
+      if (!found) return { error: "Celular o contraseña incorrectos. Si aún no confirmas tu correo, entra con el correo." };
+      email = found;
+    }
     const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) return { error: "Correo o contraseña incorrectos." };
+    if (error) return { error: email === login ? "Correo o contraseña incorrectos." : "Celular o contraseña incorrectos. Si aún no confirmas tu correo, entra con el correo." };
   }
   redirect("/");
 }
@@ -112,6 +124,7 @@ export async function updateProfile(_prev: FormState, form: FormData): Promise<F
   if (!name) return { error: "Escribe tu nombre." };
   const phone = normalizePhone(text(form, "phone"));
   if (phone === "invalid") return { error: "Escribe un celular de Colombia de 10 dígitos (empieza por 3), o déjalo vacío." };
+  if (phone && (await phoneTaken(supabase, phone, user.id))) return { error: PHONE_TAKEN };
   const email = text(form, "email").toLowerCase();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { error: "Ese correo no parece válido." };
   const emailChanged = email !== (user.email ?? "").toLowerCase();
@@ -121,7 +134,7 @@ export async function updateProfile(_prev: FormState, form: FormData): Promise<F
   );
   if (error) return { error: error.status === 429 ? "Espera un momento antes de volver a intentarlo." : `No se pudo guardar: ${error.message}` };
   revalidatePath("/", "layout");
-  return { message: emailChanged ? `Nombre guardado. Para cambiar el correo, abre el enlace que te enviamos a ${email}.` : "Datos guardados." };
+  return { message: emailChanged ? `Nombre guardado. Para cambiar el correo, abre el enlace que te enviamos a ${email} (si no llega, revisa spam).` : "Datos guardados." };
 }
 
 export async function signOut() {

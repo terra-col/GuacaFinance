@@ -12,7 +12,7 @@ const db = new PGlite();
 await db.exec(`
   create role anon nologin; create role authenticated nologin;
   create schema auth;
-  create table auth.users (id uuid primary key);
+  create table auth.users (id uuid primary key, email text, email_confirmed_at timestamptz, raw_user_meta_data jsonb, created_at timestamptz default now());
   create function auth.uid() returns uuid language sql stable as
     $$ select nullif(current_setting('request.jwt.sub', true), '')::uuid $$;
   grant usage on schema auth to anon, authenticated;
@@ -222,4 +222,28 @@ test("paid for another month: the month is optional and must be a real month", a
   const [closet] = await as(ANA, "select id from goals where name = 'Armario'");
   await as(ANA, "insert into goal_deposits (goal_id, amount, occurred_on, for_month) values ($1, 100000, '2026-11-30', '2026-12')", [closet.id]);
   await assert.rejects(as(ANA, "insert into goal_deposits (goal_id, amount, for_month) values ($1, 1, '26-12')", [closet.id]), /check constraint/);
+});
+
+test("phone login: the phone follows the profile, one account per number, and only the server key gets the email", async () => {
+  const KEY = "llave-de-prueba";
+  await db.exec(`insert into private.app_keys (name, hash) values ('login', encode(sha256('${KEY}'::bytea), 'hex'))`);
+  await db.exec(`update auth.users set email = 'ana@example.com', email_confirmed_at = now(), raw_user_meta_data = '{"phone": "+573001234567"}' where id = '${ANA}'`);
+  await db.exec(`update auth.users set email = 'beto@example.com', raw_user_meta_data = '{"phone": "+573001234567"}' where id = '${BETO}'`);
+
+  const email = async (phone, key = KEY) => (await as(null, "select public.phone_login_email($1, $2) as email", [phone, key]))[0].email;
+  assert.equal(await email("+573001234567"), "ana@example.com");
+  assert.equal(await email("+573009999999"), null);
+  await assert.rejects(email("+573001234567", "otra"), /not allowed/, "without the server key");
+  await assert.rejects(as(null, "select * from private.phones"), /permission denied/, "the table is not reachable");
+
+  const inUse = async (phone, user) => (await as(null, "select public.phone_in_use($1, $2, $3) as used", [phone, KEY, user]))[0].used;
+  assert.equal(await inUse("+573001234567", BETO), true, "Ana has it, so Beto could not take it");
+  assert.equal(await inUse("+573001234567", ANA), false, "it is Ana's own");
+
+  // An unverified email never logs in by phone; a changed phone moves with the profile.
+  await db.exec(`update auth.users set email_confirmed_at = null where id = '${ANA}'`);
+  assert.equal(await email("+573001234567"), null);
+  await db.exec(`update auth.users set email_confirmed_at = now(), raw_user_meta_data = '{"phone": "+573111111111"}' where id = '${ANA}'`);
+  assert.equal(await email("+573111111111"), "ana@example.com");
+  assert.equal(await email("+573001234567"), null, "the old number is free again");
 });
