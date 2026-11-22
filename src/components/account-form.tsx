@@ -27,7 +27,8 @@ const PLACEHOLDER: Record<AccountKind, string> = {
  * New account form. In the modal it starts from the kind tiles; `onSaved` closes
  * the modal once the account is stored.
  */
-export function AccountForm({ today, onSaved, initialKind = "savings" }: { today: string; onSaved?: () => void; initialKind?: AccountKind }) {
+export function AccountForm({ today, onSaved, initialKind = "savings", kinds }: { today: string; onSaved?: () => void; initialKind?: AccountKind; kinds?: AccountKind[] }) {
+  const offered = kinds ? KINDS.filter((k) => kinds.includes(k.kind)) : KINDS;
   const [state, action] = useActionState<FormState, FormData>(saveAccount, {});
   const [kind, setKind] = useState<AccountKind>(initialKind);
   const debt = isDebt({ kind });
@@ -41,8 +42,8 @@ export function AccountForm({ today, onSaved, initialKind = "savings" }: { today
       <input type="hidden" name="kind" value={kind} />
       <fieldset>
         <legend className="field mb-2">¿Qué quieres agregar?</legend>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          {KINDS.map((k) => (
+        <div className={`grid grid-cols-2 gap-2 ${offered.length > 2 ? "sm:grid-cols-4" : ""}`}>
+          {offered.map((k) => (
             <button
               key={k.kind}
               type="button"

@@ -235,6 +235,9 @@ body {
     box-shadow: var(--shadow);
     -webkit-backdrop-filter: blur(20px) saturate(1.5);
     backdrop-filter: blur(20px) saturate(1.5);
+    /* Its own layer: Chrome sometimes repaints the blur behind a card in strips when something
+       inside changes (an animated number), leaving a band; a layer of its own repaints whole. */
+    transform: translateZ(0);
     @apply rounded-3xl p-5 sm:p-6;
   }
   /* Action gradient: fixed in both themes so white text keeps at least 4.5:1 on it. */

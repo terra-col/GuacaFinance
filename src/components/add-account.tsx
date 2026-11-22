@@ -22,7 +22,10 @@ export function AddAccount({
   defaultKind = "savings",
   label = "Agregar cuenta",
   buttonClass = "btn h-12 gap-2 rounded-2xl px-5 text-base",
+  kinds,
 }: {
+  /** The kinds this page offers (Inicio: bank and cash; Créditos: cards and loans). All when omitted. */
+  kinds?: AccountKind[];
   today: string;
   autoOpen?: boolean;
   defaultKind?: AccountKind;
@@ -90,7 +93,7 @@ export function AddAccount({
               ✕
             </button>
           </div>
-          <AccountForm key={round} today={today} onSaved={onSaved} initialKind={kind} />
+          <AccountForm key={round} today={today} onSaved={onSaved} initialKind={kinds && !kinds.includes(kind) ? kinds[0] : kind} kinds={kinds} />
         </div>
       </dialog>
 

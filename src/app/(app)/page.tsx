@@ -161,7 +161,7 @@ async function Dashboard({ searchParams }: Props) {
             </h2>
             <p className="text-sm text-ink-3">Ahorros, nómina, débito y efectivo. Toca una para ver sus movimientos.</p>
           </div>
-          <AddAccount today={today} autoOpen={addNow} label="Agregar" buttonClass="btn-quiet h-10 gap-1.5 px-4 text-sm" />
+          <AddAccount today={today} autoOpen={addNow} label="Agregar" buttonClass="btn-quiet h-10 gap-1.5 px-4 text-sm" kinds={["savings", "cash"]} />
         </div>
         <AccountShelf kinds={["savings", "cash"]} accounts={accounts} txs={txs} title="Tus cuentas y efectivo" showTitle={false} />
       </section>

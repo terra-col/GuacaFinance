@@ -174,7 +174,7 @@ export function TxList({ txs, accounts, today }: { txs: Tx[]; accounts: Pick<Acc
                       </p>
                       {/* Mouse and keyboard: the same actions, shown on hover or focus. Touch uses the swipe. */}
                       <span className="flex shrink-0 gap-0.5 [@media(pointer:coarse)]:hidden">
-                        {tx.category !== ADJUSTMENT && (
+                        {tx.category !== ADJUSTMENT ? (
                           <button
                             type="button"
                             onClick={() => setEditing(tx)}
@@ -183,6 +183,9 @@ export function TxList({ txs, accounts, today }: { txs: Tx[]; accounts: Pick<Acc
                           >
                             <Icon name="edit" className="size-4" />
                           </button>
+                        ) : (
+                          // Adjustments are not edited, but keep the room so every amount lines up.
+                          <span className="row-tool invisible" aria-hidden="true" />
                         )}
                         {armed === tx.id ? (
                           <form action={deleteTx} className="rise">

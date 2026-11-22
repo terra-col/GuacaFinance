@@ -34,14 +34,15 @@ export function BillForm({ bill, onDone, inModal = false }: { bill?: Bill; onDon
     <form action={action} className={bare ? "flex flex-col gap-4" : "card flex flex-col gap-4"}>
       {!bare && <h2 className="display text-2xl">Nuevo pago fijo</h2>}
       {bill && <input type="hidden" name="id" value={bill.id} />}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2">
         <label className="field">
           Nombre
           <input className="input" name="name" defaultValue={bill?.name} placeholder="Internet, arriendo, Netflix…" required />
         </label>
         <label className="field">
-          Valor (vacío si cambia cada mes)
+          Valor
           <MoneyInput name="amount" defaultValue={bill?.amount} placeholder="$ 90.000" />
+          <span className="text-xs font-normal text-ink-3">Vacío si cambia cada mes (servicios).</span>
         </label>
         <label className="field">
           Día de pago
@@ -124,14 +125,15 @@ export function IncomeForm({
           </label>
         ))}
       </fieldset>
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2">
         <label className="field">
           Nombre
           <input className="input" name="name" defaultValue={income?.name} placeholder={repeat === "once" ? "Horas extra, bono…" : "Salario, prima…"} required />
         </label>
         <label className="field">
-          Valor (vacío si cambia)
+          Valor
           <MoneyInput name="amount" defaultValue={income?.amount} placeholder="$ 8.000.000" />
+          <span className="text-xs font-normal text-ink-3">Vacío si cambia cada mes.</span>
         </label>
         <label className="field">
           Día en que llega

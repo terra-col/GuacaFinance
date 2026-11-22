@@ -197,7 +197,13 @@ export function CategoryField({ name, defaultValue = "", required, placeholder =
     return q ? categories.filter((c) => c.toLocaleLowerCase("es").includes(q)) : categories;
   }, [categories, typed]);
   const isNew = typed !== "" && !categories.some((c) => c.toLocaleLowerCase("es") === typed.toLocaleLowerCase("es"));
-  const items = [...(isNew ? [{ value: typed, add: true }] : []), ...shown.map((c) => ({ value: c, add: false }))];
+  // Typing a new one offers to add it; otherwise the list ends with a way to start a new one.
+  const items = [
+    ...(isNew ? [{ value: typed, add: true, start: false }] : []),
+    ...shown.map((c) => ({ value: c, add: false, start: false })),
+    ...(query === null ? [{ value: "", add: false, start: true }] : []),
+  ];
+  const input = useRef<HTMLInputElement>(null);
 
   function pick(v: string) {
     setValue(v);
@@ -205,9 +211,18 @@ export function CategoryField({ name, defaultValue = "", required, placeholder =
     setOpen(false);
   }
 
+  /** «+ Nueva categoría»: empty the field and keep it open to type the new name. */
+  function startNew() {
+    setValue("");
+    setQuery("");
+    setActive(0);
+    requestAnimationFrame(() => input.current?.focus());
+  }
+
   return (
     <div ref={box} className="relative">
       <input
+        ref={input}
         className="input pr-9"
         name={name}
         value={value}
@@ -234,7 +249,10 @@ export function CategoryField({ name, defaultValue = "", required, placeholder =
           if (!open) return;
           if (e.key === "ArrowDown") setActive((a) => Math.min(items.length - 1, a + 1));
           else if (e.key === "ArrowUp") setActive((a) => Math.max(0, a - 1));
-          else if (e.key === "Enter" && items[active]) pick(items[active].value);
+          else if (e.key === "Enter" && items[active]) {
+            if (items[active].start) startNew();
+            else pick(items[active].value);
+          }
           else if (e.key === "Tab") return setOpen(false);
           else return;
           e.preventDefault();
@@ -251,18 +269,21 @@ export function CategoryField({ name, defaultValue = "", required, placeholder =
               <div id={id} role="listbox">
                 {items.map((item, i) => (
                   <div
-                    key={`${item.add ? "+" : ""}${item.value}`}
+                    key={item.start ? "+nueva" : `${item.add ? "+" : ""}${item.value}`}
                     role="option"
                     aria-selected={item.value === value}
                     onPointerEnter={() => setActive(i)}
                     // Before the field loses focus, so the pick lands.
                     onPointerDown={(e) => {
                       e.preventDefault();
-                      pick(item.value);
+                      if (item.start) startNew();
+                      else pick(item.value);
                     }}
                     className={`flex cursor-pointer items-center gap-2 rounded-xl px-2.5 py-2 text-sm ${i === active ? "bg-brand/10" : ""} ${item.value === value ? "font-semibold text-ink" : "text-ink-2"}`}
                   >
-                    {item.add ? (
+                    {item.start ? (
+                      <span className="font-semibold text-brand">+ Nueva categoría</span>
+                    ) : item.add ? (
                       <span className="font-semibold text-brand">+ Agregar «{item.value}»</span>
                     ) : (
                       <>

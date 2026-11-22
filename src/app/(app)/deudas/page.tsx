@@ -262,6 +262,7 @@ export default async function DebtsPage({
         </p>
         <div className="mt-4">
           <AddAccount
+          kinds={["credit_card", "loan"]}
             today={today}
             autoOpen={addNow}
             defaultKind="credit_card"
@@ -275,6 +276,7 @@ export default async function DebtsPage({
   return (
     <>
       <AddAccount
+          kinds={["credit_card", "loan"]}
         today={today}
         autoOpen={addNow}
         defaultKind="credit_card"
