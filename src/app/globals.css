@@ -1086,6 +1086,18 @@ a.card:active {
   transform: scale(0.95);
   transition-duration: 60ms;
 }
+/* Registrar, on every screen: the gold of the favourite star and the cards' chip, so it is never
+   taken for the screen's own (purple) button. Dark text in both themes: over 7:1 on every stop. */
+.register,
+.register:hover {
+  color: #1b1740;
+  background: linear-gradient(135deg, #ffe38f 0%, #ffc83d 55%, #f0aa2c 100%);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.55),
+    inset 0 -3px 8px rgb(150 85 0 / 0.16),
+    0 12px 26px -12px rgb(240 170 44 / 0.85),
+    0 2px 6px -2px rgb(90 55 0 / 0.25);
+}
 /* The advisor's floating chat (computers): a solid panel that springs up from its button. */
 .advisor-panel {
   background: var(--surface);

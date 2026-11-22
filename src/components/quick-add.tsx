@@ -56,7 +56,7 @@ export function QuickAdd({ accounts, today }: { accounts: Pick<Account, "id" | "
         type="button"
         onClick={show}
         data-tour="register"
-        className="fab fixed bottom-[calc(5.75rem+env(safe-area-inset-bottom))] right-4 z-30 flex h-12 items-center gap-2 rounded-full pl-4 pr-5 text-sm font-semibold lg:hidden"
+        className="fab register fixed bottom-[calc(5.75rem+env(safe-area-inset-bottom))] right-4 z-30 flex h-12 items-center gap-2 rounded-full pl-4 pr-5 text-sm font-semibold lg:hidden"
       >
         <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" aria-hidden="true">
           <path d="M12 5v14M5 12h14" />
@@ -92,7 +92,7 @@ export function QuickAdd({ accounts, today }: { accounts: Pick<Account, "id" | "
 /** The same action in the header on wide screens. */
 export function QuickAddButton() {
   return (
-    <button type="button" onClick={openQuickAdd} data-tour="register" className="btn hidden h-10 gap-1.5 rounded-xl px-4 text-sm lg:inline-flex">
+    <button type="button" onClick={openQuickAdd} data-tour="register" className="btn register hidden h-10 gap-1.5 rounded-xl px-4 text-sm lg:inline-flex">
       <span aria-hidden="true" className="text-lg leading-none">
         +
       </span>
@@ -104,7 +104,7 @@ export function QuickAddButton() {
 /** A visible «Nuevo movimiento» on the Movimientos screen, for every screen size. */
 export function NewMovementButton() {
   return (
-    <button type="button" onClick={openQuickAdd} className="btn h-11 gap-1.5 rounded-2xl px-4 text-sm">
+    <button type="button" onClick={openQuickAdd} className="btn register h-11 gap-1.5 rounded-2xl px-4 text-sm">
       <span aria-hidden="true" className="text-lg leading-none">
         +
       </span>
