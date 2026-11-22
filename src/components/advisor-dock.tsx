@@ -12,7 +12,7 @@ import { Icon } from "./icons";
  * screen instead of leaving it, and the conversation stays while you move between sections, so
  * you can look at your numbers while you ask. Esc or the button closes it. Phones use the page.
  */
-export function AdvisorDock({ provider }: { provider: "gemini" | "claude" | null }) {
+export function AdvisorDock({ provider, userId }: { provider: "gemini" | "claude" | null; userId: string | null }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   // Mounted on first open, then kept (only hidden) so the conversation survives closing it.
@@ -71,7 +71,7 @@ export function AdvisorDock({ provider }: { provider: "gemini" | "claude" | null
             </button>
           </div>
           {provider ? (
-            <AdvisorChat panel autoFocus={open} />
+            <AdvisorChat panel autoFocus={open} userId={userId} />
           ) : (
             <div className="flex flex-1 flex-col items-start justify-center gap-3 p-5 text-sm text-ink-2">
               <p className="font-semibold text-ink">El asesor con IA aún no está encendido.</p>

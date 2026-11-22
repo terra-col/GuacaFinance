@@ -36,6 +36,26 @@ export function FormSplash({ text, intent }: { text: string; intent?: string }) 
 }
 
 /**
+ * Inside the sign-out form: when it is sent, what this person kept on the device (the advisor's
+ * saved conversations) is forgotten, so the next person on this browser does not see it.
+ */
+export function ForgetOnSignOut() {
+  useEffect(() => {
+    const form = document.querySelector<HTMLFormElement>("form[data-sign-out]");
+    const forget = () => {
+      try {
+        for (const key of Object.keys(localStorage)) if (key.startsWith("guaca-asesor-")) localStorage.removeItem(key);
+      } catch {
+        /* storage unavailable */
+      }
+    };
+    form?.addEventListener("submit", forget);
+    return () => form?.removeEventListener("submit", forget);
+  }, []);
+  return null;
+}
+
+/**
  * iOS Safari only shows :active styles when the page listens for touches. With this, every button
  * gives under the finger the moment it is touched instead of looking frozen.
  */

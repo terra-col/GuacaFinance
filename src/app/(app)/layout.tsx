@@ -11,7 +11,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { loadShell } from "@/lib/data";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const { pending, accounts, categories, today } = await loadShell();
+  const { pending, accounts, categories, userId, today } = await loadShell();
 
   return (
     // Every category field (Registrar, editing a movement, fixed bills, Wallet's inbox) offers the person's own categories too.
@@ -40,7 +40,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <QuickAdd accounts={accounts} today={today} />
       </header>
       <main className="flex flex-col gap-6 sm:gap-8">{children}</main>
-      <AdvisorDock provider={aiProvider()} />
+      <AdvisorDock provider={aiProvider()} userId={userId} />
     </div>
     </CategoriesProvider>
   );

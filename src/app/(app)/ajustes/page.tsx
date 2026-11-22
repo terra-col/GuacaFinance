@@ -3,7 +3,7 @@ import { requestOrigin } from "@/lib/request-origin";
 import { clearWalletName, signOut } from "@/app/actions";
 import { InstallCard } from "@/components/install-card";
 import { ShareInvite } from "@/components/share-invite";
-import { FormSplash } from "@/components/splash";
+import { FormSplash, ForgetOnSignOut } from "@/components/splash";
 import { ScalePicker, ThemePicker } from "@/components/theme-toggle";
 import { TokenCard } from "@/components/token-card";
 import { WalletGuide } from "@/components/wallet-guide";
@@ -126,9 +126,10 @@ export default async function SettingsPage() {
           <h2 className="display text-2xl">Sesión</h2>
           <p className="text-sm text-ink-3">Entraste como {user.email ?? "tú"}.</p>
         </div>
-        <form action={signOut}>
+        <form action={signOut} data-sign-out>
           <SubmitButton className="btn-quiet">Cerrar sesión</SubmitButton>
           <FormSplash text="Cerrando sesión…" />
+          <ForgetOnSignOut />
         </form>
       </section>
     </>

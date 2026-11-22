@@ -4,6 +4,10 @@ import { useEffect, useRef, useState } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
+/** Prefix of the saved conversations on this device (one per person). */
+export const ADVISOR_STORAGE = "guaca-asesor-";
+const KEEP_MS = 14 * 24 * 60 * 60 * 1000;
+
 interface Message {
   role: "user" | "assistant";
   content: string;
@@ -20,8 +24,23 @@ const SUGGESTIONS = [
  * Chat with the advisor. The conversation stays in this browser tab; nothing is stored.
  * `panel`: inside the floating panel (computers), with its own scroll and the box fixed at the bottom.
  */
-export function AdvisorChat({ panel = false, autoFocus = false }: { panel?: boolean; autoFocus?: boolean }) {
+export function AdvisorChat({ panel = false, autoFocus = false, userId = null }: { panel?: boolean; autoFocus?: boolean; userId?: string | null }) {
   const [messages, setMessages] = useState<Message[]>([]);
+  // The conversation is kept on this device, per person, for two weeks: the panel and the page
+  // share it, and «Empezar de nuevo» or signing out forgets it.
+  const storageKey = userId ? `${ADVISOR_STORAGE}${userId}` : null;
+  const [loaded, setLoaded] = useState(false);
+  useEffect(() => {
+    if (!storageKey) return;
+    try {
+      const saved = JSON.parse(localStorage.getItem(storageKey) ?? "null") as { at: number; messages: Message[] } | null;
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- read once from this device after hydration
+      if (saved && Date.now() - saved.at < KEEP_MS && Array.isArray(saved.messages)) setMessages(saved.messages);
+    } catch {
+      /* nothing saved, or storage unavailable */
+    }
+    setLoaded(true);
+  }, [storageKey]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -29,6 +48,16 @@ export function AdvisorChat({ panel = false, autoFocus = false }: { panel?: bool
   const [draft, setDraft] = useState("");
   const end = useRef<HTMLDivElement>(null);
   const scroller = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!storageKey || !loaded || busy) return;
+    try {
+      if (messages.length) localStorage.setItem(storageKey, JSON.stringify({ at: Date.now(), messages }));
+      else localStorage.removeItem(storageKey);
+    } catch {
+      /* not kept, the chat still works */
+    }
+  }, [messages, busy, loaded, storageKey]);
 
   useEffect(() => {
     // In the panel only the conversation scrolls; on the page, the page does.

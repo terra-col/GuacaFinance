@@ -18,7 +18,10 @@ const PAGE = 1000; // Supabase returns at most 1000 rows per request
 /** What every screen's frame needs: accounts for the quick «new movement» sheet and the Wallet inbox count. */
 export async function loadShell() {
   const supabase = await createClient();
-  const [inbox, withFavorite, usedInTxs, usedInBills] = await Promise.all([
+  const [session, inbox, withFavorite, usedInTxs, usedInBills] = await Promise.all([
+    // Read from the cookie, no network: only to tell this person's things apart on the device (the
+    // advisor's saved conversation), never to authorize anything.
+    supabase.auth.getSession(),
     supabase.from("wallet_inbox").select("id", { count: "exact", head: true }),
     supabase.from("accounts").select("id, name, kind, favorite").order("created_at"),
     // The categories the person has used, newest first, to offer next to the app's own.
@@ -30,6 +33,7 @@ export async function loadShell() {
   return {
     pending: inbox.count ?? 0,
     accounts: (accounts.data ?? []) as Pick<Account, "id" | "name" | "kind" | "favorite">[],
+    userId: session.data.session?.user.id ?? null,
     categories: knownCategories([...(usedInTxs.data ?? []), ...(usedInBills.data ?? [])].map((r) => r.category as string)),
     today: todayInBogota(),
   };

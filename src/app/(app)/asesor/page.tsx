@@ -5,7 +5,7 @@ import { aiProvider } from "@/lib/ai-provider";
 import { loadData } from "@/lib/data";
 
 export default async function AdvisorPage() {
-  await loadData(); // signed-in check
+  const { user } = await loadData(); // also the signed-in check
   const provider = aiProvider();
   const aiReady = provider !== null;
 
@@ -29,7 +29,7 @@ export default async function AdvisorPage() {
       </div>
 
       {aiReady ? (
-        <AdvisorChat />
+        <AdvisorChat userId={user.id} />
       ) : (
         <section className="card flex flex-col gap-2 text-sm text-ink-2">
           <p className="font-semibold text-ink">El asesor con IA aún no está encendido.</p>
