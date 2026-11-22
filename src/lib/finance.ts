@@ -35,6 +35,8 @@ export interface Account {
   refinanced?: boolean;
   /** Savings or cash: the account payments come from by default (one per person). */
   favorite?: boolean;
+  /** Place in its carousel, chosen by dragging; null = after the ordered ones, oldest first. */
+  position?: number | null;
 }
 
 /** The favourite account for payments, if one is set. */
@@ -44,6 +46,12 @@ export const favoriteAccountId = (accounts: Pick<Account, "id" | "kind" | "favor
 /** Accounts with the favourite first, the rest in their order: for the "pay from" lists. */
 export const favoriteFirst = <T extends Pick<Account, "favorite">>(accounts: T[]) =>
   [...accounts].sort((a, b) => Number(Boolean(b.favorite)) - Number(Boolean(a.favorite)));
+
+/** The order of a carousel: the favourite first, then the order the person chose, then the rest as they came. */
+export const shelfOrder = <T extends Pick<Account, "favorite" | "position">>(accounts: T[]) =>
+  [...accounts].sort(
+    (a, b) => Number(Boolean(b.favorite)) - Number(Boolean(a.favorite)) || (a.position ?? Number.MAX_SAFE_INTEGER) - (b.position ?? Number.MAX_SAFE_INTEGER),
+  );
 
 export interface Tx {
   id: string;

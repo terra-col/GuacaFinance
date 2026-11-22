@@ -6,8 +6,22 @@ import { useEffect, useRef, useState } from "react";
  * A horizontal row that scrolls sideways and snaps card by card. On wide
  * screens two arrow buttons appear when there is more to see.
  */
-export function Carousel({ label, children }: { label: string; children: React.ReactNode }) {
-  const track = useRef<HTMLUListElement>(null);
+export function Carousel({
+  label,
+  children,
+  trackRef,
+  trackProps,
+  dragging = false,
+}: {
+  label: string;
+  children: React.ReactNode;
+  /** For a sortable carousel: the row itself, and its pointer and touch handlers. */
+  trackRef?: (el: HTMLUListElement | null) => void;
+  trackProps?: React.HTMLAttributes<HTMLUListElement>;
+  /** While a card is being moved: no snapping, so the row can follow the finger. */
+  dragging?: boolean;
+}) {
+  const track = useRef<HTMLUListElement | null>(null);
   const [edges, setEdges] = useState({ start: true, end: true });
 
   useEffect(() => {
@@ -36,11 +50,15 @@ export function Carousel({ label, children }: { label: string; children: React.R
     // margins) leaves room for the cards' shadow and their lift on hover.
     <div className="relative min-w-0">
       <ul
-        ref={track}
+        {...trackProps}
+        ref={(el) => {
+          track.current = el;
+          trackRef?.(el);
+        }}
         aria-label={label}
         // Where more cards wait, the edge fades instead of cutting the next card and its shadow.
         style={{ maskImage: fade(edges), WebkitMaskImage: fade(edges) }}
-        className="-mx-4 -mb-6 -mt-2 flex snap-x snap-mandatory gap-4 overflow-x-auto scroll-px-4 px-4 pb-10 pt-3 [scrollbar-width:none] sm:-mx-6 sm:scroll-px-6 sm:px-6 [&::-webkit-scrollbar]:hidden"
+        className={`-mx-4 -mb-6 -mt-2 flex ${dragging ? "" : "snap-x snap-mandatory"} gap-4 overflow-x-auto scroll-px-4 px-4 pb-10 pt-3 [scrollbar-width:none] sm:-mx-6 sm:scroll-px-6 sm:px-6 [&::-webkit-scrollbar]:hidden`}
       >
         {children}
       </ul>

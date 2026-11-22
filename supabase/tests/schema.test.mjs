@@ -247,3 +247,11 @@ test("phone login: the phone follows the profile, one account per number, and on
   assert.equal(await email("+573111111111"), "ana@example.com");
   assert.equal(await email("+573001234567"), null, "the old number is free again");
 });
+
+test("account order: a position per account, never negative, only on one's own", async () => {
+  await as(ANA, "update accounts set position = 2 where id = $1", [visa.id]);
+  assert.equal((await as(ANA, "select position from accounts where id = $1", [visa.id]))[0].position, 2);
+  await assert.rejects(as(ANA, "update accounts set position = -1 where id = $1", [visa.id]), /check constraint/);
+  await as(BETO, "update accounts set position = 0 where id = $1", [visa.id]);
+  assert.equal((await as(ANA, "select position from accounts where id = $1", [visa.id]))[0].position, 2, "Beto cannot reorder Ana's cards");
+});

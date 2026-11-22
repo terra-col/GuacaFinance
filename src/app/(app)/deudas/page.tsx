@@ -2,7 +2,7 @@ import Link from "next/link";
 import { AccountCard } from "@/components/account-card";
 import { AddAccount } from "@/components/add-account";
 import { AddTile } from "@/components/add-tile";
-import { Carousel } from "@/components/carousel";
+import { SortableCarousel } from "@/components/sortable-carousel";
 import { PlanSimulator } from "@/components/plan-simulator";
 import { planDebts } from "@/lib/planner";
 import { Icon } from "@/components/icons";
@@ -13,7 +13,7 @@ import { purchaseView, purchasesSummary } from "@/lib/installments";
 import { cardColor } from "@/lib/banks";
 import { loadData } from "@/lib/data";
 import { debtView, payFirst, type DebtView } from "@/lib/debts";
-import { formatCOP, formatDate, isDebt, relativeDay } from "@/lib/finance";
+import { formatCOP, formatDate, isDebt, relativeDay, shelfOrder } from "@/lib/finance";
 
 // Debts slide sideways on every screen, like the account cards: almost one per view on
 // phones, a fixed width with arrows on wider screens.
@@ -31,24 +31,20 @@ function Fact({ label, value }: { label: string; value: React.ReactNode }) {
 function DebtModule({
   view,
   first,
-  index,
   installments,
 }: {
   view: DebtView;
   first: boolean;
-  index: number;
   /** Cards: their purchases in instalments still running. */
   installments?: ReturnType<typeof purchasesSummary>;
 }) {
   const { account } = view;
   const owed = Math.max(0, view.balance);
   return (
-    <li
-      className={`card rise flex flex-col gap-4 ${DEBT_SLIDE}`}
-      style={{ "--i": index } as React.CSSProperties}
-    >
+    <div className="card flex h-full flex-col gap-4">
       <Link
         href={`/cuentas/${account.id}`}
+        draggable={false}
         className="relative block transition-transform hover:-translate-y-0.5 active:scale-[0.98]"
         aria-label={`Ver ${account.name}`}
       >
@@ -218,7 +214,7 @@ function DebtModule({
           />
         )}
       </dl>
-    </li>
+    </div>
   );
 }
 
@@ -241,8 +237,13 @@ export default async function DebtsPage({
   const owing = views.filter((v) => v.balance > 0);
   const total = owing.reduce((sum, v) => sum + v.balance, 0);
   const interest = owing.reduce((sum, v) => sum + (v.monthlyInterest ?? 0), 0);
-  const cards = views.filter((v) => v.account.kind === "credit_card");
-  const loans = views.filter((v) => v.account.kind === "loan");
+  // In the order the person chose by dragging (oldest first until then).
+  const inOrder = (list: DebtView[]) => {
+    const order = shelfOrder(list.map((v) => v.account)).map((a) => a.id);
+    return [...list].sort((a, b) => order.indexOf(a.account.id) - order.indexOf(b.account.id));
+  };
+  const cards = inOrder(views.filter((v) => v.account.kind === "credit_card"));
+  const loans = inOrder(views.filter((v) => v.account.kind === "loan"));
   const limit = cards.reduce(
     (sum, v) => sum + (v.account.credit_limit ?? 0),
     0,
@@ -355,24 +356,23 @@ export default async function DebtsPage({
               Tarjetas de crédito
             </h2>
             {cards.length > 1 && (
-              <p className="text-sm text-ink-3">{cards.length} · desliza</p>
+              <p className="text-sm text-ink-3">{cards.length} · desliza; mantén oprimida una para moverla</p>
             )}
           </div>
           <div className="mt-3">
-            <Carousel label="Tarjetas de crédito">
-              {cards.map((v, i) => (
-                <DebtModule
-                  key={v.account.id}
-                  view={v}
-                  first={v.account.id === first}
-                  index={i}
-                  installments={installmentsOf(v.account)}
-                />
-              ))}
-              <li className={`flex min-h-40 ${DEBT_SLIDE}`}>
-                <AddTile kind="credit_card" />
-              </li>
-            </Carousel>
+            <SortableCarousel
+              label="Tarjetas de crédito"
+              slideClass={DEBT_SLIDE}
+              items={cards.map((v) => ({
+                id: v.account.id,
+                node: <DebtModule view={v} first={v.account.id === first} installments={installmentsOf(v.account)} />,
+              }))}
+              tail={
+                <li className={`flex min-h-40 ${DEBT_SLIDE}`}>
+                  <AddTile kind="credit_card" />
+                </li>
+              }
+            />
           </div>
         </section>
       )}
@@ -384,23 +384,20 @@ export default async function DebtsPage({
               Préstamos
             </h2>
             {loans.length > 1 && (
-              <p className="text-sm text-ink-3">{loans.length} · desliza</p>
+              <p className="text-sm text-ink-3">{loans.length} · desliza; mantén oprimido uno para moverlo</p>
             )}
           </div>
           <div className="mt-3">
-            <Carousel label="Préstamos">
-              {loans.map((v, i) => (
-                <DebtModule
-                  key={v.account.id}
-                  view={v}
-                  first={v.account.id === first}
-                  index={cards.length + i}
-                />
-              ))}
-              <li className={`flex min-h-40 ${DEBT_SLIDE}`}>
-                <AddTile kind="loan" />
-              </li>
-            </Carousel>
+            <SortableCarousel
+              label="Préstamos"
+              slideClass={DEBT_SLIDE}
+              items={loans.map((v) => ({ id: v.account.id, node: <DebtModule view={v} first={v.account.id === first} /> }))}
+              tail={
+                <li className={`flex min-h-40 ${DEBT_SLIDE}`}>
+                  <AddTile kind="loan" />
+                </li>
+              }
+            />
           </div>
         </section>
       )}

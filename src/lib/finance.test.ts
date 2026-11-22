@@ -253,3 +253,15 @@ test("Pagos list: pending first (late ones by date), then skipped, paid at the e
   const ordered = [row("Luz", "2026-11-05", true), row("Gym", "2026-11-03", false, true), row("Internet", "2026-11-28"), row("Arriendo", "2026-11-05"), row("Visa", null)].sort(pendingFirst);
   assert.deepEqual(ordered.map((r) => r.name), ["Arriendo", "Internet", "Visa", "Gym", "Luz"]);
 });
+
+test("shelf order: the favourite first, then the chosen positions, then the rest as they came", async () => {
+  const { shelfOrder } = await import("./finance.ts");
+  const list = [
+    { id: "a", favorite: false, position: null },
+    { id: "b", favorite: false, position: 1 },
+    { id: "c", favorite: true, position: 5 },
+    { id: "d", favorite: false, position: 0 },
+    { id: "e", favorite: false, position: null },
+  ];
+  assert.deepEqual(shelfOrder(list).map((x) => x.id), ["c", "d", "b", "a", "e"]);
+});

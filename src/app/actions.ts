@@ -670,6 +670,22 @@ export async function toggleFavorite(form: FormData) {
   revalidatePath("/", "layout");
 }
 
+
+/**
+ * The order of one carousel after a card is dragged: each account gets its place. Row Level
+ * Security keeps it to the person's own accounts. No revalidation: the screen already shows it.
+ */
+export async function reorderAccounts(ids: string[]): Promise<FormState> {
+  const supabase = await signedIn();
+  if (!Array.isArray(ids) || ids.length === 0 || ids.length > 100 || !ids.every((id) => typeof id === "string" && UUID.test(id))) {
+    return { error: "Orden no válido." };
+  }
+  const results = await Promise.all(ids.map((id, position) => supabase.from("accounts").update({ position }).eq("id", id)));
+  const failed = results.find((r) => r.error)?.error;
+  if (failed) return { error: /position/i.test(failed.message) ? "Para guardar el orden falta ejecutar la migración 0015 en Supabase." : `No se pudo guardar el orden: ${failed.message}` };
+  return {};
+}
+
 export async function deletePurchase(form: FormData) {
   const supabase = await signedIn();
   const { error } = await supabase.from("card_purchases").delete().eq("id", text(form, "id"));

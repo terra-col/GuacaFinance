@@ -1,7 +1,9 @@
 "use client";
 
-import { useOptimistic, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useState, useTransition } from "react";
 import { toggleFavorite } from "@/app/actions";
+import { FAVORITE_EVENT, type FavoriteDetail } from "./sortable-carousel";
 
 /**
  * The star on a savings or cash card: gold and filled for the favourite account for payments,
@@ -9,19 +11,41 @@ import { toggleFavorite } from "@/app/actions";
  * star changes at once and the server confirms (the previous favourite loses its star).
  */
 export function FavoriteStar({ id, name, on, light }: { id: string; name: string; on: boolean; light: boolean }) {
-  const [star, setStar] = useOptimistic(on);
+  const [star, setStar] = useState(on);
+  const [seen, setSeen] = useState(on);
+  if (seen !== on) {
+    setSeen(on);
+    setStar(on);
+  }
   const [pending, startTransition] = useTransition();
+  const router = useRouter();
+  // Another account became the favourite: this star goes out at once, like the server will say.
+  useEffect(() => {
+    const other = (e: Event) => {
+      const detail = (e as CustomEvent<FavoriteDetail>).detail;
+      if (detail.on && detail.id !== id) setStar(false);
+    };
+    window.addEventListener(FAVORITE_EVENT, other);
+    return () => window.removeEventListener(FAVORITE_EVENT, other);
+  }, [id]);
   return (
     <button
       type="button"
-      onClick={() =>
+      onClick={() => {
+        const next = !star;
+        setStar(next);
+        // The carousel moves the card first at once; the server confirms.
+        window.dispatchEvent(new CustomEvent<FavoriteDetail>(FAVORITE_EVENT, { detail: { id, on: next } }));
         startTransition(async () => {
-          setStar(!star);
           const form = new FormData();
           form.set("id", id);
-          await toggleFavorite(form).catch(() => {});
-        })
-      }
+          await toggleFavorite(form).catch(() => {
+            // Not saved: the star and the order go back to what the server has.
+            setStar(!next);
+            router.refresh();
+          });
+        });
+      }}
       disabled={pending}
       aria-pressed={star}
       aria-label={star ? `${name} es tu favorita para pagos. Quitarla` : `Hacer ${name} tu favorita para pagos`}
