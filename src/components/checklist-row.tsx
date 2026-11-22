@@ -360,7 +360,7 @@ export function ChecklistRow({ item, month, today, editable, accounts }: Props) 
               <input type="hidden" name="month" value={month} />
               {occurrence}
               <label className="field">
-                {income ? "¿Por qué no llega este mes? (opcional)" : `¿Por qué no aplica ${when}? (opcional)`}
+                {income ? `¿Por qué no llega ${when}? (opcional)` : `¿Por qué no aplica ${when}? (opcional)`}
                 <input className="input" name="note" maxLength={200} placeholder={income ? "Vacaciones sin pago" : "Rediferida con el banco"} autoFocus />
               </label>
               <div className="flex gap-2">

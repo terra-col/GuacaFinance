@@ -74,7 +74,7 @@ export default async function GoalsPage() {
     .map((a) => ({ id: a.id, name: a.name, balance: Math.max(0, balanceAt(a, txs)) }))
     .filter((d) => d.balance > 0);
   const month = today.slice(0, 7);
-  const incomeOptions = incomes.filter((i) => !i.once_month || i.once_month >= month).map(({ id, name, day }) => ({ id, name, day }));
+  const incomeOptions = incomes.filter((i) => !i.once_month || i.once_month >= month).map(({ id, name, day, every }) => ({ id, name, day, every }));
   const active = views.filter((v) => v.status !== "done" && v.daysLeft >= 0);
   // What the goals take each month: savings with a monthly plan, and what clearing each debt on time takes.
   // One-time goals and goals with no plan have no monthly amount.

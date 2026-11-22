@@ -107,15 +107,16 @@ export function IncomeForm({
     return result;
   }, {});
   const [repeat, setRepeat] = useState<"monthly" | "some" | "once">(income?.once_month ? "once" : income?.months ? "some" : "monthly");
+  const [schedule, setSchedule] = useState<EveryValue>({ every: income?.every ?? "monthly", day: income?.day ?? "", start: income?.every && income.every !== "monthly" ? (income.starts_on ?? "") : "" });
   return (
     <form action={action} className={bare ? "flex flex-col gap-4" : "card flex flex-col gap-4"}>
       {!bare && <h2 className="display text-2xl">Nuevo ingreso</h2>}
       {income && <input type="hidden" name="id" value={income.id} />}
       <fieldset className="flex flex-wrap gap-2">
-        <legend className="sr-only">Cada cuánto llega</legend>
+        <legend className="sr-only">Tipo de ingreso</legend>
         {(
           [
-            ["monthly", "Cada mes"],
+            ["monthly", "Fijo"],
             ["some", "Algunos meses"],
             ["once", "Una sola vez"],
           ] as const
@@ -132,14 +133,18 @@ export function IncomeForm({
           <input className="input" name="name" defaultValue={income?.name} placeholder={repeat === "once" ? "Horas extra, bono…" : "Salario, prima…"} required />
         </label>
         <label className="field">
-          Valor
+          {repeat === "monthly" && schedule.every !== "monthly" ? "Valor cada vez" : "Valor"}
           <MoneyInput name="amount" defaultValue={income?.amount} placeholder="$ 8.000.000" />
-          <span className="text-xs font-normal text-ink-3">Vacío si cambia cada mes.</span>
+          <span className="text-xs font-normal text-ink-3">Vacío si cambia.</span>
         </label>
-        <label className="field">
-          Día en que llega
-          <input className="input" type="number" name="day" min={1} max={31} defaultValue={income?.day} required />
-        </label>
+        {repeat === "monthly" ? (
+          <EveryFields value={schedule} onChange={setSchedule} today={todayInBogota()} names={{ every: "every", day: "day", start: "starts_on" }} editing={editing} what="ingreso" />
+        ) : (
+          <label className="field" key="month-day">
+            Día en que llega
+            <input className="input" type="number" name="day" min={1} max={31} defaultValue={income?.day ?? schedule.day} required />
+          </label>
+        )}
         <label className="field">
           Llega a
           <SelectField

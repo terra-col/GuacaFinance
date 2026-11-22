@@ -17,13 +17,13 @@ import { SharedReadyProvider } from "@/components/shared-ready";
 import { RecurrenceReadyProvider } from "@/components/recurrence-ready";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const { pending, accounts, categories, userId, tourSeen, sharedReady, recurrenceReady, today } = await loadShell();
+  const { pending, accounts, categories, userId, tourSeen, sharedReady, recurrenceReady, incomeRecurrenceReady, today } = await loadShell();
 
   return (
     // Every category field (Registrar, editing a movement, fixed bills, Wallet's inbox) offers the person's own categories too.
     <CategoriesProvider categories={categories}>
     <SharedReadyProvider ready={sharedReady}>
-    <RecurrenceReadyProvider ready={recurrenceReady}>
+    <RecurrenceReadyProvider ready={recurrenceReady} incomes={incomeRecurrenceReady}>
     <div className="mx-auto w-full max-w-5xl px-4 pb-40 sm:px-6 lg:pb-16">
       <Suspense>
         <NavProgress />

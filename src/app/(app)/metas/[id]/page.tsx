@@ -24,7 +24,7 @@ export default async function GoalPage({ params }: { params: Promise<{ id: strin
   const month = today.slice(0, 7);
   const savedThisMonth = own.some((d) => d.amount > 0 && d.occurred_on >= `${month}-01` && d.occurred_on <= monthEnd(month));
   const income = incomes.find((i) => i.id === goal.plan_income_id);
-  const incomeOptions = incomes.filter((i) => !i.once_month || i.once_month >= month).map(({ id, name, day }) => ({ id, name, day }));
+  const incomeOptions = incomes.filter((i) => !i.once_month || i.once_month >= month).map(({ id, name, day, every }) => ({ id, name, day, every }));
   const open = view.status !== "done" && view.daysLeft >= 0;
 
   return (

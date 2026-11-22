@@ -1,6 +1,7 @@
 // Budgets per category, scheduled incomes and the month's free money. Pure, tested under `node --test`.
 
-import { daysInMonth, dueDates, monthEnd, paidMonth, shiftMonth, type ChecklistItem, type Skip, type Tx } from "./finance.ts";
+import { daysInMonth, dueDates, findSkip, monthEnd, paidMonth, shiftMonth, type ChecklistItem, type Skip, type Tx } from "./finance.ts";
+import { assign, datesIn, nextDates, type Every, type Schedule } from "./recurrence.ts";
 
 export interface Budget {
   id: string;
@@ -19,7 +20,12 @@ export interface Income {
   /** 'YYYY-MM' for a one-time income (overtime, a bonus); it shows only that month. */
   once_month?: string | null;
   account_id: string | null;
+  /** How often it arrives; absent (before migration 0019) is monthly. */
+  every?: Every;
+  starts_on?: string | null;
 }
+
+export const incomeSchedule = (income: Pick<Income, "day" | "every" | "starts_on">): Schedule => ({ every: income.every ?? "monthly", day: income.day, start: income.starts_on ?? null });
 
 export type BudgetStatus = "ok" | "watch" | "over";
 
@@ -66,7 +72,9 @@ export const arrivesIn = (income: Pick<Income, "months" | "once_month">, month: 
  * next, a prima in its next month (June, December), a one-time extra on its month. null when a
  * one-time extra is already behind.
  */
-export function nextIncomeDate(income: Pick<Income, "months" | "once_month" | "day">, today: string): string | null {
+export function nextIncomeDate(income: Pick<Income, "months" | "once_month" | "day" | "every" | "starts_on">, today: string): string | null {
+  const schedule = incomeSchedule(income);
+  if (schedule.every !== "monthly") return nextDates(schedule, today, 1)[0] ?? null;
   for (let i = 0; i < 24; i++) {
     const month = shiftMonth(today.slice(0, 7), i);
     if (!arrivesIn(income, month)) continue;
@@ -95,16 +103,52 @@ export interface IncomeItem {
   accountId: string | null;
   /** A one-time extra rather than a recurring income. */
   once: boolean;
+  /** Incomes that are not monthly: how often, the date this row ticks, and what ticked it. */
+  every?: Every;
+  forDate?: string;
+  paidIds?: string[];
 }
 
 /** The month's scheduled incomes, ticked when a movement with that income_id lands in the month. */
 export function incomeChecklist(incomes: Income[], txs: Tx[], month: string, today: string, skips: Skip[] = []): IncomeItem[] {
-  return incomes
-    .filter((i) => arrivesIn(i, month))
+  const byDate: IncomeItem[] = incomes
+    .filter((i) => incomeSchedule(i).every !== "monthly")
+    .flatMap((i) =>
+      assign(datesIn(incomeSchedule(i), month), txs.filter((t) => t.income_id === i.id && paidMonth(t) === month)).map(({ date, payments }) => {
+        const received = payments.length > 0;
+        const skipped = date && !received ? findSkip(skips, "income", i.id, month, date) : null;
+        return {
+          type: "income" as const,
+          id: i.id,
+          name: i.name,
+          every: i.every,
+          forDate: date ?? undefined,
+          paidIds: payments.map((t) => t.id),
+          due: date ?? payments[0].occurred_on,
+          expected: i.amount,
+          received,
+          receivedAmount: payments.reduce((sum, t) => sum + t.amount, 0),
+          receivedOn: payments[0]?.occurred_on ?? null,
+          receivedIn: payments[0]?.account_id ?? null,
+          late: !received && !skipped && date !== null && date < today,
+          skipped,
+          accountId: i.account_id,
+          once: false,
+        };
+      }),
+    );
+  const byMonth: IncomeItem[] = incomes
+    .filter(
+      (i) =>
+        incomeSchedule(i).every === "monthly" &&
+        arrivesIn(i, month) &&
+        // Monthly again after another periodicity: earlier months show only what arrived.
+        (!i.starts_on || month >= i.starts_on.slice(0, 7) || txs.some((t) => t.income_id === i.id && paidMonth(t) === month)),
+    )
     .map((i) => {
       const got = txs.filter((t) => t.income_id === i.id && paidMonth(t) === month);
       const due = dueDates(i.day, `${month}-01`, 1)[0];
-      const skipped = got.length === 0 ? (skips.find((s) => s.item_type === "income" && s.item_id === i.id && s.month === month) ?? null) : null;
+      const skipped = got.length === 0 ? findSkip(skips, "income", i.id, month) : null;
       return {
         type: "income" as const,
         id: i.id,
@@ -121,8 +165,8 @@ export function incomeChecklist(incomes: Income[], txs: Tx[], month: string, tod
         accountId: i.account_id,
         once: Boolean(i.once_month),
       };
-    })
-    .sort((a, b) => a.due.localeCompare(b.due) || a.name.localeCompare(b.name));
+    });
+  return [...byMonth, ...byDate].sort((a, b) => a.due.localeCompare(b.due) || a.name.localeCompare(b.name));
 }
 
 export interface MonthPlan {
@@ -176,6 +220,9 @@ export function incomeRow(i: IncomeItem): ChecklistItem {
     paid: i.received,
     paidAmount: i.receivedAmount,
     day: i.day,
+    every: i.every === "monthly" ? undefined : i.every,
+    forDate: i.forDate,
+    paidIds: i.paidIds,
     paidOn: i.receivedOn ?? null,
     paidFrom: i.receivedIn ?? null,
     overdue: i.late,

@@ -152,3 +152,15 @@ test("texts and monthly equivalents", () => {
   assert.equal(cadenceText({ every: "biweekly", day: 31, start: null }), "quincenal, 15 y último día");
   assert.equal(timesPerMonth("quarterly"), 1 / 3);
 });
+
+test("incomes: each quincena is received on its own", async () => {
+  const { incomeChecklist, incomeRow, nextIncomeDate } = await import("./budget.ts");
+  const salary = { id: "i", name: "Salario", amount: 2_000_000, day: 15, months: null, account_id: "bank", every: "biweekly" as const, starts_on: "2026-11-01" };
+  const got = pay("2026-11-15", { kind: "income", bill_id: null, income_id: "i", amount: 2_000_000, for_date: "2026-11-15" });
+  const items = incomeChecklist([salary], [got], "2026-11", "2026-11-22");
+  assert.deepEqual(items.map((i) => [i.due, i.received]), [["2026-11-15", true], ["2026-11-30", false]]);
+  assert.equal(incomeRow(items[0]).forDate, "2026-11-15");
+  assert.equal(monthPlan(items, [], []).income, 4_000_000);
+  assert.equal(monthPlan(items, [], []).incomePending, 2_000_000);
+  assert.equal(nextIncomeDate(salary, "2026-11-22"), "2026-11-30");
+});

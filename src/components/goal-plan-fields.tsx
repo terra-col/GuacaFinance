@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { formatCOP, formatDate } from "@/lib/finance";
 import { planDates } from "@/lib/goals";
-import { needsDate, quincenaFrom, type Every } from "@/lib/recurrence";
+import { needsDate, quincenaFrom, quincenaLabel, type Every } from "@/lib/recurrence";
 import { EveryFields, type EveryValue } from "./every-fields";
 import { MoneyInput } from "./money-input";
 import { SelectField } from "./pickers";
@@ -12,6 +12,7 @@ export interface IncomeOption {
   id: string;
   name: string;
   day: number;
+  every?: Every;
 }
 
 const roundUp = (n: number) => (n <= 0 ? 0 : Math.ceil(n / 1000) * 1000);
@@ -107,12 +108,16 @@ export function GoalPlanFields({
               De dónde sale (opcional)
               <SelectField
                 name="plan_income_id"
-                options={[{ value: "", label: "No lo sé / otro" }, ...incomes.map((i) => ({ value: i.id, label: `${i.name} · día ${i.day}` }))]}
+                options={[{ value: "", label: "No lo sé / otro" }, ...incomes.map((i) => ({ value: i.id, label: `${i.name} · ${i.every === "biweekly" ? quincenaLabel(i.day) : `día ${i.day}`}` }))]}
                 value={incomeId}
                 onChange={(id) => {
                   setIncomeId(id);
                   const income = incomes.find((i) => i.id === id);
-                  if (income) setSchedule((s) => ({ ...s, day: s.every === "biweekly" ? quincenaFrom(income.day) : income.day }));
+                  if (income)
+                    setSchedule((s) => {
+                      const every = income.every === "biweekly" ? "biweekly" : s.every;
+                      return { ...s, every, day: every === "biweekly" ? quincenaFrom(income.day) : income.day };
+                    });
                 }}
               />
             </label>

@@ -131,6 +131,14 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
     // Pending first (late ones by date), then skipped; paid ones go to the folded group at the end.
     const sorted = [...items].sort(pendingFirst);
     const incomeRows = incomeItems.map(incomeRow).sort(pendingFirst);
+    // A daily income folds like a daily payment.
+    const laterIncome = new Set<string>();
+    const nextIncome = new Set<string>();
+    for (const row of incomeRows) {
+      if (!isFrequent(row.every) || row.paid || !row.due || row.due <= today) continue;
+      if (nextIncome.has(row.id)) laterIncome.add(rowKey(row));
+      else nextIncome.add(row.id);
+    }
 
     // One-time extras drop off the list once their month is over.
     const visibleIncomes = incomes.filter((i) => !i.once_month || i.once_month >= current);
@@ -189,13 +197,18 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
                   )}
                 </p>
                 <ul className="mt-2 divide-y divide-line">
-                  {incomeRows.filter((r) => !r.paid).map((row) => (
-                    <ChecklistRow key={`income-${row.id}`} item={row} month={month} today={today} editable={editable} accounts={savings} />
+                  {incomeRows.filter((r) => !r.paid && !laterIncome.has(rowKey(r))).map((row) => (
+                    <ChecklistRow key={rowKey(row)} item={row} month={month} today={today} editable={editable} accounts={savings} />
                   ))}
                 </ul>
+                <PaidGroup id="ingresos-despues" label="Más adelante este mes" count={laterIncome.size}>
+                  {incomeRows.filter((r) => laterIncome.has(rowKey(r))).map((row) => (
+                    <ChecklistRow key={rowKey(row)} item={row} month={month} today={today} editable={editable} accounts={savings} />
+                  ))}
+                </PaidGroup>
                 <PaidGroup id="ingresos" label="Ya recibidos" count={incomeRows.filter((r) => r.paid).length}>
                   {incomeRows.filter((r) => r.paid).map((row) => (
-                    <ChecklistRow key={`income-${row.id}`} item={row} month={month} today={today} editable={editable} accounts={savings} />
+                    <ChecklistRow key={rowKey(row)} item={row} month={month} today={today} editable={editable} accounts={savings} />
                   ))}
                 </PaidGroup>
               </>

@@ -1,7 +1,7 @@
 // What the AI advisor knows: a plain-text snapshot of the person's finances,
 // rebuilt from the database on every question. Numbers are computed here, not by the model.
 import { advise } from "./advice.ts";
-import { budgetViews, incomeChecklist, monthPlan, type Budget, type Income } from "./budget.ts";
+import { budgetViews, incomeChecklist, incomeSchedule, monthPlan, type Budget, type Income } from "./budget.ts";
 import { debtView } from "./debts.ts";
 import {
   KIND_LABEL,
@@ -117,7 +117,9 @@ export function advisorContext({ accounts, txs, bills, goals, deposits, incomes 
     for (const i of incomes.filter((x) => !x.once_month || x.once_month >= current)) {
       const when = i.once_month
         ? `una sola vez, el ${i.day} de ${monthLabel(i.once_month)}`
-        : `día ${i.day}${i.months ? `, solo en ${i.months.map((m) => MONTH_SHORT[m - 1]).join(", ")}` : ", cada mes"}`;
+        : incomeSchedule(i).every !== "monthly"
+          ? `${cadenceText(incomeSchedule(i))} (el valor es por cada vez)`
+          : `día ${i.day}${i.months ? `, solo en ${i.months.map((m) => MONTH_SHORT[m - 1]).join(", ")}` : ", cada mes"}`;
       lines.push(`- ${i.name}: ${i.amount ? formatCOP(i.amount) : "valor variable"}, ${when}`);
     }
   }

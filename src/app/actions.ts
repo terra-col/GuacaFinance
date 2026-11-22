@@ -384,7 +384,7 @@ export async function updateRecurring(_prev: FormState, form: FormData): Promise
   const name = text(form, "name");
   if (!name) return { error: "Ponle un nombre." };
   // What is not monthly has its days in Programados: only name and amount come from its row.
-  const keepsDay = type === "bill" && !form.has("day");
+  const keepsDay = !form.has("day");
   const day = optionalDay(form, "day");
   if (!keepsDay && (day === null || day === "invalid")) return { error: "El día debe estar entre 1 y 31." };
   const amountRaw = text(form, "amount");
@@ -393,7 +393,7 @@ export async function updateRecurring(_prev: FormState, form: FormData): Promise
   const { error } =
     type === "bill"
       ? await supabase.from("bills").update({ name, amount, ...(keepsDay ? {} : { due_day: day }) }).eq("id", text(form, "id"))
-      : await supabase.from("incomes").update({ name, amount, day }).eq("id", text(form, "id"));
+      : await supabase.from("incomes").update({ name, amount, ...(keepsDay ? {} : { day }) }).eq("id", text(form, "id"));
   if (error) return { error: `No se pudo guardar: ${error.message}` };
   revalidatePath("/", "layout");
   return { message: "Guardado." };
@@ -492,7 +492,7 @@ export async function markPaid(_prev: FormState, form: FormData): Promise<FormSt
   if (forDate && (!DATE.test(forDate) || forDate.slice(0, 7) !== month)) return { error: "Esa fecha del pago no es válida." };
   const forMonth = {
     ...(MONTH.test(month) && month !== occurred_on.slice(0, 7) ? { for_month: month } : {}),
-    ...(forDate && (form.get("type") === "bill" || form.get("type") === "goal") ? { for_date: forDate } : {}),
+    ...(forDate && ["bill", "goal", "income"].includes(text(form, "type")) ? { for_date: forDate } : {}),
     ...(text(form, "written_at") && form.get("type") !== "goal" ? { created_at: text(form, "written_at") } : {}),
   };
 
@@ -944,7 +944,7 @@ export async function skipItem(_prev: FormState, form: FormData): Promise<FormSt
   const note = text(form, "note").slice(0, 200) || null;
   const for_date = text(form, "for_date");
   if (for_date) {
-    if ((item_type !== "bill" && item_type !== "goal") || !DATE.test(for_date)) return { error: "No se pudo omitir." };
+    if (!["bill", "goal", "income"].includes(item_type) || !DATE.test(for_date)) return { error: "No se pudo omitir." };
     const { error } = await supabase.from("date_skips").upsert({ item_type, item_id, for_date, note }, { onConflict: "user_id,item_type,item_id,for_date" });
     if (error) return { error: recurrenceMissing(error.message) ?? `No se pudo omitir: ${error.message}` };
     revalidatePath("/", "layout");
@@ -987,8 +987,18 @@ export async function saveIncome(_prev: FormState, form: FormData): Promise<Form
   const supabase = await signedIn();
   const name = text(form, "name");
   if (!name) return { error: "Ponle un nombre al ingreso." };
-  const day = optionalDay(form, "day");
-  if (day === null || day === "invalid") return { error: "El día debe estar entre 1 y 31." };
+  const editingId = text(form, "id");
+  const { data: current } = editingId ? await supabase.from("incomes").select("*").eq("id", editingId).maybeSingle() : { data: null };
+  const before = { every: current?.every as Every | undefined, start: current?.starts_on as string | null | undefined };
+  // «Algunos meses» and «una sola vez» are monthly: their day, and no periodicity.
+  const fixed = (text(form, "repeat") || "monthly") === "monthly";
+  const monthlyDay = optionalDay(form, "day");
+  if (!fixed && (monthlyDay === null || monthlyDay === "invalid")) return { error: "El día debe estar entre 1 y 31." };
+  const schedule = fixed
+    ? readSchedule(form, { every: "every", day: "day", start: "starts_on" }, before, halfStart(todayInBogota()))
+    : { every: "monthly" as const, day: monthlyDay as number, start: null };
+  if ("error" in schedule) return schedule;
+  const day = schedule.day;
   const amountRaw = text(form, "amount");
   const amount = amountRaw ? parsePesos(amountRaw) : null;
   if (amountRaw && !amount) return { error: "El valor no es válido." };
@@ -1012,9 +1022,12 @@ export async function saveIncome(_prev: FormState, form: FormData): Promise<Form
     // Only sent for a one-time income (so recurring ones keep working before migration 0008 runs),
     // or cleared when an edit turns a one-time extra into a recurring income.
     ...(once_month ? { once_month } : text(form, "id") ? { once_month: null } : {}),
+    // Only when it is or was not plain monthly, so saving keeps working before migration 0019.
+    ...(schedule.every !== "monthly" || (before.every && before.every !== "monthly") ? { every: schedule.every, starts_on: schedule.start } : {}),
   };
   const id = text(form, "id");
   const { error } = id ? await supabase.from("incomes").update(row).eq("id", id) : await supabase.from("incomes").insert(row);
+  if (error && /\bevery\b|starts_on/i.test(error.message)) return { error: "Falta ejecutar la migración 0019 en Supabase." };
   if (error) return { error: missingTable(error.message, once_month ? "0008" : "0007") ?? `No se pudo guardar: ${error.message}` };
   revalidatePath("/", "layout");
   return { message: once_month ? `${name} quedó para ${once_month}.` : `${name} quedó programado.` };

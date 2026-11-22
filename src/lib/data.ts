@@ -21,7 +21,7 @@ const PAGE = 1000; // Supabase returns at most 1000 rows per request
 /** What every screen's frame needs: accounts for the quick «new movement» sheet and the Wallet inbox count. */
 export async function loadShell() {
   const supabase = await createClient();
-  const [session, inbox, withFavorite, usedInTxs, usedInBills, groups, dated] = await Promise.all([
+  const [session, inbox, withFavorite, usedInTxs, usedInBills, groups, dated, datedIncomes] = await Promise.all([
     // Read from the cookie, no network: only to tell this person's things apart on the device (the
     // advisor's saved conversation), never to authorize anything.
     supabase.auth.getSession(),
@@ -34,6 +34,8 @@ export async function loadShell() {
     supabase.from("shared_groups").select("id").limit(1),
     // And whether periodicity does (migration 0017).
     supabase.from("date_skips").select("id").limit(1),
+    // And that of incomes (migration 0019).
+    supabase.from("incomes").select("every").limit(1),
   ]);
   // Until migration 0012 runs there is no favourite column: ask again without it.
   const accounts = withFavorite.error ? await supabase.from("accounts").select("id, name, kind").order("created_at") : withFavorite;
@@ -46,6 +48,7 @@ export async function loadShell() {
     categories: knownCategories([...(usedInTxs.data ?? []), ...(usedInBills.data ?? [])].map((r) => r.category as string)),
     sharedReady: !groups.error,
     recurrenceReady: !dated.error,
+    incomeRecurrenceReady: !datedIncomes.error,
     today: todayInBogota(),
   };
 }

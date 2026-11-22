@@ -322,3 +322,12 @@ test("deleting several accounts at once, or the whole person, still works", asyn
   await db.exec(`delete from auth.users where id = '${gone}'`);
   assert.equal((await db.query("select 1 from accounts where user_id = $1", [gone])).rows.length, 0);
 });
+
+test("income periodicity: monthly by default, never mixed with some months or one time", async () => {
+  const [plain] = await as(ANA, "insert into incomes (name, day) values ('Clases', 3) returning id, every");
+  assert.equal(plain.every, "monthly");
+  const [salary] = await as(ANA, "insert into incomes (name, day, every, starts_on) values ('Quincena', 15, 'biweekly', '2026-11-16') returning id");
+  await assert.rejects(as(ANA, "insert into incomes (name, day, every) values ('X', 15, 'biweekly')"), /check constraint/);
+  await assert.rejects(as(ANA, "update incomes set months = '{6}' where id = $1", [salary.id]), /check constraint/);
+  await as(ANA, "insert into date_skips (item_type, item_id, for_date) values ('income', $1, '2026-11-30')", [salary.id]);
+});

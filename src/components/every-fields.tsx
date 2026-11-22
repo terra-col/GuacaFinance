@@ -4,7 +4,7 @@ import { formatDate } from "@/lib/finance";
 import { EVERY, QUINCENAS, needsDate, nextDates, quincenaFrom, quincenaLabel, type Every } from "@/lib/recurrence";
 import { DateField } from "./date-field";
 import { SelectField } from "./pickers";
-import { useRecurrenceReady } from "./recurrence-ready";
+import { useIncomeRecurrenceReady, useRecurrenceReady } from "./recurrence-ready";
 
 export interface EveryValue {
   every: Every;
@@ -29,9 +29,11 @@ export function EveryFields({
   today: string;
   names: { every: string; day: string; start: string };
   editing: boolean;
-  what: "pago" | "abono";
+  what: "pago" | "abono" | "ingreso";
 }) {
-  const ready = useRecurrenceReady();
+  const general = useRecurrenceReady();
+  const forIncomes = useIncomeRecurrenceReady();
+  const ready = what === "ingreso" ? forIncomes : general;
   const { every, day, start } = value;
 
   function pick(next: Every) {
@@ -54,7 +56,7 @@ export function EveryFields({
       )}
       {every === "monthly" ? (
         <label className="field" key="day">
-          {what === "pago" ? "Día de pago" : "Día del mes"}
+          {what === "pago" ? "Día de pago" : what === "ingreso" ? "Día en que llega" : "Día del mes"}
           <input
             className="input num"
             type="number"

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { deleteBill, deleteIncome } from "@/app/actions";
-import type { Income } from "@/lib/budget";
+import { incomeSchedule, type Income } from "@/lib/budget";
 import { billSchedule, formatCOP, formatDate, monthName, type Bill } from "@/lib/finance";
 import { cadenceText } from "@/lib/recurrence";
 import { BillForm, IncomeForm } from "./bill-forms";
@@ -24,7 +24,8 @@ function cadence(row: ScheduledRow): string {
     const list = income.months.map((m) => MONTH_SHORT[m - 1]);
     return `${list.length > 1 ? `${list.slice(0, -1).join(", ")} y ${list.at(-1)}` : list[0]}, día ${income.day}`;
   }
-  return `Cada mes, día ${income.day}`;
+  const text = cadenceText(incomeSchedule(income));
+  return text[0].toUpperCase() + text.slice(1);
 }
 
 function Row({ row, accounts, currentMonth }: { row: ScheduledRow; accounts: { id: string; name: string }[]; currentMonth: string }) {
