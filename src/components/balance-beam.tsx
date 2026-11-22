@@ -70,30 +70,36 @@ function Track({ share, label }: { share: number | null; label: string }) {
   );
 }
 
-/** The same balance for what is owed to one and what one owes: in all, or with one person (`name`). */
+/**
+ * The same balance for what is owed to one and what one owes: in all, or with one person (`name`).
+ * With money on one side only it is one figure; the beam is for weighing both sides.
+ */
 export function SharedBeam({ owed, owes, name }: { owed: number; owes: number; name?: string }) {
   const net = owed - owes;
-  const total = owed + owes;
-  const title = name ? (net > 0 ? "Te debe en total" : net < 0 ? "Le debes en total" : "Están al día") : net > 0 ? "A tu favor" : net < 0 ? "En tu contra" : "Estás al día";
+  const both = owed > 0 && owes > 0;
+  const lead = net > 0 ? (name ? "Te debe" : "Te deben") : net < 0 ? (name ? "Le debes" : "Debes") : name ? "Están al día" : "Estás al día";
+  const title = both ? (net > 0 ? `${lead} en total` : net < 0 ? `${lead} en total` : "Quedan a mano") : lead;
   return (
     <section className="card flex flex-col gap-5" aria-label={name ? `Saldo con ${name}` : "Tus saldos compartidos"}>
       <div>
         <p className="eyebrow">{title}</p>
         <p className="display mt-1 text-4xl leading-none">{formatCOP(Math.abs(net))}</p>
       </div>
-      <div>
-        <div className="flex items-end justify-between gap-4">
-          <div>
-            <p className="eyebrow">{name ? "Te debe" : "Te deben"}</p>
-            <p className="display text-xl min-[360px]:text-2xl">{formatCOP(owed)}</p>
+      {both && (
+        <div>
+          <div className="flex items-end justify-between gap-4">
+            <div>
+              <p className="eyebrow">{name ? "Te debe" : "Te deben"}</p>
+              <p className="display text-xl min-[360px]:text-2xl">{formatCOP(owed)}</p>
+            </div>
+            <div className="text-right">
+              <p className="eyebrow">{name ? "Le debes" : "Debes"}</p>
+              <p className="display text-xl min-[360px]:text-2xl">{formatCOP(owes)}</p>
+            </div>
           </div>
-          <div className="text-right">
-            <p className="eyebrow">{name ? "Le debes" : "Debes"}</p>
-            <p className="display text-xl min-[360px]:text-2xl">{formatCOP(owes)}</p>
-          </div>
+          <Track share={owed / (owed + owes)} label={`Te deben ${formatCOP(owed)} y debes ${formatCOP(owes)}.`} />
         </div>
-        <Track share={total ? owed / total : null} label={`Te deben ${formatCOP(owed)} y debes ${formatCOP(owes)}.`} />
-      </div>
+      )}
     </section>
   );
 }
