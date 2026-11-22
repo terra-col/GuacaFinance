@@ -2,7 +2,9 @@ import { cookies } from "next/headers";
 import { requestOrigin } from "@/lib/request-origin";
 import { clearWalletName, signOut } from "@/app/actions";
 import { InstallCard } from "@/components/install-card";
+import { ProfileForm } from "@/components/profile-form";
 import { ShareInvite } from "@/components/share-invite";
+import { profileName } from "@/lib/brand";
 import { FormSplash, ForgetOnSignOut } from "@/components/splash";
 import { ScalePicker, ThemePicker } from "@/components/theme-toggle";
 import { TokenCard } from "@/components/token-card";
@@ -24,6 +26,14 @@ export default async function SettingsPage() {
   return (
     <>
       <h1 className="display pt-2 text-3xl">Ajustes</h1>
+
+      <section id="perfil" className="card flex scroll-mt-4 flex-col gap-4">
+        <div>
+          <h2 className="display text-2xl">Tu perfil</h2>
+          <p className="text-sm text-ink-3">Cómo te saludamos en la app y con qué correo entras.</p>
+        </div>
+        <ProfileForm name={profileName(user)} email={user.email ?? ""} />
+      </section>
 
       <InstallCard />
 

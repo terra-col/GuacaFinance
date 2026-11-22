@@ -9,6 +9,7 @@ import { MonthPlanCard } from "@/components/month-plan";
 import { Ring } from "@/components/ring";
 import { advise, type Advice } from "@/lib/advice";
 import { incomeChecklist, monthPlan } from "@/lib/budget";
+import { profileName } from "@/lib/brand";
 import { loadData } from "@/lib/data";
 import { balanceAt, byDue, daysBetween, formatCOP, isDebt, monthName, monthlyChecklist, monthlySeries, relativeDay, spendingByCategory, totals } from "@/lib/finance";
 import { goalChecklist } from "@/lib/goals";
@@ -43,14 +44,41 @@ export default function Page(props: Props) {
   );
 }
 
+const WEEKDAYS = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
+
+/** Under the greeting: "Sábado 21 de noviembre". */
+function greetingLine(today: string) {
+  const d = new Date(`${today}T12:00:00Z`);
+  return `${WEEKDAYS[d.getUTCDay()]} ${d.getUTCDate()} de ${monthName(today.slice(0, 7))}`;
+}
+
 async function Dashboard({ searchParams }: Props) {
-  const { accounts, txs, bills, inbox, incomes, budgets, skips, planReady, goals, deposits, today } = await loadData();
+  const { accounts, txs, bills, inbox, incomes, budgets, skips, planReady, goals, deposits, user, today } = await loadData();
   const addNow = (await searchParams).nueva === "1";
+  const name = profileName(user);
+  const greeting = (
+    <div className="pt-1">
+      <h1 className="display text-3xl sm:text-4xl">{name ? `Hola, ${name.split(" ")[0]}` : "Hola"}</h1>
+      <p className="text-sm text-ink-3">
+        {greetingLine(today)}
+        {!name && (
+          <>
+            {" · "}
+            <Link href="/ajustes#perfil" className="font-medium text-brand">
+              Dinos tu nombre
+            </Link>
+          </>
+        )}
+      </p>
+    </div>
+  );
 
   if (accounts.length === 0) {
     return (
-      <section className="max-w-xl pt-6">
-        <h1 className="display text-4xl">Empieza por lo que tienes y lo que debes</h1>
+      <>
+      {greeting}
+      <section className="max-w-xl pt-2">
+        <h2 className="display text-3xl">Empieza por lo que tienes y lo que debes</h2>
         <p className="mt-3 text-ink-2">
           Registra tus cuentas de ahorros, tarjetas y créditos con el saldo de hoy. Desde ahí, cada pago y cada gasto mueve el balance.
         </p>
@@ -58,6 +86,7 @@ async function Dashboard({ searchParams }: Props) {
           <AddAccount today={today} autoOpen={addNow} label="Agregar la primera cuenta" />
         </div>
       </section>
+      </>
     );
   }
 
@@ -85,6 +114,7 @@ async function Dashboard({ searchParams }: Props) {
 
   return (
     <>
+      {greeting}
       <div className="grid gap-4 lg:grid-cols-6 lg:gap-5">
         <div className="min-w-0 lg:col-span-4">
           <BalanceBeam savings={now.savings} debt={now.debt} previousNet={previous ? previous.net : null} />

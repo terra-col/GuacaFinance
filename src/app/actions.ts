@@ -2,12 +2,13 @@
 
 import { createHash, randomBytes } from "node:crypto";
 import { revalidatePath } from "next/cache";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { passwordProblem } from "@/lib/auth-links";
 import { ADJUSTMENT, allowedTxKinds, balanceAt, isDebt, parsePesos, todayInBogota, type Account, type AccountKind, type Tx, type TxKind } from "@/lib/finance";
 import { firstMonthFor } from "@/lib/installments";
 import { requestOrigin } from "@/lib/request-origin";
-import { createClient, isSupabaseConfigured } from "@/lib/supabase/server";
+import { REMEMBER_COOKIE, createClient, isSupabaseConfigured } from "@/lib/supabase/server";
 
 export interface FormState {
   error?: string;
@@ -39,13 +40,18 @@ export async function authenticate(_prev: FormState, form: FormData): Promise<Fo
   const password = String(form.get("password") ?? "");
   if (!email || !password) return { error: "Escribe tu correo y tu contraseña." };
 
-  const supabase = await createClient();
+  // «Mantener la sesión iniciada» (on unless unchecked): remembered for later refreshes of the session.
+  const remember = form.get("remember") !== null || form.get("intent") === "signup";
+  (await cookies()).set(REMEMBER_COOKIE, remember ? "1" : "0", { path: "/", maxAge: 60 * 60 * 24 * 400, sameSite: "lax", httpOnly: true, secure: true });
+  const supabase = await createClient({ remember });
   if (form.get("intent") === "signup") {
+    const name = text(form, "name").slice(0, 60);
+    if (!name) return { error: "Escribe tu nombre: así te saludamos en la app." };
     // The confirmation link comes back through /auth/confirm, which opens the session.
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      options: { emailRedirectTo: `${await requestOrigin()}/auth/confirm?next=/` },
+      options: { emailRedirectTo: `${await requestOrigin()}/auth/confirm?next=/`, data: { name } },
     });
     if (error) return { error: error.message };
     if (!data.session) return { message: "Cuenta creada. Abre el enlace que te enviamos al correo para entrar." };
@@ -87,6 +93,30 @@ export async function updatePassword(_prev: FormState, form: FormData): Promise<
   if (error?.code === "weak_password") return { error: "Esa contraseña es muy débil. Usa una más larga o con más variedad." };
   if (error) return { error: "No se pudo cambiar la contraseña. Pide un enlace nuevo e intenta otra vez." };
   redirect("/");
+}
+
+/**
+ * The person's profile: the name the app greets them by and their email. A new email is only
+ * used once confirmed from the link sent to it.
+ */
+export async function updateProfile(_prev: FormState, form: FormData): Promise<FormState> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+  const name = text(form, "name").slice(0, 60);
+  if (!name) return { error: "Escribe tu nombre." };
+  const email = text(form, "email").toLowerCase();
+  if (!/^[^s@]+@[^s@]+.[^s@]+$/.test(email)) return { error: "Ese correo no parece válido." };
+  const emailChanged = email !== (user.email ?? "").toLowerCase();
+  const { error } = await supabase.auth.updateUser(
+    { data: { name }, ...(emailChanged ? { email } : {}) },
+    emailChanged ? { emailRedirectTo: `${await requestOrigin()}/auth/confirm?next=/ajustes` } : undefined,
+  );
+  if (error) return { error: error.status === 429 ? "Espera un momento antes de volver a intentarlo." : `No se pudo guardar: ${error.message}` };
+  revalidatePath("/", "layout");
+  return { message: emailChanged ? `Nombre guardado. Para cambiar el correo, abre el enlace que te enviamos a ${email}.` : "Datos guardados." };
 }
 
 export async function signOut() {

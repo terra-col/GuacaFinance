@@ -16,9 +16,9 @@ export function BalanceBeam({ savings, debt, previousNet }: { savings: number; d
     <section aria-labelledby="balance-title" className="card @container flex h-full flex-col justify-between gap-8">
       <div>
         <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
-          <h1 id="balance-title" className="eyebrow">
+          <h2 id="balance-title" className="eyebrow">
             Tu balance hoy
-          </h1>
+          </h2>
           {diff !== null && diff !== 0 && (
             <span className={`pill ${diff > 0 ? "pill-idea" : "pill-urgent"}`}>
               <span aria-hidden="true">{diff > 0 ? "↑" : "↓"}</span>&nbsp;{diff > 0 ? "Mejoró" : "Bajó"} {formatCOP(Math.abs(diff))} este mes

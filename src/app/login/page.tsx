@@ -22,11 +22,10 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
           )}
           {registro && (
             <p role="status" className="card text-sm text-ink-2">
-              <span className="font-semibold text-ink">Te invitaron a Guaca.</span> Escribe tu correo y una contraseña nueva y toca{" "}
-              <span className="font-medium text-ink">Crear cuenta</span>. Te llegará un correo para confirmar.
+              <span className="font-semibold text-ink">Te invitaron a Guaca.</span> Escribe tu nombre, tu correo y una contraseña nueva. Te llegará un correo para confirmar.
             </p>
           )}
-          <LoginForm />
+          <LoginForm startWithSignup={Boolean(registro)} />
           <Link href="/recuperar" className="text-center text-sm font-medium text-brand">
             ¿Olvidaste tu contraseña?
           </Link>

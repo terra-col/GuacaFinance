@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { REMEMBER_COOKIE, sessionCookieOptions } from "@/lib/supabase/session-cookies";
 
 export async function proxy(request: NextRequest) {
   // The Wallet and calendar endpoints authenticate with their own tokens, not the session.
@@ -29,8 +30,10 @@ export async function proxy(request: NextRequest) {
       setAll(cookiesToSet, headers) {
         for (const { name, value } of cookiesToSet) request.cookies.set(name, value);
         response = NextResponse.next({ request });
+        // Refreshed session cookies keep the «mantener la sesión» choice made when signing in.
+        const keep = request.cookies.get(REMEMBER_COOKIE)?.value !== "0";
         for (const { name, value, options } of cookiesToSet) {
-          response.cookies.set(name, value, options);
+          response.cookies.set(name, value, sessionCookieOptions(options, keep));
         }
         for (const [name, value] of Object.entries(headers ?? {})) {
           response.headers.set(name, value);
