@@ -1166,3 +1166,9 @@ a.card:active {
     animation: none;
   }
 }
+
+/* Modo privado: until the amounts are masked (a moment after the page loads), the page is
+   blurred, so no number flashes. */
+html[data-privacy="on"]:not([data-masked]) body {
+  filter: blur(12px);
+}

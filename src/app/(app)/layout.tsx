@@ -8,6 +8,9 @@ import { NavProgress } from "@/components/nav-progress";
 import { QuickAdd, QuickAddButton } from "@/components/quick-add";
 import { Suspense } from "react";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { PrivacyToggle } from "@/components/privacy";
+import { PRIVACY_COOKIE } from "@/lib/privacy";
+import { cookies } from "next/headers";
 import { loadShell } from "@/lib/data";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -29,6 +32,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <div className="flex items-center gap-2">
           <QuickAddButton />
           <AdvisorButton />
+          <PrivacyToggle initial={(await cookies()).get(PRIVACY_COOKIE)?.value === "1"} />
           <ThemeToggle />
           {/* Ajustes is an icon here on every screen size. */}
           <Link href="/ajustes" className="liquid flex size-10 items-center justify-center rounded-xl" aria-label="Ajustes" title="Ajustes">

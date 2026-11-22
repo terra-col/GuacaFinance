@@ -2,7 +2,9 @@ import type { Metadata, Viewport } from "next";
 import { cookies } from "next/headers";
 import "@fontsource-variable/outfit";
 import "@fontsource-variable/plus-jakarta-sans";
+import { PrivacyMask } from "@/components/privacy";
 import { TouchFeedback } from "@/components/splash";
+import { PRIVACY_COOKIE } from "@/lib/privacy";
 import { APP_NAME, APP_TAGLINE } from "@/lib/brand";
 import { SCALE_COOKIE, THEME_COOKIE, parseScale, parseTheme } from "@/lib/theme";
 import "./globals.css";
@@ -29,10 +31,13 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const jar = await cookies();
   const theme = parseTheme(jar.get(THEME_COOKIE)?.value);
   const scale = parseScale(jar.get(SCALE_COOKIE)?.value);
+  // Modo privado is on from the first paint (amounts blurred until masked), never a flash of numbers.
+  const privacy = jar.get(PRIVACY_COOKIE)?.value === "1";
   return (
-    <html lang="es-CO" className="h-full antialiased" data-theme={theme === "system" ? undefined : theme} data-scale={scale === "std" ? undefined : scale}>
+    <html lang="es-CO" className="h-full antialiased" data-theme={theme === "system" ? undefined : theme} data-scale={scale === "std" ? undefined : scale} data-privacy={privacy ? "on" : undefined} suppressHydrationWarning>
       <body className="min-h-full font-sans">
         <TouchFeedback />
+        <PrivacyMask />
         {children}
       </body>
     </html>
