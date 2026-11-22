@@ -64,9 +64,24 @@ export function TxForm({
   const [invalid, setInvalid] = useState<string | null>(null);
   const [kind, setKind] = useState<TxKind>(tx?.kind ?? "expense");
   const divides = !tx && split && kind === "expense";
+  const otherPays = Boolean(divides && dividing && dividing.draft.paidBy !== dividing.target.me);
   const [state, action] = useActionState<FormState, FormData>(
     async (prev: FormState, form: FormData) => {
       const chosen = divides ? dividing : null;
+      if (chosen && chosen.draft.paidBy !== chosen.target.me) {
+        // Not one's money: an expense of theirs, never a movement of one's own.
+        const order = new FormData();
+        for (const key of ["amount", "occurred_on", "category", "description", "phone"]) order.set(key, String(form.get(key) ?? ""));
+        order.set("name", String(form.get("person") ?? ""));
+        order.set("group", chosen.target.group ?? "");
+        order.set("person", chosen.target.person ?? "");
+        order.set("paid_by", chosen.draft.paidBy);
+        order.set("split", JSON.stringify(draftSplit(chosen.draft)));
+        const { error } = await divideMovement(order);
+        if (error) return { error };
+        onDone?.("Anotado. Tus cuentas no se movieron.");
+        return {};
+      }
       const result = await saveTx(prev, form);
       if (result.error) return result;
       let message = result.message ?? "Guardado.";
@@ -131,7 +146,7 @@ export function TxForm({
           draft={dividing.draft}
           onChange={(draft) => setDividing({ target: dividing.target, draft })}
           onClose={() => setSplitting(false)}
-          fixedPayer
+          fixedPayer={false}
         />
       )}
       <div hidden={splitting} className="flex flex-col gap-4">
@@ -182,6 +197,8 @@ export function TxForm({
               <DateField name="occurred_on" defaultValue={tx?.occurred_on ?? today} max={today} required />
             </label>
             {/* key: the option list changes with the kind, so the select starts fresh */}
+            {otherPays && <p className="self-end text-sm text-ink-2">Como pagó otra persona, tus cuentas no se mueven.</p>}
+            {!otherPays && (
             <label className="field" key={kind}>
               {kind === "payment"
                 ? "Deuda que pagas"
@@ -195,6 +212,7 @@ export function TxForm({
                 required
               />
             </label>
+            )}
             {kind === "payment" && (
               <label className="field">
                 Sale de

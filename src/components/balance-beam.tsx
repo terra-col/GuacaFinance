@@ -42,22 +42,57 @@ export function BalanceBeam({ savings, debt, previousNet }: { savings: number; d
             <p className="display text-xl min-[360px]:text-2xl sm:text-3xl">{formatCOP(debt)}</p>
           </div>
         </div>
-        <div
-          className="relative mt-3"
-          role="img"
-          aria-label={`De cada 100 pesos entre lo que tienes y lo que debes, ${Math.round(share * 100)} son tuyos y ${100 - Math.round(share * 100)} son deuda.`}
-        >
-          <div className="flex h-6 gap-1">
-            <div className="overflow-hidden rounded-l-full" style={{ width: `${share * 100}%` }}>
-              <div className="grow-left h-full rounded-l-full" />
-            </div>
-            <div className="flex-1 overflow-hidden rounded-r-full">
-              <div className="grow-right h-full rounded-r-full" />
-            </div>
-          </div>
-          <div className="absolute -top-2 left-1/2 h-10 w-0.5 rounded-full bg-ink" aria-hidden="true" />
-        </div>
+        <Track share={share} label={`De cada 100 pesos entre lo que tienes y lo que debes, ${Math.round(share * 100)} son tuyos y ${100 - Math.round(share * 100)} son deuda.`} />
         <p className="mt-3 text-center text-xs text-ink-3">La línea marca el punto de equilibrio</p>
+      </div>
+    </section>
+  );
+}
+
+/** The two bars and the midpoint. No share: nothing on either side. */
+function Track({ share, label }: { share: number | null; label: string }) {
+  return (
+    <div className="relative mt-3" role="img" aria-label={label}>
+      {share === null ? (
+        <div className="h-6 rounded-full bg-line" />
+      ) : (
+        <div className="flex h-6 gap-1">
+          <div className="overflow-hidden rounded-l-full" style={{ width: `${share * 100}%` }}>
+            <div className="grow-left h-full rounded-l-full" />
+          </div>
+          <div className="flex-1 overflow-hidden rounded-r-full">
+            <div className="grow-right h-full rounded-r-full" />
+          </div>
+        </div>
+      )}
+      <div className="absolute -top-2 left-1/2 h-10 w-0.5 rounded-full bg-ink" aria-hidden="true" />
+    </div>
+  );
+}
+
+/** The same balance for what is owed to one and what one owes: in all, or with one person (`name`). */
+export function SharedBeam({ owed, owes, name }: { owed: number; owes: number; name?: string }) {
+  const net = owed - owes;
+  const total = owed + owes;
+  const title = name ? (net > 0 ? "Te debe en total" : net < 0 ? "Le debes en total" : "Están al día") : net > 0 ? "A tu favor" : net < 0 ? "En tu contra" : "Estás al día";
+  return (
+    <section className="card flex flex-col gap-5" aria-label={name ? `Saldo con ${name}` : "Tus saldos compartidos"}>
+      <div>
+        <p className="eyebrow">{title}</p>
+        <p className="display mt-1 text-4xl leading-none">{formatCOP(Math.abs(net))}</p>
+      </div>
+      <div>
+        <div className="flex items-end justify-between gap-4">
+          <div>
+            <p className="eyebrow">{name ? "Te debe" : "Te deben"}</p>
+            <p className="display text-xl min-[360px]:text-2xl">{formatCOP(owed)}</p>
+          </div>
+          <div className="text-right">
+            <p className="eyebrow">{name ? "Le debes" : "Debes"}</p>
+            <p className="display text-xl min-[360px]:text-2xl">{formatCOP(owes)}</p>
+          </div>
+        </div>
+        <Track share={total ? owed / total : null} label={`Te deben ${formatCOP(owed)} y debes ${formatCOP(owes)}.`} />
       </div>
     </section>
   );

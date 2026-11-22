@@ -95,6 +95,32 @@ export function peopleWith(data: SharedData, me: string, { deletedToo = false } 
     .sort((a, b) => Math.abs(b.total) - Math.abs(a.total) || a.name.localeCompare(b.name, "es"));
 }
 
+export interface PersonMove {
+  id: string;
+  group: SharedGroup;
+  kind: "expense" | "settlement";
+  description: string;
+  on: string;
+  /** What that movement left between the two: above zero, in one's favour. */
+  net: number;
+}
+
+/** The movements between the person and one, newest first. One that a third paid leaves nothing between the two. */
+export function movesWith(data: SharedData, me: string, person: Person): PersonMove[] {
+  return person.places
+    .flatMap(({ group, member }) => {
+      const mine = memberOf(group.id, data, me)?.id;
+      return data.entries.flatMap((e) => {
+        if (e.group_id !== group.id || (e.paid_by !== mine && e.paid_by !== member)) return [];
+        const ower = e.paid_by === mine ? member : mine;
+        const share = data.shares.find((s) => s.entry_id === e.id && s.member_id === ower)?.amount;
+        if (!share) return [];
+        return [{ id: `${e.id}-${member}`, group, kind: e.kind, description: e.description, on: e.occurred_on, net: e.paid_by === mine ? share : -share }];
+      });
+    })
+    .sort((a, b) => b.on.localeCompare(a.on));
+}
+
 /** An account between two is called by the other person, as one has them. */
 export function groupTitle(group: SharedGroup, data: SharedData, me: string): string {
   const other = group.direct ? data.members.find((m) => m.group_id === group.id && m.user_id !== me) : undefined;

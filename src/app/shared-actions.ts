@@ -241,8 +241,18 @@ export async function divideMovement(form: FormData): Promise<SharedResult> {
   }
   if (!split) return { error: "Revisa cómo se divide." };
   const { supabase } = await currentPerson();
-  const { data: tx } = await supabase.from("transactions").select("id, amount, description, category, occurred_on").eq("id", text(form, "tx")).maybeSingle();
+  const id = text(form, "tx");
+  // With no movement someone else paid: only the group learns of it, no account moves.
+  const typed = { id: "", amount: parsePesos(text(form, "amount")) ?? 0, description: text(form, "description"), category: text(form, "category"), occurred_on: text(form, "occurred_on") };
+  const { data: tx } = id
+    ? await supabase.from("transactions").select("id, amount, description, category, occurred_on").eq("id", id).maybeSingle()
+    : { data: typed };
   if (!tx) return { error: "Ese movimiento ya no existe." };
+  if (!id) {
+    if (!tx.amount) return { error: "Escribe un monto mayor que cero." };
+    if (!DATE.test(tx.occurred_on)) return { error: "La fecha no es válida." };
+    if ([PENDING_ME, ""].includes(text(form, "paid_by"))) return { error: "Elige quién pagó." };
+  }
 
   let group = text(form, "group");
   if (!group) {
@@ -265,7 +275,9 @@ export async function divideMovement(form: FormData): Promise<SharedResult> {
   expense.set("description", tx.description || tx.category || "Gasto");
   expense.set("category", tx.category ?? "");
   expense.set("occurred_on", tx.occurred_on);
-  expense.set("paid_by", mine.id);
+  const payer = id ? mine.id : real(text(form, "paid_by"));
+  if (!id && payer === mine.id) return { error: "Elige quién pagó." };
+  expense.set("paid_by", payer);
   expense.set("split", JSON.stringify({ mode: split.mode, parts: split.parts.map((p) => ({ ...p, id: real(p.id) })) }));
   const saved = await saveSharedExpense(expense);
   return saved.error ? saved : { id: group };

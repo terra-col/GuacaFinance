@@ -1,12 +1,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { SharedBeam } from "@/components/balance-beam";
 import { Modal } from "@/components/modal";
 import { DeleteContactForm } from "@/components/remove-forms";
 import { DirectButton } from "@/components/shared-forms";
 import { loadData } from "@/lib/data";
-import { formatCOP } from "@/lib/finance";
+import { formatCOP, formatDate } from "@/lib/finance";
 import { formatPhone } from "@/lib/phone";
-import { peopleWith } from "@/lib/people";
+import { movesWith, peopleWith } from "@/lib/people";
 import { groupNets } from "@/lib/shared";
 
 /** One person: what is pending with them in all, and where it comes from. */
@@ -24,6 +25,7 @@ export default async function PersonPage({ params }: { params: Promise<{ member:
       }
     : null;
   const inGroups = person.places.filter((p) => !p.group.direct);
+  const moves = movesWith(shared, user.id, person);
 
   return (
     <>
@@ -50,10 +52,11 @@ export default async function PersonPage({ params }: { params: Promise<{ member:
         </div>
       </div>
 
-      <section className="card" aria-label={`Saldo con ${person.name}`}>
-        <p className="eyebrow">{person.total > 0 ? "Te debe en total" : person.total < 0 ? "Le debes en total" : "Están al día"}</p>
-        <p className="display text-3xl">{formatCOP(Math.abs(person.total))}</p>
-      </section>
+      <SharedBeam
+        name={person.name}
+        owed={person.places.reduce((sum, p) => sum + Math.max(0, p.net), 0)}
+        owes={person.places.reduce((sum, p) => sum + Math.max(0, -p.net), 0)}
+      />
 
       {shared.social && !person.direct && <DirectButton member={person.member}>+ Gasto solo entre ustedes dos</DirectButton>}
 
@@ -61,23 +64,54 @@ export default async function PersonPage({ params }: { params: Promise<{ member:
         <h2 id="where-title" className="display text-2xl">
           De dónde viene
         </h2>
-        <ul className="mt-1 divide-y divide-line">
-          {person.places.map(({ group, net }) => (
-            <li key={group.id}>
-              <Link href={`/compartidos/${group.id}`} className="flex items-center justify-between gap-3 py-3.5">
-                <span className="min-w-0 truncate font-semibold">{group.direct ? "Solo ustedes dos" : group.name}</span>
-                <span className="shrink-0 text-right">
-                  <span className="block text-xs text-ink-3">{net > 0 ? "te debe" : net < 0 ? "le debes" : "al día"}</span>
-                  {net !== 0 && <span className="num block font-semibold">{formatCOP(Math.abs(net))}</span>}
-                </span>
-              </Link>
-            </li>
-          ))}
-        </ul>
-        {person.places.some((p) => !p.group.direct) && (
-          <p className="mt-2 text-xs text-ink-3">En los grupos es lo que sale en «Para quedar al día». Cada cuenta se salda por aparte.</p>
+        {moves.length === 0 ? (
+          <p className="mt-1 text-sm text-ink-3">Todavía no hay movimientos entre ustedes.</p>
+        ) : (
+          <ul className="mt-1 divide-y divide-line" data-moves>
+            {moves.map((m) => (
+              <li key={m.id}>
+                <Link href={`/compartidos/${m.group.id}`} className="flex items-center justify-between gap-3 py-3">
+                  <span className="min-w-0">
+                    <span className="block truncate font-semibold">{m.group.direct ? (m.kind === "settlement" ? "Pago para saldar" : m.description) : "Movimiento de grupo"}</span>
+                    <span className="block truncate text-xs text-ink-3">
+                      {m.group.direct ? "" : `${m.group.name} · ${m.kind === "settlement" ? "pago para saldar" : m.description} · `}
+                      {formatDate(m.on)}
+                    </span>
+                  </span>
+                  <span className="shrink-0 text-right">
+                    <span className="block text-xs text-ink-3">{m.kind === "settlement" ? (m.net > 0 ? "le pagaste" : "te pagó") : m.net > 0 ? "te debe" : "le debes"}</span>
+                    <span className="num block font-semibold">{formatCOP(Math.abs(m.net))}</span>
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+        {inGroups.length > 0 && moves.length > 0 && (
+          <p className="mt-2 text-xs text-ink-3">En los grupos el total puede ser distinto a la suma: las deudas se cruzan entre todos, como en «Para quedar al día».</p>
         )}
       </section>
+
+      {inGroups.length > 0 && (
+        <section className="card" aria-labelledby="common-title">
+          <h2 id="common-title" className="display text-2xl">
+            Grupos en común
+          </h2>
+          <ul className="mt-1 divide-y divide-line">
+            {inGroups.map(({ group, net }) => (
+              <li key={group.id}>
+                <Link href={`/compartidos/${group.id}`} className="flex items-center justify-between gap-3 py-3.5">
+                  <span className="min-w-0 truncate font-semibold">{group.name}</span>
+                  <span className="shrink-0 text-right">
+                    <span className="block text-xs text-ink-3">{net > 0 ? "te debe" : net < 0 ? "le debes" : "al día"}</span>
+                    {net !== 0 && <span className="num block font-semibold">{formatCOP(Math.abs(net))}</span>}
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
     </>
   );
 }

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { knownPeople } from "./contacts.ts";
-import { groupTitle, peopleWith, placesOf, splitTargets } from "./people.ts";
+import { groupTitle, movesWith, peopleWith, placesOf, splitTargets } from "./people.ts";
 import { myPosition, sharedMarks, type SharedData } from "./shared.ts";
 
 const base = (): SharedData => ({
@@ -100,4 +100,10 @@ test("a deleted contact leaves the list and the suggestions, and returns with so
   data.groups.push({ id: "n", name: "Nuevo", created_by: "ana", created_at: "" });
   data.members.push({ id: "na", group_id: "n", user_id: "ana", name: "Ana" }, { id: "nb", group_id: "n", user_id: "beto", name: "Beto" });
   assert.ok(peopleWith(data, "ana").some((p) => p.name === "Beto"), "somewhere new");
+});
+
+test("a person's movements: what each left between the two", () => {
+  const data = base();
+  const beto = peopleWith(data, "ana").find((p) => p.name === "Beto")!;
+  assert.deepEqual(movesWith(data, "ana", beto).map((m) => [m.group.id, m.net]).sort(), [["d", -40_000], ["g", 100_000]]);
 });

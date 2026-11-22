@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { SharedBeam } from "@/components/balance-beam";
+import { FoldSection, GroupMark } from "@/components/fold-section";
 import { Modal } from "@/components/modal";
 import { MovesSwitch } from "@/components/moves-switch";
 import { PendingCards } from "@/components/pending-cards";
@@ -82,16 +84,7 @@ export default async function SharedPage({ searchParams }: { searchParams: Promi
       )}
 
       {!empty && !tx && (
-        <section className="card grid grid-cols-2 gap-4" aria-label="Tus saldos compartidos">
-          <div>
-            <p className="eyebrow">Te deben</p>
-            <p className="display text-2xl">{formatCOP(position.owedToMe)}</p>
-          </div>
-          <div className="text-right">
-            <p className="eyebrow">Debes</p>
-            <p className="display text-2xl">{formatCOP(position.iOwe)}</p>
-          </div>
-        </section>
+        <SharedBeam owed={position.owedToMe} owes={position.iOwe} />
       )}
 
       {empty ? (
@@ -111,13 +104,8 @@ export default async function SharedPage({ searchParams }: { searchParams: Promi
       ) : (
         <>
           {shared.social && (
-            <section className="card pb-1 sm:pb-2" aria-labelledby="persons-title">
-              <div className="flex items-center justify-between gap-3">
-                <h2 id="persons-title" className="display text-2xl">
-                  Personas
-                </h2>
-                {newPerson}
-              </div>
+            <FoldSection kind="people" title="Personas" count={people.length}>
+              <div className="flex justify-end">{newPerson}</div>
               <ul className="mt-1 divide-y divide-line" aria-label="Tus personas">
                 {people.map((person) => {
                   const row = (
@@ -145,20 +133,18 @@ export default async function SharedPage({ searchParams }: { searchParams: Promi
                   );
                 })}
               </ul>
-            </section>
+            </FoldSection>
           )}
           {groups.length > 0 && (
-            <section className="card pb-1 sm:pb-2" aria-labelledby="groups-title">
-              <h2 id="groups-title" className="display text-2xl">
-                Grupos
-              </h2>
+            <FoldSection kind="groups" title="Grupos" count={groups.length}>
               <ul className="mt-1 divide-y divide-line" aria-label="Tus grupos">
                 {groups.map((group) => {
                   const count = shared.members.filter((m) => m.group_id === group.id && !m.removed_at).length;
                   return (
                     <li key={group.id}>
-                      <Link href={`/compartidos/${group.id}${query}`} className="flex items-center justify-between gap-3 py-4">
-                        <span className="min-w-0">
+                      <Link href={`/compartidos/${group.id}${query}`} className="flex items-center gap-3 py-4">
+                        <GroupMark house={Boolean(group.house)} />
+                        <span className="min-w-0 flex-1">
                           <span className="block truncate font-semibold">{group.name}</span>
                           <span className="block text-sm text-ink-3">{group.house ? "Casa · " : ""}{count === 1 ? "Solo tú" : count === 2 ? "Solo ustedes dos" : `${count} personas`}</span>
                         </span>
@@ -168,7 +154,7 @@ export default async function SharedPage({ searchParams }: { searchParams: Promi
                   );
                 })}
               </ul>
-            </section>
+            </FoldSection>
           )}
         </>
       )}
