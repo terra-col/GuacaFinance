@@ -1,12 +1,15 @@
+import { cookies } from "next/headers";
 import Link from "next/link";
 import { AuthShell } from "@/components/auth-shell";
 import { APP_TAGLINE } from "@/lib/brand";
 import { phoneLoginReady } from "@/lib/phone-login";
+import { INVITE_COOKIE, invitePath } from "@/lib/shared";
 import { isSupabaseConfigured } from "@/lib/supabase/server";
 import { LoginForm } from "./login-form";
 
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ enlace?: string; registro?: string }> }) {
   const { enlace, registro } = await searchParams;
+  const toGroup = Boolean(invitePath((await cookies()).get(INVITE_COOKIE)?.value));
 
   return (
     <AuthShell subtitle={APP_TAGLINE}>
@@ -19,6 +22,12 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
                 pide uno nuevo
               </Link>
               .
+            </p>
+          )}
+          {toGroup && !registro && (
+            <p role="status" className="card text-sm text-ink-2">
+              <span className="font-semibold text-ink">Te invitaron a un grupo para dividir gastos.</span> Entra o crea tu cuenta para unirte. Si confirmas el correo en otro dispositivo, vuelve a
+              abrir el enlace de la invitación.
             </p>
           )}
           {registro && (

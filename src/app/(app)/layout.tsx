@@ -13,13 +13,15 @@ import { PRIVACY_COOKIE } from "@/lib/privacy";
 import { cookies } from "next/headers";
 import { loadShell } from "@/lib/data";
 import { Tour } from "@/components/tour";
+import { SharedReadyProvider } from "@/components/shared-ready";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const { pending, accounts, categories, userId, tourSeen, today } = await loadShell();
+  const { pending, accounts, categories, userId, tourSeen, sharedReady, today } = await loadShell();
 
   return (
     // Every category field (Registrar, editing a movement, fixed bills, Wallet's inbox) offers the person's own categories too.
     <CategoriesProvider categories={categories}>
+    <SharedReadyProvider ready={sharedReady}>
     <div className="mx-auto w-full max-w-5xl px-4 pb-40 sm:px-6 lg:pb-16">
       <Suspense>
         <NavProgress />
@@ -48,6 +50,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <AdvisorDock provider={aiProvider()} userId={userId} />
       <Tour autoStart={!tourSeen} userId={userId} />
     </div>
+    </SharedReadyProvider>
     </CategoriesProvider>
   );
 }

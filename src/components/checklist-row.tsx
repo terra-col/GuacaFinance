@@ -99,7 +99,8 @@ export function ChecklistRow({ item, month, today, editable, accounts }: Props) 
       form.set("id", item.id);
       form.set("month", month);
       try {
-        await unmarkPaid(form);
+        const result = await unmarkPaid(form);
+        if (result.error) setError(result.error);
       } catch {
         setError("No se pudo desmarcar. Intenta de nuevo.");
       }

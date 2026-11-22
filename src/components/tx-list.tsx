@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { deleteTx } from "@/app/actions";
 import { formatCOP, formatDate, isAdjustment, isDebt, monthName, relativeDay, daysBetween, type Account, type Tx, type TxKind } from "@/lib/finance";
+import type { SharedMark } from "@/lib/shared";
 import { Icon, txIconName } from "./icons";
 import { Sheet } from "./modal";
 import { TxForm } from "./tx-form";
@@ -20,6 +21,10 @@ const FILTERS: { value: Filter; label: string }[] = [
 
 // An adjustment only corrects a balance, so it looks like neither money in nor money out.
 const ADJUSTED = { label: "Ajuste", stripe: "var(--line-strong)", tint: "bg-brand/8" };
+
+// Settling up moves money and is neither spending nor income.
+const SETTLED = { label: "Pago compartido", stripe: "var(--brand)", tint: "bg-brand/15" };
+const NOTHING_SHARED: Record<string, SharedMark> = {};
 
 // Each kind has its own stripe, tint and word, so it reads without relying on colour alone.
 const LOOK: Record<TxKind, { label: string; stripe: string; tint: string; sign: string }> = {
@@ -41,11 +46,14 @@ export function TxList({
   accounts,
   today,
   showAdjustments = false,
+  shared = NOTHING_SHARED,
 }: {
   txs: Tx[];
   accounts: Pick<Account, "id" | "name" | "kind">[];
   today: string;
   showAdjustments?: boolean;
+  /** The movements that are the money of a shared entry. */
+  shared?: Record<string, SharedMark>;
 }) {
   const accountNames = useMemo(() => Object.fromEntries(accounts.map((a) => [a.id, a.name])), [accounts]);
   const [editing, setEditing] = useState<Tx | null>(null);
@@ -69,6 +77,7 @@ export function TxList({
       : tx.kind === "payment" ? `Pago a ${accountNames[tx.account_id] ?? "cuenta"}` : (tx.description ?? (tx.kind === "income" ? "Ingreso" : (tx.category ?? "Gasto")));
   const detail = (tx: Tx) =>
     isAdjustment(tx) ? (tx.description ?? "") : [
+      shared[tx.id]?.kind === "expense" ? `tu parte ${formatCOP(shared[tx.id].mine)}` : null,
       tx.kind === "expense" && tx.description ? tx.category : null,
       tx.kind === "payment" ? (tx.source_account_id ? `desde ${accountNames[tx.source_account_id]}` : null) : accountNames[tx.account_id],
       tx.kind === "payment" ? tx.description : null,
@@ -87,9 +96,10 @@ export function TxList({
   const inFilter = useCallback(
     (tx: Tx, f: Filter) => {
       if (isAdjustment(tx)) return f === "adjustment" || (f === "all" && showAdjustments);
+      if (shared[tx.id]?.kind === "settlement") return f === "all";
       return f === "all" || f === tx.kind;
     },
-    [showAdjustments],
+    [showAdjustments, shared],
   );
 
   const matches = useMemo(() => {
@@ -107,12 +117,13 @@ export function TxList({
       let group = groups[groups.length - 1];
       if (!group || group.date !== tx.occurred_on) groups.push((group = { date: tx.occurred_on, items: [], out: 0, inn: 0 }));
       group.items.push(tx);
-      if (isAdjustment(tx)) continue;
+      const mark = shared[tx.id];
+      if (isAdjustment(tx) || mark?.kind === "settlement") continue;
       if (tx.kind === "income") group.inn += tx.amount;
-      else if (tx.kind === "expense") group.out += tx.amount;
+      else if (tx.kind === "expense") group.out += mark ? mark.mine : tx.amount;
     }
     return groups;
-  }, [matches, limit]);
+  }, [matches, limit, shared]);
 
   const dayLabel = (date: string) => {
     const diff = daysBetween(today, date);
@@ -161,7 +172,9 @@ export function TxList({
               </div>
               <ul>
                 {day.items.map((tx) => {
-                  const look = isAdjustment(tx) ? ADJUSTED : LOOK[tx.kind];
+                  const look = isAdjustment(tx) ? ADJUSTED : shared[tx.id]?.kind === "settlement" ? SETTLED : LOOK[tx.kind];
+                  // Their amount belongs to a correction or to a group.
+                  const locked = isAdjustment(tx) || Boolean(shared[tx.id]);
                   return (
                     <SwipeRow
                       key={tx.id}
@@ -174,7 +187,7 @@ export function TxList({
                           <button
                             type="button"
                             className="swipe-action bg-brand"
-                            disabled={isAdjustment(tx)}
+                            disabled={locked}
                             onClick={() => { setSwiped(null); setEditing(tx); }}
                           >
                             <Icon name="edit" className="size-5" />
@@ -211,7 +224,7 @@ export function TxList({
                       </p>
                       {/* Mouse and keyboard: the same actions, shown on hover or focus. Touch uses the swipe. */}
                       <span className="flex shrink-0 gap-0.5 [@media(pointer:coarse)]:hidden">
-                        {!isAdjustment(tx) ? (
+                        {!locked ? (
                           <button
                             type="button"
                             onClick={() => setEditing(tx)}
@@ -221,7 +234,7 @@ export function TxList({
                             <Icon name="edit" className="size-4" />
                           </button>
                         ) : (
-                          // Adjustments are not edited, but keep the room so every amount lines up.
+                          // Adjustments and shared ones are not edited, but keep the room so every amount lines up.
                           <span className="row-tool invisible" aria-hidden="true">
                             <Icon name="edit" className="size-4" />
                           </span>

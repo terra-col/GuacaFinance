@@ -46,7 +46,7 @@ export default async function SettingsPage() {
         <div>
           <h2 className="display text-2xl">Invita a alguien</h2>
           <p className="text-sm text-ink-3">
-            Comparte el enlace para que cree su propia cuenta. Cada persona ve solo sus datos: nadie puede ver los tuyos.
+            Comparte el enlace para que cree su propia cuenta. Cada persona ve solo sus datos. Lo único que otros pueden ver es lo que pongas en un grupo de Compartidos.
           </p>
         </div>
         <ShareInvite origin={origin} />

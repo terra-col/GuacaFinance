@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { INVITE_COOKIE, invitePath } from "@/lib/shared";
 import { REMEMBER_COOKIE, sessionCookieOptions } from "@/lib/supabase/session-cookies";
 
 export async function proxy(request: NextRequest) {
@@ -17,7 +18,11 @@ export async function proxy(request: NextRequest) {
     const target = request.nextUrl.clone();
     target.pathname = "/login";
     target.search = "";
-    return NextResponse.redirect(target);
+    const redirected = NextResponse.redirect(target);
+    // An invitation to a group survives signing in or signing up; nothing else is remembered.
+    const invited = invitePath(path);
+    if (invited) redirected.cookies.set(INVITE_COOKIE, invited, { path: "/", maxAge: 60 * 60 * 24, sameSite: "lax", httpOnly: true, secure: true });
+    return redirected;
   };
 
   // Without Supabase credentials only the login page (which explains the setup) is reachable.

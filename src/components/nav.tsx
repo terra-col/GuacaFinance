@@ -45,7 +45,9 @@ export function Nav({ pending }: { pending: number }) {
     setSeenPath(pathname);
     setTapped(null);
   }
-  const current = TABS.findIndex((t) => (t.href === "/" ? pathname === "/" : pathname.startsWith(t.href)));
+  // Compartidos is the other half of Movimientos.
+  const section = pathname.startsWith("/compartidos") ? "/movimientos" : pathname;
+  const current = TABS.findIndex((t) => (t.href === "/" ? section === "/" : section.startsWith(t.href)));
   const active = tapped ? TABS.findIndex((t) => t.href === tapped) : current;
   const tap = (href: string) => () => {
     if (TABS.findIndex((t) => t.href === href) !== current) setTapped(href);

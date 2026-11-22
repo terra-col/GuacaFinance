@@ -35,6 +35,10 @@ interface Snapshot {
   budgets?: Budget[];
   skips?: Skip[];
   purchases?: CardPurchase[];
+  /** What counts as income and spending (see flowTxs); the movements when there is nothing shared. */
+  flows?: Tx[];
+  /** Only totals: the names of the people in the groups never go to the AI. */
+  position?: { owedToMe: number; iOwe: number };
   today: string;
 }
 
@@ -42,7 +46,7 @@ const month = (today: string, n: number | null) => (n === null ? "nunca con los 
 
 const MONTH_SHORT = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
 
-export function advisorContext({ accounts, txs, bills, goals, deposits, incomes = [], budgets = [], skips = [], purchases = [], today }: Snapshot): string {
+export function advisorContext({ accounts, txs, bills, goals, deposits, incomes = [], budgets = [], skips = [], purchases = [], flows = txs, position, today }: Snapshot): string {
   const lines: string[] = [];
   const t = totals(accounts, txs);
   lines.push(`Fecha de hoy: ${today} (Colombia). Montos en pesos colombianos.`);
@@ -50,6 +54,11 @@ export function advisorContext({ accounts, txs, bills, goals, deposits, incomes 
 
   lines.push("\n## Dinero disponible");
   for (const a of accounts.filter(holdsMoney)) lines.push(`- ${a.name} (${KIND_LABEL[a.kind]}${a.institution ? `, ${a.institution}` : ""}): ${formatCOP(balanceAt(a, txs))}`);
+
+  if (position && (position.owedToMe || position.iOwe)) {
+    lines.push("\n## Gastos compartidos (fuera del balance; como gasto ya cuenta solo su parte)");
+    lines.push(`- Le deben ${formatCOP(position.owedToMe)}; debe ${formatCOP(position.iOwe)}.`);
+  }
 
   lines.push("\n## Deudas");
   for (const a of accounts.filter(isDebt)) {
@@ -112,7 +121,7 @@ export function advisorContext({ accounts, txs, bills, goals, deposits, incomes 
   }
   if (budgets.length) {
     lines.push("\n## Presupuestos de este mes (gastado / tope)");
-    for (const b of budgetViews(budgets, txs, current, today))
+    for (const b of budgetViews(budgets, flows, current, today))
       lines.push(`- ${b.category}: ${formatCOP(b.spent)} de ${formatCOP(b.amount)}${b.status === "over" ? " (pasado)" : b.status === "watch" ? " (va rápido)" : ""}`);
   }
   const monthSkips = skips.filter((k) => k.month === current);
@@ -130,8 +139,8 @@ export function advisorContext({ accounts, txs, bills, goals, deposits, incomes 
 
   lines.push("\n## Últimos 3 meses (según lo registrado)");
   for (const m of months) {
-    const { income, expense: spent, payment: paid } = monthFlows(txs, m);
-    const top = spendingByCategory(txs, m)
+    const { income, expense: spent, payment: paid } = monthFlows(flows, m);
+    const top = spendingByCategory(flows, m)
       .slice(0, 5)
       .map((c) => `${c.category} ${formatCOP(c.amount)}`)
       .join(", ");
@@ -156,7 +165,7 @@ export function advisorContext({ accounts, txs, bills, goals, deposits, incomes 
     }
   }
 
-  const alerts = advise(accounts, txs, today, bills);
+  const alerts = advise(accounts, txs, today, bills, flows);
   if (alerts.length) {
     lines.push("\n## Alertas de la app");
     for (const a of alerts) lines.push(`- ${a.title}. ${a.detail}`);

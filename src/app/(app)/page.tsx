@@ -13,6 +13,7 @@ import { profileName } from "@/lib/brand";
 import { loadData } from "@/lib/data";
 import { balanceAt, byDue, daysBetween, formatCOP, isDebt, monthName, monthlyChecklist, monthlySeries, relativeDay, spendingByCategory, totals } from "@/lib/finance";
 import { goalChecklist } from "@/lib/goals";
+import { SharedSummary } from "@/components/shared-summary";
 import { TourButton } from "@/components/tour";
 
 const LEVEL = { urgent: "Urgente", warn: "Atención", idea: "Idea" };
@@ -54,7 +55,7 @@ function greetingLine(today: string) {
 }
 
 async function Dashboard({ searchParams }: Props) {
-  const { accounts, txs, bills, inbox, incomes, budgets, skips, planReady, goals, deposits, user, today } = await loadData();
+  const { accounts, txs, flows, position, bills, inbox, incomes, budgets, skips, planReady, goals, deposits, user, today } = await loadData();
   const addNow = (await searchParams).nueva === "1";
   const name = profileName(user);
   const greeting = (
@@ -81,6 +82,7 @@ async function Dashboard({ searchParams }: Props) {
     return (
       <>
       {greeting}
+      <SharedSummary position={position} />
       <section className="max-w-xl pt-2" data-tour="accounts">
         <h2 className="display text-3xl">Empieza por lo que tienes y lo que debes</h2>
         <p className="mt-3 text-ink-2">
@@ -100,9 +102,9 @@ async function Dashboard({ searchParams }: Props) {
   const started = series.filter((p) => Object.values(p.byAccount).some((v) => v !== null));
   const lastMonth = series[series.length - 2];
   const previous = started.includes(lastMonth) ? lastMonth : null;
-  const spending = spendingByCategory(txs, today.slice(0, 7));
+  const spending = spendingByCategory(flows, today.slice(0, 7));
   const spent = spending.reduce((sum, c) => sum + c.amount, 0);
-  const advice = advise(accounts, txs, today, bills);
+  const advice = advise(accounts, txs, today, bills, flows);
   const debts = accounts.filter(isDebt);
 
   const month = today.slice(0, 7);
@@ -156,6 +158,8 @@ async function Dashboard({ searchParams }: Props) {
           </div>
         </div>
       </div>
+
+      <SharedSummary position={position} />
 
       <section aria-labelledby="money-title" data-tour="accounts">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">

@@ -4,25 +4,30 @@ import { InboxItem } from "@/components/inbox-item";
 import { budgetViews } from "@/lib/budget";
 import { NewMovementButton } from "@/components/quick-add";
 import { TxList } from "@/components/tx-list";
+import { MovesSwitch } from "@/components/moves-switch";
+import { sharedMarks } from "@/lib/shared";
 import { loadData } from "@/lib/data";
 import { formatCOP, monthFlows, monthLabel, spendingByCategory } from "@/lib/finance";
 
 export default async function TransactionsPage() {
-  const { accounts, txs, inbox, budgets, planReady, today } = await loadData();
+  const { accounts, txs, flows: counted, shared, sharedReady, user, inbox, budgets, planReady, today } = await loadData();
 
   if (accounts.length === 0) {
     return (
-      <section className="card flex flex-col items-start gap-3">
-        <h1 className="display text-3xl">Primero registra una cuenta</h1>
-        <Link href="/?nueva=1" className="btn">
-          Ir a cuentas
-        </Link>
-      </section>
+      <>
+        {sharedReady && <MovesSwitch active="/movimientos" />}
+        <section className="card flex flex-col items-start gap-3">
+          <h1 className="display text-3xl">Primero registra una cuenta</h1>
+          <Link href="/?nueva=1" className="btn">
+            Ir a cuentas
+          </Link>
+        </section>
+      </>
     );
   }
 
   const month = today.slice(0, 7);
-  const sum = monthFlows(txs, month);
+  const sum = monthFlows(counted, month);
   const flows = [
     { label: "Ingresos", amount: sum.income, bar: "fill-have" },
     { label: "Gastos", amount: sum.expense, bar: "fill-owe" },
@@ -37,6 +42,7 @@ export default async function TransactionsPage() {
         <h1 className="display text-3xl">Movimientos</h1>
         <NewMovementButton />
       </div>
+      {sharedReady && <MovesSwitch active="/movimientos" />}
 
       <section className="card">
         <p className="eyebrow">Flujo de {monthLabel(month)}</p>
@@ -57,10 +63,10 @@ export default async function TransactionsPage() {
 
       {planReady && (
         <BudgetsCard
-          views={budgetViews(budgets, txs, month, today)}
+          views={budgetViews(budgets, counted, month, today)}
           current
           // Where the month's spending went.
-          totals={spendingByCategory(txs, month)}
+          totals={spendingByCategory(counted, month)}
         />
       )}
 
@@ -76,7 +82,7 @@ export default async function TransactionsPage() {
         </section>
       )}
 
-      <TxList txs={txs} accounts={accounts.map(({ id, name, kind }) => ({ id, name, kind }))} today={today} />
+      <TxList txs={txs} shared={sharedMarks(shared, user.id)} accounts={accounts.map(({ id, name, kind }) => ({ id, name, kind }))} today={today} />
     </>
   );
 }

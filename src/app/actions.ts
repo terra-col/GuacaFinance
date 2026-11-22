@@ -11,11 +11,14 @@ import { allPages } from "@/lib/paging";
 import { normalizePhone } from "@/lib/phone";
 import { PHONE_TAKEN, emailForPhone, phoneLoginReady, phoneTaken } from "@/lib/phone-login";
 import { requestOrigin } from "@/lib/request-origin";
+import { INVITE_COOKIE, invitePath } from "@/lib/shared";
 import { REMEMBER_COOKIE, createClient, isSupabaseConfigured } from "@/lib/supabase/server";
 
 export interface FormState {
   error?: string;
   message?: string;
+  /** The movement just created. */
+  id?: string;
   /** A freshly created token. It is only ever shown here; the database keeps its hash. */
   token?: string;
 }
@@ -75,7 +78,11 @@ export async function authenticate(_prev: FormState, form: FormData): Promise<Fo
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) return { error: email === login ? "Correo o contraseña incorrectos." : "Celular o contraseña incorrectos. Si aún no confirmas tu correo, entra con el correo." };
   }
-  redirect("/");
+  // An invitation opened before signing in: back to it.
+  const jar = await cookies();
+  const invited = invitePath(jar.get(INVITE_COOKIE)?.value);
+  if (invited) jar.delete(INVITE_COOKIE);
+  redirect(invited ?? "/");
 }
 
 /** Sends the reset link. The answer is the same whether or not the email has an account. */
@@ -292,10 +299,17 @@ export async function saveTx(_prev: FormState, form: FormData): Promise<FormStat
   // With an id the form edits that movement; its links to a bill or an income stay as they were.
   const id = text(form, "id");
   if (id && !UUID.test(id)) return { error: "Ese movimiento no existe." };
-  const { error } = id ? await supabase.from("transactions").update(row).eq("id", id) : await supabase.from("transactions").insert(row);
+  if (id) {
+    const { error } = await supabase.from("transactions").update(row).eq("id", id);
+    if (error) return { error: `No se pudo guardar: ${error.message}` };
+    revalidatePath("/", "layout");
+    return { message: "Movimiento actualizado." };
+  }
+  const { data, error } = await supabase.from("transactions").insert(row).select("id").single();
   if (error) return { error: `No se pudo guardar: ${error.message}` };
   revalidatePath("/", "layout");
-  return { message: id ? "Movimiento actualizado." : "Movimiento registrado." };
+  // «Dividir» needs to know which one, and only an expense can be divided.
+  return { message: "Movimiento registrado.", id: kind === "expense" ? (data.id as string) : undefined };
 }
 
 export async function deleteTx(form: FormData) {
@@ -482,7 +496,7 @@ export async function markPaid(_prev: FormState, form: FormData): Promise<FormSt
 }
 
 /** Unticks an item by deleting the payments that ticked it in that month (by their date, or marked for it). */
-export async function unmarkPaid(form: FormData) {
+export async function unmarkPaid(form: FormData): Promise<FormState> {
   const supabase = await signedIn();
   const month = text(form, "month");
   if (!MONTH.test(month)) throw new Error("Mes no válido.");
@@ -497,11 +511,11 @@ export async function unmarkPaid(form: FormData) {
     const { data, error: findError } = await supabase.from("goal_deposits").select("*").eq("goal_id", id).gt("amount", 0);
     if (findError) throw failed(findError.message);
     const ids = ticking(data);
-    if (ids.length === 0) return;
+    if (ids.length === 0) return {};
     const { error } = await supabase.from("goal_deposits").delete().in("id", ids);
     if (error) throw failed(error.message);
     revalidatePath("/", "layout");
-    return;
+    return {};
   }
 
   // Find exactly the movements that ticked it; balance adjustments are never touched.
@@ -510,10 +524,14 @@ export async function unmarkPaid(form: FormData) {
     type === "bill" ? await base.eq("bill_id", id) : type === "income" ? await base.eq("income_id", id) : await base.eq("account_id", id).eq("kind", "payment");
   if (findError) throw failed(findError.message);
   const ids = ticking(rows);
-  if (ids.length === 0) return;
+  if (ids.length === 0) return {};
+  // A divided payment, deleted and marked again, would count in full on top of the person's share.
+  const { data: divided } = await supabase.from("shared_links").select("tx_id").in("tx_id", ids).limit(1);
+  if (divided?.length) return { error: "Este pago está dividido. Para cambiarlo, primero bórralo en Compartidos." };
   const { error } = await supabase.from("transactions").delete().in("id", ids);
   if (error) throw failed(error.message);
   revalidatePath("/", "layout");
+  return {};
 }
 
 const forMonthMissing = (message: string) => (/for_month/i.test(message) ? "Para marcar pagos de otro mes falta ejecutar la migración 0013 en Supabase." : null);
@@ -531,7 +549,8 @@ export async function updatePaid(_prev: FormState, form: FormData): Promise<Form
   const type = form.get("type");
   if ((type === "bill" || type === "income") && !text(form, "account_id")) return { error: type === "bill" ? "Elige con qué pagaste." : "Elige a qué cuenta llegó." };
   try {
-    await unmarkPaid(form);
+    const undone = await unmarkPaid(form);
+    if (undone.error) return undone;
   } catch {
     return { error: "No se pudo actualizar. Intenta de nuevo." };
   }

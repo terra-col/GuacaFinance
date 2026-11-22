@@ -1,10 +1,13 @@
 "use client";
 
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useActionState, useState } from "react";
 import { saveTx, type FormState } from "@/app/actions";
 import { DateField } from "./date-field";
 import { MoneyInput } from "./money-input";
 import { CategoryField, SelectField, type PickOption } from "./pickers";
+import { useSharedReady } from "./shared-ready";
 import { SubmitButton } from "./submit-button";
 import {
   allowedTxKinds,
@@ -48,10 +51,17 @@ export function TxForm({
   tx?: Tx;
   onDone?: (message: string) => void;
 }) {
+  const sharedReady = useSharedReady();
+  const router = useRouter();
+  const [split, setSplit] = useState(false);
   const [state, action] = useActionState<FormState, FormData>(
     async (prev: FormState, form: FormData) => {
       const result = await saveTx(prev, form);
-      if (!result.error) onDone?.(result.message ?? "Guardado.");
+      if (!result.error) {
+        onDone?.(result.message ?? "Guardado.");
+        // «Dividir»: the expense is saved, then one chooses with whom.
+        if (result.id && split) router.push(`/compartidos?dividir=${result.id}`);
+      }
       return result;
     },
     {},
@@ -153,6 +163,16 @@ export function TxForm({
               />
             </label>
           </div>
+          {sharedReady && kind === "expense" &&
+            (editing ? (
+              <Link href={`/compartidos?dividir=${tx!.id}`} className="self-start text-sm font-semibold text-brand">
+                Dividir este gasto
+              </Link>
+            ) : (
+              <button type="button" className="chip self-start" aria-pressed={split} onClick={() => setSplit(!split)}>
+                {split ? "✓ " : ""}Dividir con alguien
+              </button>
+            ))}
           {state.error && (
             <p role="alert" className="alert">
               {state.error}
@@ -163,7 +183,7 @@ export function TxForm({
               {state.message}
             </p>
           )}
-          <SubmitButton className="btn self-start">{editing ? "Guardar cambios" : "Registrar"}</SubmitButton>
+          <SubmitButton className="btn self-start">{editing ? "Guardar cambios" : split && kind === "expense" ? "Registrar y dividir" : "Registrar"}</SubmitButton>
         </>
       )}
     </form>

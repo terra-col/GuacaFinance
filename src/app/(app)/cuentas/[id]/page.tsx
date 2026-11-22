@@ -9,10 +9,11 @@ import { DebtTags, InstallmentMeter } from "@/components/installment-meter";
 import { debtView } from "@/lib/debts";
 import { balanceAt, formatCOP, formatDate, isDebt, monthLabel, monthlySeries, nextDueDate, relativeDay, daysBetween } from "@/lib/finance";
 import { purchaseView } from "@/lib/installments";
+import { sharedMarks } from "@/lib/shared";
 
 export default async function AccountPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const { accounts, txs, today, purchases, purchasesReady } = await loadData();
+  const { accounts, txs, shared, user, today, purchases, purchasesReady } = await loadData();
   const account = accounts.find((a) => a.id === id);
   if (!account) notFound();
   const view = isDebt(account) ? debtView(account, txs, today) : null;
@@ -126,7 +127,7 @@ export default async function AccountPage({ params }: { params: Promise<{ id: st
 
 
       <h2 className="display text-2xl">Movimientos de esta cuenta</h2>
-      <TxList txs={own} showAdjustments accounts={accounts.map(({ id, name, kind }) => ({ id, name, kind }))} today={today} />
+      <TxList txs={own} showAdjustments shared={sharedMarks(shared, user.id)} accounts={accounts.map(({ id, name, kind }) => ({ id, name, kind }))} today={today} />
     </>
   );
 }

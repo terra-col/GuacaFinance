@@ -46,7 +46,8 @@ function monthAfter(today: string, months: number): string {
   return monthLabel(`${Math.floor(total / 12)}-${String((total % 12) + 1).padStart(2, "0")}`);
 }
 
-export function advise(accounts: Account[], txs: Tx[], today: string, bills: Bill[] = []): Advice[] {
+/** `flows`: what counts as spending, when it is not simply the movements (shared expenses). */
+export function advise(accounts: Account[], txs: Tx[], today: string, bills: Bill[] = [], flows: Tx[] = txs): Advice[] {
   const out: Advice[] = [];
 
   // 0. A fixed bill is overdue or due within three days and has not been paid this month.
@@ -143,9 +144,9 @@ export function advise(accounts: Account[], txs: Tx[], today: string, bills: Bil
   const [m3, m2, m1, current] = lastMonths(today, 4);
   const usual = new Map<string, number>();
   for (const month of [m3, m2, m1]) {
-    for (const c of spendingByCategory(txs, month)) usual.set(c.category, (usual.get(c.category) ?? 0) + c.amount / 3);
+    for (const c of spendingByCategory(flows, month)) usual.set(c.category, (usual.get(c.category) ?? 0) + c.amount / 3);
   }
-  for (const c of spendingByCategory(txs, current)) {
+  for (const c of spendingByCategory(flows, current)) {
     const average = usual.get(c.category) ?? 0;
     if (average <= 0 || c.amount < average * 1.3 || c.amount - average < 50_000) continue;
     out.push({

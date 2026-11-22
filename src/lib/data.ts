@@ -3,6 +3,8 @@ import { knownCategories, todayInBogota, type Account, type Bill, type Skip, typ
 import type { Budget, Income } from "./budget";
 import type { Goal, GoalDeposit } from "./goals";
 import type { CardPurchase } from "./installments";
+import { flowTxs, myPosition } from "./shared";
+import { loadShared } from "./shared-data";
 
 export interface InboxItem {
   id: string;
@@ -18,7 +20,7 @@ const PAGE = 1000; // Supabase returns at most 1000 rows per request
 /** What every screen's frame needs: accounts for the quick «new movement» sheet and the Wallet inbox count. */
 export async function loadShell() {
   const supabase = await createClient();
-  const [session, inbox, withFavorite, usedInTxs, usedInBills] = await Promise.all([
+  const [session, inbox, withFavorite, usedInTxs, usedInBills, groups] = await Promise.all([
     // Read from the cookie, no network: only to tell this person's things apart on the device (the
     // advisor's saved conversation), never to authorize anything.
     supabase.auth.getSession(),
@@ -27,6 +29,8 @@ export async function loadShell() {
     // The categories the person has used, newest first, to offer next to the app's own.
     supabase.from("transactions").select("category").not("category", "is", null).order("created_at", { ascending: false }).limit(1000),
     supabase.from("bills").select("category").not("category", "is", null),
+    // Only whether Compartidos exists yet (migration 0016).
+    supabase.from("shared_groups").select("id").limit(1),
   ]);
   // Until migration 0012 runs there is no favourite column: ask again without it.
   const accounts = withFavorite.error ? await supabase.from("accounts").select("id, name, kind").order("created_at") : withFavorite;
@@ -37,6 +41,7 @@ export async function loadShell() {
     // The welcome tour starts by itself until it is seen once (see markTourSeen).
     tourSeen: Boolean(session.data.session?.user.user_metadata?.tour_seen),
     categories: knownCategories([...(usedInTxs.data ?? []), ...(usedInBills.data ?? [])].map((r) => r.category as string)),
+    sharedReady: !groups.error,
     today: todayInBogota(),
   };
 }
@@ -67,7 +72,7 @@ export async function loadData() {
     if (data.length < PAGE) break;
   }
 
-  const [bills, inbox, goals, deposits, budgets, skips, incomes, purchases] = await Promise.all([
+  const [bills, inbox, goals, deposits, budgets, skips, incomes, purchases, sharing] = await Promise.all([
     supabase.from("bills").select("*").order("due_day"),
     supabase.from("wallet_inbox").select("*").order("received_at", { ascending: false }),
     supabase.from("goals").select("*").order("target_date"),
@@ -76,6 +81,7 @@ export async function loadData() {
     supabase.from("checklist_skips").select("*"),
     supabase.from("incomes").select("*").order("day"),
     supabase.from("card_purchases").select("*").order("first_due_month"),
+    loadShared(supabase),
   ]);
   // Card purchases in instalments arrived with migration 0009.
   const purchasesReady = !purchases.error;
@@ -91,6 +97,11 @@ export async function loadData() {
     user,
     accounts: accounts as Account[],
     txs,
+    // Balances read `txs`; totals of what came in or was spent read `flows` (see flowTxs).
+    flows: flowTxs(txs, sharing.shared, user.id),
+    shared: sharing.shared,
+    sharedReady: sharing.ready,
+    position: myPosition(sharing.shared, user.id),
     bills: bills.data as Bill[],
     inbox: inbox.data as InboxItem[],
     goals: goalsMissing ? [] : (goals.data as Goal[]),

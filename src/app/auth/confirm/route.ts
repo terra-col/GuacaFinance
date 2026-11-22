@@ -1,5 +1,7 @@
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { emailLinkType, safeNext } from "@/lib/auth-links";
+import { INVITE_COOKIE, invitePath } from "@/lib/shared";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/server";
 
 /**
@@ -29,5 +31,10 @@ export async function GET(request: Request) {
     opened = !error;
   }
 
-  redirect(opened ? next : "/login?enlace=vencido");
+  if (!opened) redirect("/login?enlace=vencido");
+  // Signed up from an invitation to a group, in this same browser: back to it.
+  const jar = await cookies();
+  const invited = next === "/" ? invitePath(jar.get(INVITE_COOKIE)?.value) : null;
+  if (invited) jar.delete(INVITE_COOKIE);
+  redirect(invited ?? next);
 }

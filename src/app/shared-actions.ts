@@ -1,0 +1,142 @@
+"use server";
+
+import { createHash, randomBytes } from "node:crypto";
+import { revalidatePath } from "next/cache";
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
+import { parsePesos } from "@/lib/finance";
+import { requestOrigin } from "@/lib/request-origin";
+import { INVITE_COOKIE, splitEqual } from "@/lib/shared";
+import { createClient } from "@/lib/supabase/server";
+
+// Every write goes through a function of migration 0016, which checks who asks and what for.
+
+export interface SharedResult {
+  error?: string;
+  id?: string;
+  link?: string;
+}
+
+const text = (form: FormData, name: string) => String(form.get(name) ?? "").trim();
+const DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** The functions raise in Spanish (P0001); anything else gets a plain answer. */
+function problem(error: { code?: string; message: string }): string {
+  if (error.code === "P0001") return error.message;
+  if (error.code === "23505") return "Ya hay alguien con ese nombre en el grupo, o eso ya quedó registrado.";
+  if (error.code === "PGRST202") return "Falta ejecutar la migración 0016 en Supabase.";
+  if (error.code === "23514") return "Revisa los datos: hay un nombre, monto o texto que no es válido.";
+  return "No se pudo guardar. Intenta de nuevo.";
+}
+
+async function call(fn: string, args: Record<string, unknown>): Promise<SharedResult> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc(fn, args);
+  if (error) return { error: problem(error) };
+  revalidatePath("/", "layout");
+  return typeof data === "string" ? { id: data } : {};
+}
+
+export async function createGroup(form: FormData): Promise<SharedResult> {
+  const others = form.getAll("person").map((p) => String(p).trim()).filter(Boolean);
+  if (others.length === 0) return { error: "Agrega al menos una persona." };
+  const me = text(form, "me");
+  if (!me) return { error: "Escribe tu nombre: así te verán en el grupo." };
+  if (new Set([me, ...others].map((n) => n.toLocaleLowerCase("es"))).size !== others.length + 1) return { error: "Hay nombres repetidos: distínguelos con un apellido." };
+  // With one person the group can simply carry their name.
+  const name = text(form, "name") || (others.length === 1 ? `${me} y ${others[0]}`.slice(0, 60) : "");
+  if (!name) return { error: "Ponle un nombre al grupo." };
+  return call("shared_create_group", { p_name: name, p_my_name: me, p_others: others });
+}
+
+export async function addMember(form: FormData): Promise<SharedResult> {
+  const name = text(form, "name");
+  if (!name) return { error: "Escribe el nombre." };
+  return call("shared_add_member", { p_group: text(form, "group"), p_name: name });
+}
+
+export async function removeMember(form: FormData): Promise<SharedResult> {
+  return call("shared_remove_member", { p_member: text(form, "member") });
+}
+
+export async function deleteGroup(form: FormData): Promise<SharedResult> {
+  const result = await call("shared_delete_group", { p_group: text(form, "group") });
+  if (result.error) return result;
+  // From here, so the deleted group's page is never drawn again.
+  redirect("/compartidos");
+}
+
+/** A one-use link for one person's place; only its hash is kept. */
+export async function inviteMember(form: FormData): Promise<SharedResult> {
+  const token = randomBytes(24).toString("base64url");
+  const result = await call("shared_invite", { p_member: text(form, "member"), p_hash: createHash("sha256").update(token).digest("hex") });
+  return result.error ? result : { link: `${await requestOrigin()}/unirse/${token}` };
+}
+
+export async function joinGroup(form: FormData): Promise<SharedResult> {
+  const result = await call("shared_join", { p_token: text(form, "token") });
+  if (result.error) return result;
+  (await cookies()).delete(INVITE_COOKIE);
+  // From here: redrawn, the invitation's page would already say «ya se usó».
+  redirect(`/compartidos/${result.id}`);
+}
+
+export async function saveSharedExpense(form: FormData): Promise<SharedResult> {
+  const amount = parsePesos(text(form, "amount"));
+  if (!amount) return { error: "Escribe cuánto fue." };
+  const description = text(form, "description").slice(0, 120);
+  if (!description) return { error: "Escribe qué fue." };
+  const occurred_on = text(form, "occurred_on");
+  if (!DATE.test(occurred_on)) return { error: "La fecha no es válida." };
+  const people = [...new Set(form.getAll("with").map(String))];
+  if (people.length === 0) return { error: "Elige entre quiénes se divide." };
+
+  const exact = text(form, "mode") === "exact";
+  const shares = exact
+    ? people.map((member_id) => ({ member_id, amount: parsePesos(text(form, `share-${member_id}`)) ?? 0 })).filter((s) => s.amount > 0)
+    : splitEqual(amount, people);
+  if (shares.reduce((sum, s) => sum + s.amount, 0) !== amount) return { error: "Las partes deben sumar el total." };
+
+  return call("shared_add_entry", {
+    p_group: text(form, "group"),
+    p_kind: "expense",
+    p_description: description,
+    p_category: text(form, "category") || null,
+    p_amount: amount,
+    p_paid_by: text(form, "paid_by"),
+    p_occurred_on: occurred_on,
+    p_shares: shares,
+    p_account: text(form, "account_id") || null,
+    p_tx: text(form, "tx") || null,
+  });
+}
+
+export async function saveSettlement(form: FormData): Promise<SharedResult> {
+  const amount = parsePesos(text(form, "amount"));
+  if (!amount) return { error: "Escribe cuánto se pagó." };
+  const occurred_on = text(form, "occurred_on");
+  if (!DATE.test(occurred_on)) return { error: "La fecha no es válida." };
+  return call("shared_add_entry", {
+    p_group: text(form, "group"),
+    p_kind: "settlement",
+    p_description: (text(form, "description") || "Pago para saldar").slice(0, 120),
+    p_category: null,
+    p_amount: amount,
+    p_paid_by: text(form, "from"),
+    p_occurred_on: occurred_on,
+    p_shares: [{ member_id: text(form, "to"), amount }],
+    p_account: text(form, "account_id") || null,
+    p_tx: null,
+  });
+}
+
+/** The other side of a payment (or who paid, later) records it in their own account. */
+export async function recordInAccount(form: FormData): Promise<SharedResult> {
+  const account = text(form, "account_id");
+  if (!account) return { error: "Elige la cuenta." };
+  return call("shared_record", { p_entry: text(form, "entry"), p_account: account });
+}
+
+export async function deleteSharedEntry(form: FormData): Promise<SharedResult> {
+  return call("shared_delete_entry", { p_entry: text(form, "entry") });
+}
