@@ -283,3 +283,42 @@ test("periodicity: the calendar feed still works with its token only, and carrie
   assert.equal(rows.find((r) => r.name === "Visa").every, "monthly");
   assert.equal((await as(null, "select * from calendar_feed('nope')")).length, 0);
 });
+
+test("checkpoints: zero only for a checkpoint, and only an adjustment is one", async () => {
+  const [bank] = await as(ANA, "insert into accounts (kind, name, opening_balance) values ('savings', 'Con control', 1000000) returning id");
+  await as(ANA, "insert into transactions (account_id, kind, amount, category, checkpoint) values ($1, 'expense', 0, 'Ajuste de saldo', 1000000)", [bank.id]);
+  await assert.rejects(as(ANA, "insert into transactions (account_id, kind, amount) values ($1, 'expense', 0)", [bank.id]), /check constraint/);
+  await assert.rejects(as(ANA, "insert into transactions (account_id, kind, amount, category, checkpoint) values ($1, 'expense', 5, 'Mercado', 9)", [bank.id]), /check constraint/);
+  await assert.rejects(as(ANA, "insert into transactions (account_id, kind, amount, checkpoint) values ($1, 'expense', 5, 9)", [bank.id]), /check constraint/);
+});
+
+test("deleting a debt keeps what was paid to it out of the account it came from", async () => {
+  const [bank] = await as(ANA, "insert into accounts (kind, name) values ('savings', 'Origen') returning id");
+  const [debt] = await as(ANA, "insert into accounts (kind, name) values ('loan', 'Moto') returning id");
+  const [paid] = await as(ANA, "insert into transactions (account_id, source_account_id, kind, amount, occurred_on) values ($1, $2, 'payment', 400000, '2026-10-05') returning id, created_at", [debt.id, bank.id]);
+  await as(ANA, "insert into transactions (account_id, kind, amount) values ($1, 'payment', 50000)", [debt.id]);
+  await as(ANA, "delete from accounts where id = $1", [debt.id]);
+  const rows = await as(ANA, "select * from transactions where account_id = $1", [bank.id]);
+  assert.equal(rows.length, 1, "only the one that came from this account");
+  assert.deepEqual([rows[0].id, rows[0].kind, Number(rows[0].amount), rows[0].category, rows[0].source_account_id], [paid.id, "expense", 400000, "Ajuste de saldo", null]);
+  assert.deepEqual(rows[0].created_at, paid.created_at, "same moment, so checkpoints still place it");
+});
+
+test("deleting several accounts at once, or the whole person, still works", async () => {
+  const pair = async (user) => {
+    const [from] = await as(user, "insert into accounts (kind, name) values ('savings', 'De') returning id");
+    const [to] = await as(user, "insert into accounts (kind, name) values ('loan', 'A') returning id");
+    await as(user, "insert into transactions (account_id, source_account_id, kind, amount) values ($1, $2, 'payment', 7000)", [to.id, from.id]);
+    return [from.id, to.id];
+  };
+  for (const flip of [false, true]) {
+    const ids = await pair(ANA);
+    await as(ANA, "delete from accounts where id = any($1)", [flip ? ids.reverse() : ids]);
+    assert.equal((await as(ANA, "select 1 from transactions where account_id = any($1)", [ids])).length, 0);
+  }
+  const gone = "00000000-0000-0000-0000-00000000000d";
+  await db.exec(`insert into auth.users (id) values ('${gone}')`);
+  await pair(gone);
+  await db.exec(`delete from auth.users where id = '${gone}'`);
+  assert.equal((await db.query("select 1 from accounts where user_id = $1", [gone])).rows.length, 0);
+});

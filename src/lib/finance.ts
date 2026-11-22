@@ -71,6 +71,10 @@ export interface Tx {
   for_month?: string | null;
   /** The date it ticks, for what does not repeat monthly (the quincena of the 15th). */
   for_date?: string | null;
+  /** When it was written down. */
+  created_at?: string;
+  /** An adjustment that is a checkpoint: the account's balance at that moment, as the bank showed it. */
+  checkpoint?: number | null;
 }
 
 /** The month a payment ticks in Pagos: the one it was marked for, else the month of its date. */
@@ -171,11 +175,37 @@ export function effect(account: Account, tx: Tx): number {
   return 0;
 }
 
-/** Balance at the end of `date` (inclusive); with no date, the balance after every movement. */
+const writtenAt = (tx: Tx) => (tx.created_at ? Date.parse(tx.created_at) : 0);
+const isCheckpoint = (tx: Tx) => tx.checkpoint !== null && tx.checkpoint !== undefined;
+
+/** The account's latest checkpoint up to `date`. */
+export function lastCheckpoint(account: Pick<Account, "id">, txs: Tx[], date?: string): Tx | null {
+  let last: Tx | null = null;
+  for (const tx of txs) {
+    if (tx.account_id !== account.id || !isCheckpoint(tx) || (date && tx.occurred_on > date)) continue;
+    if (!last || tx.occurred_on > last.occurred_on || (tx.occurred_on === last.occurred_on && writtenAt(tx) > writtenAt(last))) last = tx;
+  }
+  return last;
+}
+
+/**
+ * Balance at the end of `date` (inclusive); with no date, the balance after every movement.
+ *
+ * A checkpoint («Actualizar saldo») replaces everything before it: only what came after counts.
+ * That is later dates and, when the check was made on its own day, what was written down later
+ * that day. A check dated in the past is that day's closing balance, so it includes all of it.
+ */
 export function balanceAt(account: Account, txs: Tx[], date?: string): number {
-  let balance = account.opening_balance;
+  const check = lastCheckpoint(account, txs, date);
+  let balance = check ? check.checkpoint! : account.opening_balance;
+  const sameDayCounts = Boolean(check?.created_at && todayInBogota(new Date(check.created_at)) === check.occurred_on);
+  const checkedAt = check ? writtenAt(check) : 0;
   for (const tx of txs) {
     if (date && tx.occurred_on > date) continue;
+    if (check) {
+      if (tx === check || tx.occurred_on < check.occurred_on) continue;
+      if (tx.occurred_on === check.occurred_on && !(sameDayCounts && writtenAt(tx) > checkedAt)) continue;
+    }
     balance += effect(account, tx);
   }
   return balance;

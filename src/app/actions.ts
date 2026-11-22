@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { passwordProblem } from "@/lib/auth-links";
-import { ADJUSTMENT, allowedTxKinds, balanceAt, isDebt, paidMonth, parsePesos, todayInBogota, type Account, type AccountKind, type Tx, type TxKind } from "@/lib/finance";
+import { ADJUSTMENT, allowedTxKinds, balanceAt, isDebt, lastCheckpoint, paidMonth, parsePesos, todayInBogota, type Account, type AccountKind, type Tx, type TxKind } from "@/lib/finance";
 import { firstMonthFor } from "@/lib/installments";
 import { allPages } from "@/lib/paging";
 import { normalizePhone } from "@/lib/phone";
@@ -449,6 +449,8 @@ export async function resolveInbox(_prev: FormState, form: FormData): Promise<Fo
 
   const { error } = await supabase.from("transactions").insert({
     kind: "expense",
+    // When the phone reported it, not when it was reviewed: that places it against a checkpoint.
+    created_at: item.received_at,
     account_id,
     amount,
     occurred_on: item.occurred_on,
@@ -491,6 +493,7 @@ export async function markPaid(_prev: FormState, form: FormData): Promise<FormSt
   const forMonth = {
     ...(MONTH.test(month) && month !== occurred_on.slice(0, 7) ? { for_month: month } : {}),
     ...(forDate && (form.get("type") === "bill" || form.get("type") === "goal") ? { for_date: forDate } : {}),
+    ...(text(form, "written_at") && form.get("type") !== "goal" ? { created_at: text(form, "written_at") } : {}),
   };
 
   if (form.get("type") === "goal") {
@@ -540,7 +543,7 @@ export async function markPaid(_prev: FormState, form: FormData): Promise<FormSt
 }
 
 /** Unticks an item by deleting the payments that ticked it in that month (by their date, or marked for it). */
-export async function unmarkPaid(form: FormData): Promise<FormState> {
+export async function unmarkPaid(form: FormData): Promise<FormState & { writtenAt?: string }> {
   const supabase = await signedIn();
   const month = text(form, "month");
   if (!MONTH.test(month)) throw new Error("Mes no válido.");
@@ -548,7 +551,7 @@ export async function unmarkPaid(form: FormData): Promise<FormState> {
   const type = form.get("type");
   const failed = (message: string) => new Error(`No se pudo deshacer: ${message}`);
   // Read whole rows and pick in code: works the same before and after migration 0013.
-  type Row = { id: string; occurred_on: string; for_month?: string | null; for_date?: string | null; category?: string | null };
+  type Row = { id: string; occurred_on: string; for_month?: string | null; for_date?: string | null; category?: string | null; created_at?: string };
   // A date of something not monthly unticks only itself, never the month's other dates.
   const date = text(form, "for_date");
   const listed = new Set(text(form, "paid_ids").split(",").filter(Boolean));
@@ -582,7 +585,7 @@ export async function unmarkPaid(form: FormData): Promise<FormState> {
   const { error } = await supabase.from("transactions").delete().in("id", ids);
   if (error) throw failed(error.message);
   revalidatePath("/", "layout");
-  return {};
+  return { writtenAt: (rows as Row[]).find((r) => ids.includes(r.id))?.created_at };
 }
 
 const forMonthMissing = (message: string) => (/for_month/i.test(message) ? "Para marcar pagos de otro mes falta ejecutar la migración 0013 en Supabase." : null);
@@ -602,6 +605,8 @@ export async function updatePaid(_prev: FormState, form: FormData): Promise<Form
   try {
     const undone = await unmarkPaid(form);
     if (undone.error) return undone;
+    form.delete("written_at");
+    if (undone.writtenAt) form.set("written_at", undone.writtenAt);
   } catch {
     return { error: "No se pudo actualizar. Intenta de nuevo." };
   }
@@ -787,22 +792,29 @@ export async function adjustBalance(_prev: FormState, form: FormData): Promise<F
   );
   if (read.error) return { error: `No se pudo leer la cuenta: ${read.error.message}` };
   const diff = target - balanceAt(account as Account, read.rows, occurred_on);
-  if (diff === 0) return { message: "El saldo ya estaba al día." };
 
   const debt = isDebt(account);
   // For a debt, more owed is a charge (interest, fees, a purchase not yet recorded); less is a payment.
   const kind: TxKind = debt ? (diff > 0 ? "expense" : "payment") : diff > 0 ? "income" : "expense";
-  const { error } = await supabase.from("transactions").insert({
+  const row = {
     kind,
     account_id: id,
     amount: Math.abs(diff),
     occurred_on,
     category: ADJUSTMENT,
-    description: diff > 0 ? (debt ? "Subió la deuda: intereses o cargos" : "Saldo mayor al registrado") : debt ? "Bajó la deuda" : "Saldo menor al registrado",
-  });
+    description: diff === 0 ? "Coincidía con lo registrado" : diff > 0 ? (debt ? "Subió la deuda: intereses o cargos" : "Saldo mayor al registrado") : debt ? "Bajó la deuda" : "Saldo menor al registrado",
+  };
+  // The bank's balance is kept as a checkpoint, also when it matches: from there on it is what counts.
+  let { error } = await supabase.from("transactions").insert({ ...row, checkpoint: target });
+  if (error && /checkpoint/i.test(error.message) && !/check constraint/i.test(error.message)) {
+    // Before migration 0018: the difference, as before.
+    if (diff === 0) return { message: "El saldo ya estaba al día." };
+    ({ error } = await supabase.from("transactions").insert(row));
+  }
   if (error) return { error: `No se pudo ajustar: ${error.message}` };
   revalidatePath("/", "layout");
-  return { message: "Saldo actualizado." };
+  const later = lastCheckpoint({ id }, read.rows);
+  return { message: later && later.occurred_on > occurred_on ? "Guardado. El saldo de hoy no cambia: tienes una actualización más reciente." : "Saldo actualizado." };
 }
 
 const goalsMissing = (message: string) =>

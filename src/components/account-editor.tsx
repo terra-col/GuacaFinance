@@ -281,7 +281,7 @@ export function AccountHero({
               <DateField name="occurred_on" defaultValue={today} max={today} />
             </label>
             <p className="text-xs text-ink-3 sm:col-span-2">
-              Si no coincide con el extracto, escribe lo que dice el banco: la diferencia queda como un ajuste, que no cuenta como gasto ni como pago. Si te faltan movimientos, regístralos antes de ajustar.
+              Si no coincide con el extracto, escribe lo que dice el banco: la cuenta sigue desde ese número, y la diferencia no es gasto ni pago. Lo de días anteriores que registres después ya no lo mueve. Lo de hoy que registres después sí.
             </p>
           </div>
         )}
@@ -453,7 +453,8 @@ export function AccountHero({
             <form action={deleteAccount} className="rise mt-1 flex flex-col gap-3 rounded-2xl border border-debt/30 bg-debt/8 p-4">
               <input type="hidden" name="id" value={account.id} />
               <p className="text-ink-2">
-                Se borran también sus {movements} movimientos y deja de contar en tu balance. No se puede deshacer.
+                Se borran también sus {movements} movimientos y deja de contar en tu balance.
+                {debt ? " Lo que le pagaste desde tus cuentas sigue descontado de ellas." : ""} No se puede deshacer.
               </p>
               <div className="flex flex-wrap gap-2">
                 <SubmitButton className="btn-quiet border-debt/50 text-ink">Sí, eliminar</SubmitButton>

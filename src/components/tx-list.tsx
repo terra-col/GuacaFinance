@@ -72,7 +72,9 @@ export function TxList({
   }, [armed]);
 
   const title = (tx: Tx) =>
-    isAdjustment(tx)
+    tx.checkpoint !== null && tx.checkpoint !== undefined
+      ? `Saldo del banco · ${accountNames[tx.account_id] ?? "cuenta"}`
+      : isAdjustment(tx)
       ? `Ajuste de saldo · ${accountNames[tx.account_id] ?? "cuenta"}`
       : tx.kind === "payment" ? `Pago a ${accountNames[tx.account_id] ?? "cuenta"}` : (tx.description ?? (tx.kind === "income" ? "Ingreso" : (tx.category ?? "Gasto")));
   const detail = (tx: Tx) =>
@@ -89,6 +91,8 @@ export function TxList({
 
   // An adjustment's sign says which way the balance moved: on a debt, «+» is owing more.
   const sign = (tx: Tx) => {
+    // A checkpoint is the balance itself, not a difference.
+    if (tx.checkpoint !== null && tx.checkpoint !== undefined) return "";
     if (!isAdjustment(tx)) return LOOK[tx.kind].sign;
     const account = accounts.find((a) => a.id === tx.account_id);
     return tx.kind === "income" || (tx.kind === "expense" && account && isDebt(account)) ? "+" : "−";
@@ -220,7 +224,7 @@ export function TxList({
                       </div>
                       <p className={`display num shrink-0 rounded-xl px-2 py-0.5 text-lg ${isAdjustment(tx) ? "text-ink-3" : tx.kind === "income" ? "bg-savings/15" : ""}`}>
                         {sign(tx)}
-                        {formatCOP(tx.amount)}
+                        {formatCOP(tx.checkpoint ?? tx.amount)}
                       </p>
                       {/* Mouse and keyboard: the same actions, shown on hover or focus. Touch uses the swipe. */}
                       <span className="flex shrink-0 gap-0.5 [@media(pointer:coarse)]:hidden">
