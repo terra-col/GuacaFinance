@@ -1194,3 +1194,37 @@ html[data-privacy="on"]:not([data-masked]) body {
     animation: none;
   }
 }
+
+/* Scrollbars in the app's look, everywhere (page, modals, lists, pickers): a thin rounded thumb in
+   the theme's lavender line colour, no track and no arrows. In base, so a utility that hides a
+   scrollbar (the card carousels) still wins. */
+@layer base {
+  /* Firefox only understands the standard properties. Chrome and Safari use the rules below, which
+     allow the rounded thumb (Chrome ignores them once the standard ones are set). */
+  @supports not selector(::-webkit-scrollbar) {
+    * {
+      scrollbar-width: thin;
+      scrollbar-color: var(--line-strong) transparent;
+    }
+  }
+  ::-webkit-scrollbar {
+    width: 12px;
+    height: 12px;
+  }
+  ::-webkit-scrollbar-track,
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background-color: var(--line-strong);
+    background-clip: padding-box;
+    border: 3px solid transparent;
+    border-radius: 999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: color-mix(in oklab, var(--brand) 60%, var(--line-strong));
+  }
+  ::-webkit-scrollbar-button {
+    display: none;
+  }
+}
