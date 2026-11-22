@@ -199,9 +199,20 @@ html[data-scale="lg"] {
 }
 
 body {
-  background: var(--aurora), var(--bg);
-  background-attachment: fixed;
+  background: var(--bg);
   color: var(--ink);
+}
+/* The aurora stays put while the page scrolls. On its own fixed layer, not with
+   background-attachment: fixed: Chrome repaints a fixed background in tiles, and at some zoom
+   levels it left a 1 px seam that every frosted card blurred into a grey band at the same spot. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: var(--aurora), var(--bg);
+  will-change: transform;
 }
 
 :focus-visible {
@@ -236,9 +247,6 @@ body {
     box-shadow: var(--shadow);
     -webkit-backdrop-filter: blur(20px) saturate(1.5);
     backdrop-filter: blur(20px) saturate(1.5);
-    /* Its own layer: Chrome sometimes repaints the blur behind a card in strips when something
-       inside changes (an animated number), leaving a band; a layer of its own repaints whole. */
-    transform: translateZ(0);
     @apply rounded-3xl p-5 sm:p-6;
   }
   /* Action gradient: fixed in both themes so white text keeps at least 4.5:1 on it. */
