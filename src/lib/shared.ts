@@ -15,7 +15,16 @@ export interface SharedMember {
   group_id: string;
   /** null: a friend without an account (or who has not joined yet). */
   user_id: string | null;
+  /** As the person has them in their contacts; else the group's name for them. */
   name: string;
+  /** From the person's own contacts: nobody else sees it. */
+  phone?: string | null;
+}
+
+export interface SharedRequest {
+  member_id: string;
+  group_id: string;
+  user_id: string;
 }
 
 export interface SharedEntry {
@@ -51,6 +60,10 @@ export interface SharedData {
   entries: SharedEntry[];
   shares: SharedShare[];
   links: SharedLink[];
+  /** Invitations inside Guaca: to the person's groups, and to the person. */
+  requests?: SharedRequest[];
+  /** Whether groups, people and expenses can be edited (migration 0020). */
+  editable?: boolean;
 }
 
 export const NO_SHARED: SharedData = { groups: [], members: [], entries: [], shares: [], links: [] };

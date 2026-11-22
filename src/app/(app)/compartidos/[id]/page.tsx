@@ -2,7 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Icon, txIconName } from "@/components/icons";
 import { Modal } from "@/components/modal";
-import { AddPersonForm, DeleteEntryForm, DeleteGroupForm, ExpenseForm, InviteForm, RecordForm, SettlementForm } from "@/components/shared-forms";
+import { AddPersonForm, DeleteEntryForm, DeleteGroupForm, EditPersonForm, ExpenseForm, InviteForm, RecordForm, RenameGroupForm, SettlementForm, type EditableEntry } from "@/components/shared-forms";
+import { knownPeople } from "@/lib/contacts";
 import { loadData } from "@/lib/data";
 import { favoriteAccountId, favoriteFirst, formatCOP, formatDate, holdsMoney, isAdjustment } from "@/lib/finance";
 import { groupNets, memberOf, settleUp } from "@/lib/shared";
@@ -11,7 +12,7 @@ const SMALL = "text-xs font-semibold text-brand";
 
 export default async function GroupPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ dividir?: string }> }) {
   const { id } = await params;
-  const { shared, accounts, txs, user, today } = await loadData();
+  const { supabase, shared, accounts, txs, user, today } = await loadData();
   const group = shared.groups.find((g) => g.id === id);
   const me = memberOf(id, shared, user.id);
   if (!group || !me) notFound();
@@ -37,6 +38,18 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
   const dividing = dividir && !alreadyLinked ? txs.find((t) => t.id === dividir && t.kind === "expense" && !isAdjustment(t)) : undefined;
   const form = { group: id, members: people, me: me.id, favorite, today };
 
+  const known = shared.editable ? knownPeople(shared, user.id) : null;
+  const pending = new Map(shared.requests?.filter((r) => r.group_id === id).map((r) => [r.member_id, r.user_id]));
+  // Offered to add: whoever is neither in the group nor invited to it.
+  const addable = known?.filter(
+    (k) =>
+      !members.some((m) => (k.userId ? m.user_id === k.userId : k.phone ? m.phone === k.phone : m.name.toLocaleLowerCase("es") === k.name.toLocaleLowerCase("es"))) &&
+      !(k.userId && [...pending.values()].includes(k.userId)),
+  );
+  // Other people's links are theirs alone, so whether anyone else recorded it is asked to the database.
+  const { data: recorded } = shared.editable && entries.length ? await supabase.rpc("shared_recorded_by_others", { p_group: id }) : { data: null };
+  const recordedByOthers = new Set<string>((recorded as string[] | null) ?? []);
+
   return (
     <>
       <div className="flex flex-col gap-3 pt-2">
@@ -46,6 +59,11 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div className="min-w-0">
             <h1 className="display text-3xl break-words">{group.name}</h1>
+            {known && (
+              <Modal label="Editar grupo" title="Editar grupo" buttonClass={SMALL}>
+                <RenameGroupForm group={id} name={group.name} />
+              </Modal>
+            )}
             <p className="text-sm text-ink-2">
               {mine === 0 ? (
                 "Estás al día."
@@ -118,7 +136,7 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
             Personas
           </h2>
           <Modal label="+ Agregar" title="Agregar persona" buttonClass="btn-quiet h-9 px-3 text-sm">
-            <AddPersonForm group={id} />
+            <AddPersonForm group={id} known={addable ?? null} />
           </Modal>
         </div>
         <ul className="mt-1 divide-y divide-line">
@@ -132,14 +150,26 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
                     {m.name}
                     {m.id === me.id ? " (tú)" : ""}
                   </p>
-                  {!m.user_id && (
-                    <div className="flex flex-wrap gap-x-2 text-xs text-ink-3">
-                      Sin cuenta
-                      <Modal label="Invitar" title={`Invitar a ${m.name}`} buttonClass={SMALL}>
-                        <InviteForm member={{ id: m.id, name: m.name }} groupName={group.name} removable={!inHistory} />
+                  <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-ink-3">
+                    {!m.user_id && (
+                      <>
+                        {pending.has(m.id) ? "Invitación enviada" : "Sin unirse"}
+                        <Modal label="Invitar" title={`Invitar a ${m.name}`} buttonClass={SMALL}>
+                          <InviteForm member={{ id: m.id, name: m.name }} groupName={group.name} phone={m.phone ?? ""} removable={!known && !inHistory} />
+                        </Modal>
+                      </>
+                    )}
+                    {known && (
+                      <Modal label="Editar" title={m.id === me.id ? "Tu nombre en el grupo" : `Editar a ${m.name}`} buttonClass={SMALL}>
+                        <EditPersonForm
+                          member={{ id: m.id, name: m.name, phone: m.phone ?? "" }}
+                          who={m.id === me.id ? "me" : m.user_id ? "joined" : "guest"}
+                          known={addable ?? []}
+                          removable={!m.user_id && !inHistory}
+                        />
                       </Modal>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
                 <p className="shrink-0 text-right">
                   <span className="block text-xs text-ink-3">{net > 0 ? "le deben" : net < 0 ? "debe" : "al día"}</span>
@@ -167,6 +197,22 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
               const ownPart = parts.find((s) => s.member_id === me.id)?.amount ?? 0;
               const tx = linkOf.get(entry.id);
               const canDelete = entry.created_by === user.id || (entry.created_by === null && payer);
+              const link = shared.links.find((l) => l.entry_id === entry.id);
+              const editable: EditableEntry | null =
+                known && (entry.created_by === user.id || payer)
+                  ? {
+                      id: entry.id,
+                      amount: entry.amount,
+                      description: entry.description,
+                      category: entry.category,
+                      occurred_on: entry.occurred_on,
+                      paidBy: entry.paid_by,
+                      shares: Object.fromEntries(parts.map((s) => [s.member_id, s.amount])),
+                      account: link && link.created_tx !== false ? (txs.find((t) => t.id === link.tx_id)?.account_id ?? null) : null,
+                      ownMovement: link?.created_tx === false,
+                      othersRecorded: recordedByOthers.has(entry.id),
+                    }
+                  : null;
               return (
                 <li key={entry.id} className="flex items-start gap-3 py-3">
                   <span className={`badge shrink-0 ${settled ? "bg-brand/15" : "bg-debt/15"}`} aria-hidden="true">
@@ -185,6 +231,15 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
                       {(payer || receiver) && !tx && (
                         <Modal label="Registrar en mi cuenta" title="Registrar en mi cuenta" buttonClass={SMALL}>
                           <RecordForm entry={entry.id} accounts={settled ? money : payable} favorite={favorite} />
+                        </Modal>
+                      )}
+                      {editable && (
+                        <Modal label="Editar" title={settled ? "Editar pago" : "Editar gasto"} buttonClass={SMALL}>
+                          {settled ? (
+                            <SettlementForm {...form} accounts={money} entry={editable} transfer={{ from: entry.paid_by, to: parts[0]?.member_id, amount: entry.amount }} />
+                          ) : (
+                            <ExpenseForm {...form} accounts={payable} entry={editable} />
+                          )}
                         </Modal>
                       )}
                       {canDelete && (

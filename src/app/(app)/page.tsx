@@ -55,9 +55,10 @@ function greetingLine(today: string) {
 }
 
 async function Dashboard({ searchParams }: Props) {
-  const { accounts, txs, flows, position, bills, inbox, incomes, budgets, skips, planReady, goals, deposits, user, today } = await loadData();
+  const { accounts, txs, flows, position, shared, bills, inbox, incomes, budgets, skips, planReady, goals, deposits, user, today } = await loadData();
   const addNow = (await searchParams).nueva === "1";
   const name = profileName(user);
+  const invitations = shared.requests?.filter((r) => r.user_id === user.id).length ?? 0;
   const greeting = (
     <div className="pt-1">
       <div className="flex items-center gap-3">
@@ -82,7 +83,7 @@ async function Dashboard({ searchParams }: Props) {
     return (
       <>
       {greeting}
-      <SharedSummary position={position} />
+      <SharedSummary position={position} invitations={invitations} />
       <section className="max-w-xl pt-2" data-tour="accounts">
         <h2 className="display text-3xl">Empieza por lo que tienes y lo que debes</h2>
         <p className="mt-3 text-ink-2">
@@ -160,7 +161,7 @@ async function Dashboard({ searchParams }: Props) {
         </div>
       </div>
 
-      <SharedSummary position={position} />
+      <SharedSummary position={position} invitations={invitations} />
 
       <section aria-labelledby="money-title" data-tour="accounts">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">

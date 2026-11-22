@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { deleteTx } from "@/app/actions";
 import { formatCOP, formatDate, isAdjustment, isDebt, monthName, relativeDay, daysBetween, type Account, type Tx, type TxKind } from "@/lib/finance";
@@ -57,6 +58,9 @@ export function TxList({
 }) {
   const accountNames = useMemo(() => Object.fromEntries(accounts.map((a) => [a.id, a.name])), [accounts]);
   const [editing, setEditing] = useState<Tx | null>(null);
+  const router = useRouter();
+  // A shared one is edited in its group.
+  const edit = (tx: Tx) => (shared[tx.id] ? router.push(`/compartidos/${shared[tx.id].groupId}`) : setEditing(tx));
   const closeEditor = useCallback(() => setEditing(null), []);
   // Only one row stays swiped open at a time.
   const [swiped, setSwiped] = useState<string | null>(null);
@@ -177,8 +181,8 @@ export function TxList({
               <ul>
                 {day.items.map((tx) => {
                   const look = isAdjustment(tx) ? ADJUSTED : shared[tx.id]?.kind === "settlement" ? SETTLED : LOOK[tx.kind];
-                  // Their amount belongs to a correction or to a group.
-                  const locked = isAdjustment(tx) || Boolean(shared[tx.id]);
+                  // An adjustment's amount belongs to a correction.
+                  const locked = isAdjustment(tx);
                   return (
                     <SwipeRow
                       key={tx.id}
@@ -192,7 +196,7 @@ export function TxList({
                             type="button"
                             className="swipe-action bg-brand"
                             disabled={locked}
-                            onClick={() => { setSwiped(null); setEditing(tx); }}
+                            onClick={() => { setSwiped(null); edit(tx); }}
                           >
                             <Icon name="edit" className="size-5" />
                             Editar
@@ -231,14 +235,14 @@ export function TxList({
                         {!locked ? (
                           <button
                             type="button"
-                            onClick={() => setEditing(tx)}
+                            onClick={() => edit(tx)}
                             className="row-tool"
                             aria-label={`Editar ${title(tx)} del ${formatDate(tx.occurred_on)}`}
                           >
                             <Icon name="edit" className="size-4" />
                           </button>
                         ) : (
-                          // Adjustments and shared ones are not edited, but keep the room so every amount lines up.
+                          // Adjustments are not edited, but keep the room so every amount lines up.
                           <span className="row-tool invisible" aria-hidden="true">
                             <Icon name="edit" className="size-4" />
                           </span>

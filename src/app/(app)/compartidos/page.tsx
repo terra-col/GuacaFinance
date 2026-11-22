@@ -1,18 +1,27 @@
 import Link from "next/link";
 import { Modal } from "@/components/modal";
 import { MovesSwitch } from "@/components/moves-switch";
-import { GroupForm } from "@/components/shared-forms";
+import { GroupForm, RequestCard } from "@/components/shared-forms";
+import { knownPeople } from "@/lib/contacts";
 import { profileName } from "@/lib/brand";
 import { loadData } from "@/lib/data";
 import { formatCOP, isAdjustment } from "@/lib/finance";
 
 export default async function SharedPage({ searchParams }: { searchParams: Promise<{ dividir?: string }> }) {
-  const { shared, sharedReady, position, txs, user } = await loadData();
+  const { supabase, shared, sharedReady, position, txs, user } = await loadData();
   const { dividir } = await searchParams;
   const linked = shared.links.some((l) => l.tx_id === dividir);
   const tx = dividir && !linked ? txs.find((t) => t.id === dividir && t.kind === "expense" && !isAdjustment(t)) : undefined;
   const me = profileName(user);
   const query = tx ? `?dividir=${tx.id}` : "";
+  const known = shared.editable ? knownPeople(shared, user.id) : null;
+  // The names of groups one is not in yet come only through this function.
+  let invitations: { member_id: string; group_name: string; member_name: string; invited_by_name: string | null }[] = [];
+  if (shared.requests?.some((r) => r.user_id === user.id)) {
+    const { data, error } = await supabase.rpc("shared_my_requests");
+    if (error) throw new Error(`No se pudieron leer tus invitaciones: ${error.message}`);
+    invitations = data ?? [];
+  }
 
   return (
     <>
@@ -20,7 +29,7 @@ export default async function SharedPage({ searchParams }: { searchParams: Promi
         <h1 className="display text-3xl">Movimientos</h1>
         {sharedReady && (
           <Modal label="+ Grupo" title="Nuevo grupo o persona" buttonClass="btn h-11 rounded-2xl px-4 text-sm">
-            <GroupForm me={me} tx={tx?.id} />
+            <GroupForm me={me} tx={tx?.id} known={known} />
           </Modal>
         )}
       </div>
@@ -30,6 +39,13 @@ export default async function SharedPage({ searchParams }: { searchParams: Promi
         <p className="card text-sm text-ink-2">Los gastos compartidos todavía no están activos.</p>
       ) : (
         <>
+          {invitations.length > 0 && (
+            <ul className="flex flex-col gap-3" aria-label="Invitaciones">
+              {invitations.map((r) => (
+                <RequestCard key={r.member_id} member={r.member_id} group={r.group_name} as={r.member_name} from={r.invited_by_name} />
+              ))}
+            </ul>
+          )}
           {tx && (
             <p role="status" className="card text-sm text-ink-2">
               Vas a dividir <strong className="num text-ink">{formatCOP(tx.amount)}</strong>
@@ -56,7 +72,7 @@ export default async function SharedPage({ searchParams }: { searchParams: Promi
               </p>
               <p className="text-sm text-ink-3">El grupo ve solo sus gastos: nunca tus cuentas, saldos ni otros movimientos.</p>
               <Modal label="Empezar" title="Nuevo grupo o persona">
-                <GroupForm me={me} tx={tx?.id} />
+                <GroupForm me={me} tx={tx?.id} known={known} />
               </Modal>
             </section>
           ) : (
