@@ -33,10 +33,18 @@ export function LoginForm({ startWithSignup = false }: { startWithSignup?: boole
         </div>
       </div>
       {signup && (
-        <label className="field rise">
-          Tu nombre
-          <input className="input" name="name" autoComplete="given-name" placeholder="Así te saludamos en la app" maxLength={60} required />
-        </label>
+        <div className="rise grid gap-4">
+          <label className="field">
+            Tu nombre
+            <input className="input" name="name" autoComplete="given-name" placeholder="Así te saludamos en la app" maxLength={60} required />
+          </label>
+          <label className="field">
+            <span>
+              Celular <span className="font-normal text-ink-3">(opcional)</span>
+            </span>
+            <input className="input num" type="tel" name="phone" inputMode="tel" autoComplete="tel-national" placeholder="300 123 4567" maxLength={20} />
+          </label>
+        </div>
       )}
       <label className="field">
         Correo

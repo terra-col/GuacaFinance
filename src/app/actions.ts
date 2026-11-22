@@ -7,6 +7,7 @@ import { redirect } from "next/navigation";
 import { passwordProblem } from "@/lib/auth-links";
 import { ADJUSTMENT, allowedTxKinds, balanceAt, isDebt, paidMonth, parsePesos, todayInBogota, type Account, type AccountKind, type Tx, type TxKind } from "@/lib/finance";
 import { firstMonthFor } from "@/lib/installments";
+import { normalizePhone } from "@/lib/phone";
 import { requestOrigin } from "@/lib/request-origin";
 import { REMEMBER_COOKIE, createClient, isSupabaseConfigured } from "@/lib/supabase/server";
 
@@ -47,11 +48,13 @@ export async function authenticate(_prev: FormState, form: FormData): Promise<Fo
   if (form.get("intent") === "signup") {
     const name = text(form, "name").slice(0, 60);
     if (!name) return { error: "Escribe tu nombre: así te saludamos en la app." };
+    const phone = normalizePhone(text(form, "phone"));
+    if (phone === "invalid") return { error: "Escribe un celular de Colombia de 10 dígitos (empieza por 3), o déjalo vacío." };
     // The confirmation link comes back through /auth/confirm, which opens the session.
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      options: { emailRedirectTo: `${await requestOrigin()}/auth/confirm?next=/`, data: { name } },
+      options: { emailRedirectTo: `${await requestOrigin()}/auth/confirm?next=/`, data: phone ? { name, phone } : { name } },
     });
     if (error) return { error: error.message };
     if (!data.session) return { message: "Cuenta creada. Abre el enlace que te enviamos al correo para entrar." };
@@ -107,11 +110,13 @@ export async function updateProfile(_prev: FormState, form: FormData): Promise<F
   if (!user) redirect("/login");
   const name = text(form, "name").slice(0, 60);
   if (!name) return { error: "Escribe tu nombre." };
+  const phone = normalizePhone(text(form, "phone"));
+  if (phone === "invalid") return { error: "Escribe un celular de Colombia de 10 dígitos (empieza por 3), o déjalo vacío." };
   const email = text(form, "email").toLowerCase();
-  if (!/^[^s@]+@[^s@]+.[^s@]+$/.test(email)) return { error: "Ese correo no parece válido." };
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { error: "Ese correo no parece válido." };
   const emailChanged = email !== (user.email ?? "").toLowerCase();
   const { error } = await supabase.auth.updateUser(
-    { data: { name }, ...(emailChanged ? { email } : {}) },
+    { data: { name, phone }, ...(emailChanged ? { email } : {}) },
     emailChanged ? { emailRedirectTo: `${await requestOrigin()}/auth/confirm?next=/ajustes` } : undefined,
   );
   if (error) return { error: error.status === 429 ? "Espera un momento antes de volver a intentarlo." : `No se pudo guardar: ${error.message}` };

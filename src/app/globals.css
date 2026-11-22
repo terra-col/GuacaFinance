@@ -1175,3 +1175,22 @@ a.card:active {
 html[data-privacy="on"]:not([data-masked]) body {
   filter: blur(12px);
 }
+
+/* The cards floating behind the login: a slow drift up and down, each at its own moment. */
+@keyframes float-card {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-12px);
+  }
+}
+.float-card {
+  animation: float-card 9s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .float-card {
+    animation: none;
+  }
+}
