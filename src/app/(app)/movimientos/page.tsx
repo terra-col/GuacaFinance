@@ -5,7 +5,7 @@ import { budgetViews } from "@/lib/budget";
 import { NewMovementButton } from "@/components/quick-add";
 import { TxList } from "@/components/tx-list";
 import { loadData } from "@/lib/data";
-import { ADJUSTMENT, formatCOP, monthLabel, spendingByCategory } from "@/lib/finance";
+import { formatCOP, monthFlows, monthLabel, spendingByCategory } from "@/lib/finance";
 
 export default async function TransactionsPage() {
   const { accounts, txs, inbox, budgets, planReady, today } = await loadData();
@@ -22,11 +22,11 @@ export default async function TransactionsPage() {
   }
 
   const month = today.slice(0, 7);
-  const sum = (kind: string) => txs.filter((t) => t.kind === kind && t.occurred_on.startsWith(month)).reduce((s, t) => s + t.amount, 0);
+  const sum = monthFlows(txs, month);
   const flows = [
-    { label: "Ingresos", amount: sum("income"), bar: "fill-have" },
-    { label: "Gastos", amount: sum("expense"), bar: "fill-owe" },
-    { label: "Pagos a deuda", amount: sum("payment"), bar: "fill-brand" },
+    { label: "Ingresos", amount: sum.income, bar: "fill-have" },
+    { label: "Gastos", amount: sum.expense, bar: "fill-owe" },
+    { label: "Pagos a deuda", amount: sum.payment, bar: "fill-brand" },
   ];
   const largest = Math.max(1, ...flows.map((f) => f.amount));
   const spendable = accounts.filter((a) => a.kind !== "loan").map(({ id, name }) => ({ id, name }));
@@ -59,8 +59,8 @@ export default async function TransactionsPage() {
         <BudgetsCard
           views={budgetViews(budgets, txs, month, today)}
           current
-          // Where the month's spending went; balance adjustments are not spending.
-          totals={spendingByCategory(txs.filter((t) => t.category !== ADJUSTMENT), month)}
+          // Where the month's spending went.
+          totals={spendingByCategory(txs, month)}
         />
       )}
 

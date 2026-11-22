@@ -126,7 +126,7 @@ export default async function AccountPage({ params }: { params: Promise<{ id: st
 
 
       <h2 className="display text-2xl">Movimientos de esta cuenta</h2>
-      <TxList txs={own} accounts={accounts.map(({ id, name, kind }) => ({ id, name, kind }))} today={today} />
+      <TxList txs={own} showAdjustments accounts={accounts.map(({ id, name, kind }) => ({ id, name, kind }))} today={today} />
     </>
   );
 }

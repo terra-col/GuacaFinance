@@ -268,7 +268,9 @@ export function AccountHero({
       <div hidden={mode !== "data"} className="flex flex-col gap-5">
         {/* The balance, open like the other numbers: saved with them, as an adjustment if it changed. */}
         {debt && (
-          <div className="grid gap-4 rounded-2xl bg-brand/6 p-4 sm:grid-cols-2">
+          // key: a movement saved meanwhile refreshes the typed field along with `balance_shown`.
+          // Out of step, saving the other fields would record an adjustment undoing that movement.
+          <div key={balance} className="grid gap-4 rounded-2xl bg-brand/6 p-4 sm:grid-cols-2">
             <input type="hidden" name="balance_shown" value={Math.max(0, balance)} />
             <label className="field">
               Saldo de la deuda hoy
@@ -279,7 +281,7 @@ export function AccountHero({
               <DateField name="occurred_on" defaultValue={today} max={today} />
             </label>
             <p className="text-xs text-ink-3 sm:col-span-2">
-              Si no coincide con el extracto, escribe lo que dice el banco: la diferencia queda registrada como un ajuste (intereses, cargos o un pago).
+              Si no coincide con el extracto, escribe lo que dice el banco: la diferencia queda como un ajuste, que no cuenta como gasto ni como pago. Si te faltan movimientos, regístralos antes de ajustar.
             </p>
           </div>
         )}

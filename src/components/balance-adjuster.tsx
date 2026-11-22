@@ -43,7 +43,7 @@ export function BalanceAdjuster({
           <input type="hidden" name="id" value={id} />
           <p className="text-sm text-ink-2">
             Aquí dice <span className="num font-semibold text-ink">{formatCOP(current)}</span>. Escribe {debt ? "lo que debes según el banco" : "el saldo que ves en el banco"} y la
-            diferencia queda registrada como un ajuste.
+            diferencia queda como un ajuste, que no cuenta como gasto ni como ingreso. Si te faltan movimientos, regístralos antes: si los agregas después, se restan o suman dos veces.
           </p>
           <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
             <label className="field">

@@ -1,11 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { formatPesosInput } from "@/lib/finance";
+import { formatPesosInput, parsePesos } from "@/lib/finance";
 
 /**
- * A peso amount that formats itself as you type: "$ 1.500.000". The server
- * reads only the digits, so the formatted text is submitted as is.
+ * A peso amount that formats itself as you type: "$ 1.500.000". The formatted
+ * text is submitted as is: the server's parsePesos reads it, without cents.
  */
 export function MoneyInput({
   name,
@@ -34,7 +34,7 @@ export function MoneyInput({
       onChange={(e) => {
         const next = formatPesosInput(e.target.value);
         setValue(next);
-        onValue?.(Number(next.replace(/\D/g, "")) || 0);
+        onValue?.(parsePesos(next) ?? 0);
         // Keep the caret at the end: the dots move as digits are typed.
         const el = e.target;
         requestAnimationFrame(() => el.setSelectionRange(el.value.length, el.value.length));

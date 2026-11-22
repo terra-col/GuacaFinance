@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useId, useMemo, useRef, useState } from "react";
+import { createContext, useContext, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { CATEGORIES } from "@/lib/finance";
 import { useAnchoredPopover, useFinePointer } from "./use-anchored-popover";
@@ -35,6 +35,26 @@ function Star() {
     <svg viewBox="0 0 24 24" className="size-3.5 shrink-0" aria-label="Favorita">
       <path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.5 9.7l5.9-.9z" fill="#FFC83D" stroke="#E0A100" strokeWidth={1.4} strokeLinejoin="round" />
     </svg>
+  );
+}
+
+/**
+ * The phone's own select. After a form is sent React resets it, and a select then goes back to
+ * its default option (the first one) while the state still holds the choice: the next try would
+ * save another account. Keeping the choice as the default makes the reset harmless.
+ */
+function NativeSelect({ value, onPick, children, ...rest }: { value: string; onPick: (value: string) => void; children: React.ReactNode; name?: string; required?: boolean }) {
+  const select = useRef<HTMLSelectElement>(null);
+  useLayoutEffect(() => {
+    const el = select.current;
+    if (!el) return;
+    for (const option of el.options) option.defaultSelected = option.value === value;
+    if ([...el.options].some((option) => option.value === value)) el.value = value;
+  });
+  return (
+    <select ref={select} className="input" value={value} onChange={(e) => onPick(e.target.value)} {...rest}>
+      {children}
+    </select>
   );
 }
 
@@ -75,13 +95,13 @@ export function SelectField({
 
   if (!fine) {
     return (
-      <select className="input" name={name} value={value} onChange={(e) => set(e.target.value)} required={required}>
+      <NativeSelect name={name} value={value} onPick={set} required={required}>
         {options.map((o) => (
           <option key={o.value} value={o.value}>
             {o.star ? `★ ${o.label}` : o.label}
           </option>
         ))}
-      </select>
+      </NativeSelect>
     );
   }
 
@@ -178,11 +198,65 @@ export function CategoriesProvider({ categories, children }: { categories: strin
   return <CategoriesContext.Provider value={categories}>{children}</CategoriesContext.Provider>;
 }
 
+interface CategoryProps {
+  name: string;
+  defaultValue?: string;
+  required?: boolean;
+  placeholder?: string;
+}
+
+/** A category: the combobox with a mouse or trackpad, the phone's own picker on touch screens. */
+export function CategoryField(props: CategoryProps) {
+  return useFinePointer() ? <CategoryCombobox {...props} /> : <CategorySelect {...props} />;
+}
+
+const NEW_CATEGORY = "__nueva__";
+
+/** On touch screens: the native picker, ending in a way to write a category that is not there yet. */
+function CategorySelect({ name, defaultValue = "", required }: CategoryProps) {
+  const categories = useContext(CategoriesContext);
+  const [value, setValue] = useState(defaultValue);
+  const [writing, setWriting] = useState<string | null>(null);
+
+  if (writing !== null) {
+    return (
+      <>
+        <input
+          className="input"
+          name={name}
+          value={writing}
+          onChange={(e) => setWriting(e.target.value)}
+          placeholder="Nombre de la categoría"
+          autoComplete="off"
+          autoFocus
+          required={required}
+        />
+        <button type="button" data-category-list className="self-start py-1 text-sm font-semibold text-brand" onClick={() => setWriting(null)}>
+          Elegir de la lista
+        </button>
+      </>
+    );
+  }
+  // One saved before and no longer in the list still shows as chosen.
+  const options = !value || categories.includes(value) ? categories : [value, ...categories];
+  return (
+    <NativeSelect name={name} value={value} required={required} onPick={(v) => (v === NEW_CATEGORY ? setWriting("") : setValue(v))}>
+      <option value="">Sin categoría</option>
+      {options.map((c) => (
+        <option key={c} value={c}>
+          {c}
+        </option>
+      ))}
+      <option value={NEW_CATEGORY}>+ Nueva categoría…</option>
+    </NativeSelect>
+  );
+}
+
 /**
- * A category: type to filter the list of existing ones (the app's and the person's own), pick one,
- * or keep a new one with «Agregar». Works the same on phones (there is no good native equivalent).
+ * With a mouse: type to filter the list of existing ones (the app's and the person's own), pick
+ * one, or keep a new one with «Agregar».
  */
-export function CategoryField({ name, defaultValue = "", required, placeholder = "Escribe o elige" }: { name: string; defaultValue?: string; required?: boolean; placeholder?: string }) {
+function CategoryCombobox({ name, defaultValue = "", required, placeholder = "Escribe o elige" }: CategoryProps) {
   const categories = useContext(CategoriesContext);
   const [value, setValue] = useState(defaultValue);
   const [query, setQuery] = useState<string | null>(null); // null: show all (just opened)

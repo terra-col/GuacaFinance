@@ -4,13 +4,13 @@ import { advise } from "./advice.ts";
 import { budgetViews, incomeChecklist, monthPlan, type Budget, type Income } from "./budget.ts";
 import { debtView } from "./debts.ts";
 import {
-  ADJUSTMENT,
   KIND_LABEL,
   balanceAt,
   formatCOP,
   holdsMoney,
   isDebt,
   lastMonths,
+  monthFlows,
   monthLabel,
   shiftMonth,
   spendingByCategory,
@@ -130,10 +130,7 @@ export function advisorContext({ accounts, txs, bills, goals, deposits, incomes 
 
   lines.push("\n## Últimos 3 meses (según lo registrado)");
   for (const m of months) {
-    const inMonth = txs.filter((x) => x.occurred_on.startsWith(m));
-    const income = inMonth.filter((x) => x.kind === "income").reduce((s, x) => s + x.amount, 0);
-    const spent = inMonth.filter((x) => x.kind === "expense").reduce((s, x) => s + x.amount, 0);
-    const paid = inMonth.filter((x) => x.kind === "payment" && x.category !== ADJUSTMENT).reduce((s, x) => s + x.amount, 0);
+    const { income, expense: spent, payment: paid } = monthFlows(txs, m);
     const top = spendingByCategory(txs, m)
       .slice(0, 5)
       .map((c) => `${c.category} ${formatCOP(c.amount)}`)

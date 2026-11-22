@@ -92,6 +92,12 @@ export const KIND_LABEL: Record<AccountKind, string> = {
 /** Category of the movements "Actualizar saldo" records. They reconcile; they are not payments the person made. */
 export const ADJUSTMENT = "Ajuste de saldo";
 
+/**
+ * An adjustment moves a balance and nothing else: it is never income, spending or a payment.
+ * Every total of what came in or went out leaves it out.
+ */
+export const isAdjustment = (tx: Pick<Tx, "category">) => tx.category === ADJUSTMENT;
+
 export const CATEGORIES = ["Ocio", "Mercado", "Restaurantes", "Transporte", "Hogar", "Salud", "Suscripciones", "Recibos", "Intereses y cargos", "Otros"];
 
 const CATEGORY_ICON: Record<string, string> = {
@@ -254,13 +260,20 @@ export interface CategoryTotal {
 export function spendingByCategory(txs: Tx[], month: string): CategoryTotal[] {
   const sums = new Map<string, number>();
   for (const tx of txs) {
-    if (tx.kind !== "expense" || !tx.occurred_on.startsWith(month)) continue;
+    if (tx.kind !== "expense" || isAdjustment(tx) || !tx.occurred_on.startsWith(month)) continue;
     const category = tx.category?.trim() || "Sin categoría";
     sums.set(category, (sums.get(category) ?? 0) + tx.amount);
   }
   return [...sums.entries()]
     .map(([category, amount]) => ({ category, amount }))
     .sort((a, b) => b.amount - a.amount);
+}
+
+/** What came in, was spent and was paid to debts in a 'YYYY-MM' month. */
+export function monthFlows(txs: Tx[], month: string): Record<TxKind, number> {
+  const flows = { income: 0, expense: 0, payment: 0 };
+  for (const tx of txs) if (!isAdjustment(tx) && tx.occurred_on.startsWith(month)) flows[tx.kind] += tx.amount;
+  return flows;
 }
 
 /** The next `count` dates on or after `today` that fall on `dueDay`, clamped to short months. */
@@ -297,10 +310,21 @@ const copCompact = new Intl.NumberFormat("es-CO", { notation: "compact", maximum
 export const formatCOP = (amount: number) => cop.format(amount);
 export const formatCompact = (amount: number) => `$${copCompact.format(amount)}`;
 
-/** As typed in a money field: "$ 1.500.000"; empty when there are no digits. */
+// Cents, as the banks show them: a comma and up to two digits at the end ("1.054.000,00"; three
+// digits are thousands: "80,000"), or a point after comma thousands ("1,054,000.00").
+const CENTS = /,(\d{0,2})\s*$/;
+const CENTS_POINT = /(,\d{3})\.\d{1,2}\s*$/;
+const withoutCents = (input: string) => input.replace(CENTS_POINT, "$1").replace(CENTS, "");
+
+/**
+ * As typed in a money field: "$ 1.500.000"; empty when there are no digits. Cents stay on screen
+ * while they are typed ("$ 1.054.000,00") and parsePesos drops them.
+ */
 export function formatPesosInput(input: string | number | null | undefined): string {
-  const digits = String(input ?? "").replace(/[^\d]/g, "").replace(/^0+(?=\d)/, "").slice(0, 13);
-  return digits ? `$ ${new Intl.NumberFormat("es-CO").format(Number(digits))}` : "";
+  const typed = String(input ?? "").replace(CENTS_POINT, "$1");
+  const cents = typed.match(CENTS);
+  const digits = withoutCents(typed).replace(/[^\d]/g, "").replace(/^0+(?=\d)/, "").slice(0, 13);
+  return digits ? `$ ${new Intl.NumberFormat("es-CO").format(Number(digits))}${cents ? `,${cents[1]}` : ""}` : "";
 }
 
 export function formatDate(date: string): string {
@@ -312,9 +336,9 @@ export function todayInBogota(now: Date = new Date()): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Bogota" }).format(now);
 }
 
-/** Parses what a person types as pesos ("1.500.000", "$ 80,000", "25000") into an integer. */
+/** Parses what a person types as pesos ("1.500.000", "$ 80,000", "25000", "1.054.000,00") into an integer, without cents. */
 export function parsePesos(input: string): number | null {
-  const digits = input.replace(/[^\d]/g, "");
+  const digits = withoutCents(input).replace(/[^\d]/g, "");
   if (!digits) return null;
   const value = Number(digits);
   return Number.isSafeInteger(value) ? value : null;

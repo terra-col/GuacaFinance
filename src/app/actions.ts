@@ -7,6 +7,7 @@ import { redirect } from "next/navigation";
 import { passwordProblem } from "@/lib/auth-links";
 import { ADJUSTMENT, allowedTxKinds, balanceAt, isDebt, paidMonth, parsePesos, todayInBogota, type Account, type AccountKind, type Tx, type TxKind } from "@/lib/finance";
 import { firstMonthFor } from "@/lib/installments";
+import { allPages } from "@/lib/paging";
 import { normalizePhone } from "@/lib/phone";
 import { PHONE_TAKEN, emailForPhone, phoneLoginReady, phoneTaken } from "@/lib/phone-login";
 import { requestOrigin } from "@/lib/request-origin";
@@ -709,9 +710,13 @@ export async function adjustBalance(_prev: FormState, form: FormData): Promise<F
   // The balance is computed here, from the database, as of the chosen date: never trusted from the page.
   const { data: account } = await supabase.from("accounts").select("*").eq("id", id).maybeSingle();
   if (!account) return { error: "Esa cuenta ya no existe." };
-  const { data: moves, error: readError } = await supabase.from("transactions").select("*").or(`account_id.eq.${id},source_account_id.eq.${id}`);
-  if (readError) return { error: `No se pudo leer la cuenta: ${readError.message}` };
-  const diff = target - balanceAt(account as Account, (moves ?? []) as Tx[], occurred_on);
+  // Every movement, page by page: Supabase returns 1000 rows at most, and a balance computed
+  // from a cut list would record a wrong adjustment.
+  const read = await allPages<Tx>((from, to) =>
+    supabase.from("transactions").select("*").or(`account_id.eq.${id},source_account_id.eq.${id}`).order("id").range(from, to),
+  );
+  if (read.error) return { error: `No se pudo leer la cuenta: ${read.error.message}` };
+  const diff = target - balanceAt(account as Account, read.rows, occurred_on);
   if (diff === 0) return { message: "El saldo ya estaba al día." };
 
   const debt = isDebt(account);

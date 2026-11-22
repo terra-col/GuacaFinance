@@ -2,18 +2,24 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { deleteTx } from "@/app/actions";
-import { ADJUSTMENT, formatCOP, formatDate, monthName, relativeDay, daysBetween, type Account, type Tx, type TxKind } from "@/lib/finance";
+import { formatCOP, formatDate, isAdjustment, isDebt, monthName, relativeDay, daysBetween, type Account, type Tx, type TxKind } from "@/lib/finance";
 import { Icon, txIconName } from "./icons";
 import { Sheet } from "./modal";
 import { TxForm } from "./tx-form";
 import { SubmitButton } from "./submit-button";
 
-const FILTERS: { value: TxKind | "all"; label: string }[] = [
+type Filter = TxKind | "all" | "adjustment";
+
+const FILTERS: { value: Filter; label: string }[] = [
   { value: "all", label: "Todos" },
   { value: "expense", label: "Gastos" },
   { value: "payment", label: "Pagos" },
   { value: "income", label: "Ingresos" },
+  { value: "adjustment", label: "Ajustes" },
 ];
+
+// An adjustment only corrects a balance, so it looks like neither money in nor money out.
+const ADJUSTED = { label: "Ajuste", stripe: "var(--line-strong)", tint: "bg-brand/8" };
 
 // Each kind has its own stripe, tint and word, so it reads without relying on colour alone.
 const LOOK: Record<TxKind, { label: string; stripe: string; tint: string; sign: string }> = {
@@ -26,13 +32,27 @@ const PAGE = 60;
 
 const ACTIONS_WIDTH = 152; // two 76 px buttons behind a swiped row
 
-export function TxList({ txs, accounts, today }: { txs: Tx[]; accounts: Pick<Account, "id" | "name" | "kind">[]; today: string }) {
+/**
+ * `showAdjustments`: «Todos» includes them (an account's own history, where they explain its
+ * balance). Otherwise they stay apart, under «Ajustes».
+ */
+export function TxList({
+  txs,
+  accounts,
+  today,
+  showAdjustments = false,
+}: {
+  txs: Tx[];
+  accounts: Pick<Account, "id" | "name" | "kind">[];
+  today: string;
+  showAdjustments?: boolean;
+}) {
   const accountNames = useMemo(() => Object.fromEntries(accounts.map((a) => [a.id, a.name])), [accounts]);
   const [editing, setEditing] = useState<Tx | null>(null);
   const closeEditor = useCallback(() => setEditing(null), []);
   // Only one row stays swiped open at a time.
   const [swiped, setSwiped] = useState<string | null>(null);
-  const [filter, setFilter] = useState<TxKind | "all">("all");
+  const [filter, setFilter] = useState<Filter>("all");
   const [query, setQuery] = useState("");
   const [limit, setLimit] = useState(PAGE);
   // Deleting asks for a second tap on the same row, which expires after a few seconds.
@@ -44,11 +64,11 @@ export function TxList({ txs, accounts, today }: { txs: Tx[]; accounts: Pick<Acc
   }, [armed]);
 
   const title = (tx: Tx) =>
-    tx.category === ADJUSTMENT
+    isAdjustment(tx)
       ? `Ajuste de saldo · ${accountNames[tx.account_id] ?? "cuenta"}`
       : tx.kind === "payment" ? `Pago a ${accountNames[tx.account_id] ?? "cuenta"}` : (tx.description ?? (tx.kind === "income" ? "Ingreso" : (tx.category ?? "Gasto")));
   const detail = (tx: Tx) =>
-    [
+    isAdjustment(tx) ? (tx.description ?? "") : [
       tx.kind === "expense" && tx.description ? tx.category : null,
       tx.kind === "payment" ? (tx.source_account_id ? `desde ${accountNames[tx.source_account_id]}` : null) : accountNames[tx.account_id],
       tx.kind === "payment" ? tx.description : null,
@@ -58,14 +78,28 @@ export function TxList({ txs, accounts, today }: { txs: Tx[]; accounts: Pick<Acc
       .filter(Boolean)
       .join(" · ");
 
+  // An adjustment's sign says which way the balance moved: on a debt, «+» is owing more.
+  const sign = (tx: Tx) => {
+    if (!isAdjustment(tx)) return LOOK[tx.kind].sign;
+    const account = accounts.find((a) => a.id === tx.account_id);
+    return tx.kind === "income" || (tx.kind === "expense" && account && isDebt(account)) ? "+" : "−";
+  };
+  const inFilter = useCallback(
+    (tx: Tx, f: Filter) => {
+      if (isAdjustment(tx)) return f === "adjustment" || (f === "all" && showAdjustments);
+      return f === "all" || f === tx.kind;
+    },
+    [showAdjustments],
+  );
+
   const matches = useMemo(() => {
     const q = query.trim().toLowerCase();
     return txs.filter(
       (tx) =>
-        (filter === "all" || tx.kind === filter) &&
+        inFilter(tx, filter) &&
         (!q || [tx.description, tx.category, accountNames[tx.account_id]].some((field) => field?.toLowerCase().includes(q))),
     );
-  }, [txs, filter, query, accountNames]);
+  }, [txs, filter, query, accountNames, inFilter]);
 
   const days = useMemo(() => {
     const groups: { date: string; items: Tx[]; out: number; inn: number }[] = [];
@@ -73,6 +107,7 @@ export function TxList({ txs, accounts, today }: { txs: Tx[]; accounts: Pick<Acc
       let group = groups[groups.length - 1];
       if (!group || group.date !== tx.occurred_on) groups.push((group = { date: tx.occurred_on, items: [], out: 0, inn: 0 }));
       group.items.push(tx);
+      if (isAdjustment(tx)) continue;
       if (tx.kind === "income") group.inn += tx.amount;
       else if (tx.kind === "expense") group.out += tx.amount;
     }
@@ -90,7 +125,8 @@ export function TxList({ txs, accounts, today }: { txs: Tx[]; accounts: Pick<Acc
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="-mx-4 flex gap-2 overflow-x-auto px-4 sm:mx-0 sm:px-0" role="group" aria-label="Filtrar por tipo">
           {FILTERS.map((f) => {
-            const count = f.value === "all" ? txs.length : txs.filter((t) => t.kind === f.value).length;
+            const count = txs.filter((t) => inFilter(t, f.value)).length;
+            if (f.value === "adjustment" && count === 0 && filter !== f.value) return null;
             return (
               <button key={f.value} type="button" className="chip shrink-0" aria-pressed={filter === f.value} onClick={() => { setFilter(f.value); setLimit(PAGE); }}>
                 {f.label} <span className="num opacity-70">{count}</span>
@@ -125,7 +161,7 @@ export function TxList({ txs, accounts, today }: { txs: Tx[]; accounts: Pick<Acc
               </div>
               <ul>
                 {day.items.map((tx) => {
-                  const look = LOOK[tx.kind];
+                  const look = isAdjustment(tx) ? ADJUSTED : LOOK[tx.kind];
                   return (
                     <SwipeRow
                       key={tx.id}
@@ -138,7 +174,7 @@ export function TxList({ txs, accounts, today }: { txs: Tx[]; accounts: Pick<Acc
                           <button
                             type="button"
                             className="swipe-action bg-brand"
-                            disabled={tx.category === ADJUSTMENT}
+                            disabled={isAdjustment(tx)}
                             onClick={() => { setSwiped(null); setEditing(tx); }}
                           >
                             <Icon name="edit" className="size-5" />
@@ -169,13 +205,13 @@ export function TxList({ txs, accounts, today }: { txs: Tx[]; accounts: Pick<Acc
                           {detail(tx)}
                         </p>
                       </div>
-                      <p className={`display num shrink-0 rounded-xl px-2 py-0.5 text-lg ${tx.kind === "income" ? "bg-savings/15" : ""}`}>
-                        {look.sign}
+                      <p className={`display num shrink-0 rounded-xl px-2 py-0.5 text-lg ${isAdjustment(tx) ? "text-ink-3" : tx.kind === "income" ? "bg-savings/15" : ""}`}>
+                        {sign(tx)}
                         {formatCOP(tx.amount)}
                       </p>
                       {/* Mouse and keyboard: the same actions, shown on hover or focus. Touch uses the swipe. */}
                       <span className="flex shrink-0 gap-0.5 [@media(pointer:coarse)]:hidden">
-                        {tx.category !== ADJUSTMENT ? (
+                        {!isAdjustment(tx) ? (
                           <button
                             type="button"
                             onClick={() => setEditing(tx)}
