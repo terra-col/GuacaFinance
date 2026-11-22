@@ -24,6 +24,11 @@ create table private.phones (
   phone text not null unique check (phone ~ '^\+573[0-9]{9}$')
 );
 
+-- No policies: nobody reaches these tables through the API. The functions below run as their
+-- owner, which RLS does not restrict.
+alter table private.app_keys enable row level security;
+alter table private.phones enable row level security;
+
 -- Keeps private.phones in step with the phone in each profile. A number already used by
 -- another account is not copied (the app checks before saving, so this only covers a race).
 create function private.sync_phone() returns trigger
