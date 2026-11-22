@@ -139,3 +139,17 @@ test("incomes: the next date, also when it falls in a coming month", async () =>
   assert.equal(nextIncomeDate({ day: 5, months: null, once_month: "2026-11" }, "2026-11-21"), null, "a one-time extra already behind");
   assert.equal(nextIncomeDate({ day: 31, months: null, once_month: null }, "2027-02-10"), "2027-02-28");
 });
+
+test("paid for next month: counts in the month it was marked for, not in the month of its date", () => {
+  const rent = { id: "arr", name: "Arriendo", amount: 1_800_000, due_day: 5, category: "Hogar", created_at: "2026-01-01T12:00:00Z" };
+  const early = tx({ amount: 1_800_000, bill_id: "arr", occurred_on: "2026-11-30", for_month: "2026-12" });
+  const nov = monthlyChecklist([], [rent], [early], "2026-11", "2026-11-30");
+  const dec = monthlyChecklist([], [rent], [early], "2026-12", "2026-11-30");
+  assert.equal(nov[0].paid, false, "November's rent is still to pay");
+  assert.deepEqual([dec[0].paid, dec[0].paidOn], [true, "2026-11-30"]);
+
+  // The salary of December arrives on 30 November and is marked for December.
+  const salaryEarly = tx({ kind: "income", amount: 7_500_000, income_id: "sal", occurred_on: "2026-11-30", for_month: "2026-12" });
+  assert.equal(incomeChecklist([salary], [salaryEarly], "2026-11", "2026-11-30")[0].received, false);
+  assert.equal(incomeChecklist([salary], [salaryEarly], "2026-12", "2026-11-30")[0].received, true);
+});

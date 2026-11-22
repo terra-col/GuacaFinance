@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { deleteTx } from "@/app/actions";
-import { ADJUSTMENT, formatCOP, formatDate, relativeDay, daysBetween, type Account, type Tx, type TxKind } from "@/lib/finance";
+import { ADJUSTMENT, formatCOP, formatDate, monthName, relativeDay, daysBetween, type Account, type Tx, type TxKind } from "@/lib/finance";
 import { Icon, txIconName } from "./icons";
 import { Sheet } from "./modal";
 import { TxForm } from "./tx-form";
@@ -53,6 +53,7 @@ export function TxList({ txs, accounts, today }: { txs: Tx[]; accounts: Pick<Acc
       tx.kind === "payment" ? (tx.source_account_id ? `desde ${accountNames[tx.source_account_id]}` : null) : accountNames[tx.account_id],
       tx.kind === "payment" ? tx.description : null,
       tx.source === "wallet" ? "Apple Wallet" : null,
+      tx.for_month ? `cuenta para ${monthName(tx.for_month)}` : null,
     ]
       .filter(Boolean)
       .join(" · ");

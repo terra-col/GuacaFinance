@@ -1,6 +1,6 @@
 // Budgets per category, scheduled incomes and the month's free money. Pure, tested under `node --test`.
 
-import { daysInMonth, dueDates, monthEnd, shiftMonth, type ChecklistItem, type Skip, type Tx } from "./finance.ts";
+import { daysInMonth, dueDates, monthEnd, paidMonth, shiftMonth, type ChecklistItem, type Skip, type Tx } from "./finance.ts";
 
 export interface Budget {
   id: string;
@@ -102,7 +102,7 @@ export function incomeChecklist(incomes: Income[], txs: Tx[], month: string, tod
   return incomes
     .filter((i) => arrivesIn(i, month))
     .map((i) => {
-      const got = txs.filter((t) => t.income_id === i.id && inMonth(month)(t));
+      const got = txs.filter((t) => t.income_id === i.id && paidMonth(t) === month);
       const due = dueDates(i.day, `${month}-01`, 1)[0];
       const skipped = got.length === 0 ? (skips.find((s) => s.item_type === "income" && s.item_id === i.id && s.month === month) ?? null) : null;
       return {

@@ -29,10 +29,11 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
   const { mes: asked, vista } = await searchParams;
   const view: PaymentsView = vista === "calendario" ? "calendario" : "lista";
   const valid = Boolean(asked && MONTH.test(asked));
-  // The list: the current month and the past (future months have nothing to tick yet).
-  // The calendar also looks ahead, up to a year, to see what is coming.
+  // The list: the past, this month and the next one (to tick early what the salary of the
+  // end of the month pays). The calendar also looks ahead, up to a year, to see what is coming.
+  const nextMonth = shiftMonth(current, 1);
   const range: Record<PaymentsView, [string, string]> = {
-    lista: ["0000-01", current],
+    lista: ["0000-01", nextMonth],
     calendario: [shiftMonth(current, -12), shiftMonth(current, 12)],
   };
   const monthFor = (v: PaymentsView) => (valid && asked! >= range[v][0] && asked! <= range[v][1] ? asked! : current);
@@ -40,7 +41,9 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
   const other: PaymentsView = view === "lista" ? "calendario" : "lista";
   // Both views come in this page (and switch instantly) when they show the same month.
   const both = monthFor(other) === month;
-  const editable = month === current;
+  // This month and the next can be ticked; earlier ones are a record.
+  const editable = month === current || month === nextMonth;
+  const ahead = month === nextMonth;
   const hrefFor = (m: string, v: PaymentsView) => `/pagos?${v === "calendario" ? "vista=calendario&" : ""}mes=${m}`;
 
   // Bills, card and loan payments, and the monthly saving of goals with a plan.
@@ -79,7 +82,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
   }
 
   const backLink = (v: PaymentsView) =>
-    !editable && (
+    month !== current && (
       <Link href={hrefFor(current, v)} className="text-sm font-medium text-brand">
         Volver a {monthName(current)}
       </Link>
@@ -144,9 +147,11 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
     return (
       <>
         <p className="-mt-3 text-balance text-center text-sm text-ink-3">
-          {editable
-            ? "Lo que entra y lo que tienes que pagar este mes. Al marcar uno se registra el movimiento; cada mes la lista vuelve a empezar."
-            : "Mes cerrado: así quedó la lista."}
+          {ahead
+            ? `Puedes marcar desde ya lo de ${monthName(month)}: si el salario llega antes de fin de mes y con él pagas lo del mes siguiente. Queda con la fecha en que lo marcas y cuenta para ${monthName(month)}.`
+            : editable
+              ? "Lo que entra y lo que tienes que pagar este mes. Al marcar uno se registra el movimiento; cada mes la lista vuelve a empezar."
+              : "Mes cerrado: así quedó la lista."}
         </p>
 
         {planReady && (incomes.length > 0 || budgets.length > 0) && <MonthPlanCard plan={plan} />}
@@ -192,7 +197,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
         {items.length === 0 ? (
           <section className="card">
             <div className="flex items-center justify-between gap-3">
-              <p className="font-medium">No hay pagos obligatorios {editable ? "este mes" : "en ese mes"}.</p>
+              <p className="font-medium">No hay pagos obligatorios {month === current ? "este mes" : "en ese mes"}.</p>
               {editable && (
                 <Modal label="+ Agregar" title="Nuevo pago fijo" buttonClass="btn-quiet h-9 shrink-0 px-3 text-sm">
                   <BillForm inModal />
@@ -246,7 +251,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
           </section>
         )}
 
-        {editable && scheduled.length > 0 && (
+        {month === current && scheduled.length > 0 && (
           <section className="card" aria-labelledby="scheduled-title">
             <h2 id="scheduled-title" className="display text-2xl">
               Programados

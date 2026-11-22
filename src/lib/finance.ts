@@ -58,7 +58,12 @@ export interface Tx {
   bill_id: string | null;
   /** Set when the movement records a scheduled income as received. */
   income_id?: string | null;
+  /** The month it pays in Pagos when that is not the month of its date (next month's rent paid early). */
+  for_month?: string | null;
 }
+
+/** The month a payment ticks in Pagos: the one it was marked for, else the month of its date. */
+export const paidMonth = (t: { occurred_on: string; for_month?: string | null }) => t.for_month ?? t.occurred_on.slice(0, 7);
 
 /** «Este mes no aplica» for a bill, a debt instalment or an income. */
 export interface Skip {
@@ -345,7 +350,7 @@ export interface BillStatus {
 /** A bill counts as paid for the month once a movement dated in that month references it. */
 export function billStatus(bill: Bill, txs: Tx[], today: string): BillStatus {
   const month = today.slice(0, 7);
-  const paidThisMonth = txs.some((t) => t.bill_id === bill.id && t.occurred_on.startsWith(month));
+  const paidThisMonth = txs.some((t) => t.bill_id === bill.id && paidMonth(t) === month);
   const [thisMonth, nextMonth] = dueDates(bill.due_day, `${month}-01`, 2);
   const date = paidThisMonth ? nextMonth : thisMonth;
   return { date, paidThisMonth, days: daysBetween(today, date) };
@@ -402,7 +407,7 @@ export function monthlyChecklist(accounts: Account[], bills: Bill[], txs: Tx[], 
   const skipOf = (type: Skip["item_type"], id: string) => skips.find((s) => s.item_type === type && s.item_id === id && s.month === month) ?? null;
   const first = `${month}-01`;
   const last = monthEnd(month);
-  const inMonth = (t: Tx) => t.occurred_on >= first && t.occurred_on <= last;
+  const inMonth = (t: Tx) => paidMonth(t) === month;
   const dueIn = (day: number) => dueDates(day, first, 1)[0];
   const spendable = accounts.filter((a) => a.kind !== "loan");
   // Where a payment comes from by default: the favourite account, else the one used last time.

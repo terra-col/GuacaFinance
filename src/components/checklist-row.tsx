@@ -84,6 +84,7 @@ export function ChecklistRow({ item, month, today, editable, accounts }: Props) 
     form.set("amount", String(item.quick!.amount));
     form.set("account_id", item.quick!.accountId ?? "");
     form.set("occurred_on", today);
+    form.set("month", month);
     pay(form);
   }
 
@@ -173,6 +174,8 @@ export function ChecklistRow({ item, month, today, editable, accounts }: Props) 
   }
 
   const days = item.due ? daysBetween(today, item.due) : null;
+  // Next month's items are marked ahead of time, with a date from this month.
+  const earliest = `${month < today.slice(0, 7) ? month : today.slice(0, 7)}-01`;
   const doneWord = income ? "Recibido" : saving ? "Ahorrado" : "Pagado";
   const status = paid
     ? celebrate
@@ -288,6 +291,7 @@ export function ChecklistRow({ item, month, today, editable, accounts }: Props) 
             >
               <input type="hidden" name="type" value={item.type} />
               <input type="hidden" name="id" value={item.id} />
+              <input type="hidden" name="month" value={month} />
               <label className="field">
                 {income ? "Cuánto llegó" : saving ? "Cuánto abonas" : "Cuánto pagaste"}
                 <MoneyInput name="amount" defaultValue={item.expected} required autoFocus />
@@ -303,7 +307,7 @@ export function ChecklistRow({ item, month, today, editable, accounts }: Props) 
               </label>
               <label className="field">
                 Fecha
-                <DateField name="occurred_on" defaultValue={today} min={`${month}-01`} max={today} required />
+                <DateField name="occurred_on" defaultValue={today} min={earliest} max={today} required />
               </label>
               <div className="flex flex-wrap items-center gap-2 sm:col-span-4 sm:justify-end">
                 {removable && (
@@ -441,7 +445,7 @@ export function ChecklistRow({ item, month, today, editable, accounts }: Props) 
               </label>
               <label className="field">
                 Fecha
-                <DateField name="occurred_on" defaultValue={item.paidOn ?? today} min={`${month}-01`} max={today} required />
+                <DateField name="occurred_on" defaultValue={item.paidOn ?? today} min={earliest} max={today} required />
               </label>
               <div className="flex flex-wrap items-center justify-between gap-2 sm:col-span-3">
                 <span className="flex flex-wrap gap-x-4 gap-y-1">

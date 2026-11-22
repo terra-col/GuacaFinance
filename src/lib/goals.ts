@@ -1,6 +1,6 @@
 // Goals: save an amount by a date, or clear a debt by a date. Pure, so it is tested.
 import { monthlyRate } from "./advice.ts";
-import { balanceAt, daysBetween, dueDates, monthEnd, shiftMonth, type Account, type ChecklistItem, type Skip, type Tx } from "./finance.ts";
+import { balanceAt, daysBetween, dueDates, paidMonth, shiftMonth, type Account, type ChecklistItem, type Skip, type Tx } from "./finance.ts";
 
 export type GoalKind = "save" | "payoff";
 
@@ -27,6 +27,8 @@ export interface GoalDeposit {
   goal_id: string;
   amount: number;
   occurred_on: string;
+  /** The month of the plan it covers, when not the month of its date (saved early). */
+  for_month?: string | null;
 }
 
 /** «scheduled»: a goal with no pace to keep (one payment on its date, or no plan): only its date matters. */
@@ -166,7 +168,6 @@ const savedBy = (goal: Goal, deposits: GoalDeposit[], before: string) =>
  */
 export function goalChecklist(goals: Goal[], deposits: GoalDeposit[], month: string, today: string, skips: Skip[] = []): ChecklistItem[] {
   const first = `${month}-01`;
-  const last = monthEnd(month);
   const items: ChecklistItem[] = [];
   for (const goal of goals) {
     if (goal.kind !== "save" || !goal.target_amount) continue;
@@ -175,7 +176,7 @@ export function goalChecklist(goals: Goal[], deposits: GoalDeposit[], month: str
     if (month < goal.created_on.slice(0, 7) || month > goal.target_date.slice(0, 7)) continue;
     // A one-time goal: only the month of its date.
     if (goal.plan_once && month !== goal.target_date.slice(0, 7)) continue;
-    const thisMonth = deposits.filter((d) => d.goal_id === goal.id && d.occurred_on >= first && d.occurred_on <= last && d.amount > 0);
+    const thisMonth = deposits.filter((d) => d.goal_id === goal.id && paidMonth(d) === month && d.amount > 0);
     const missing = goal.target_amount - savedBy(goal, deposits, first);
     if (missing <= 0 && thisMonth.length === 0) continue;
     const skip = skips.find((s) => s.item_type === "goal" && s.item_id === goal.id && s.month === month) ?? null;
@@ -220,7 +221,7 @@ export function planOutlook(view: GoalView, deposits: GoalDeposit[], today: stri
   const { goal } = view;
   if (goal.kind !== "save" || !goal.plan_amount || !goal.plan_day) return null;
   const month = today.slice(0, 7);
-  const savedThisMonth = deposits.some((d) => d.goal_id === goal.id && d.occurred_on >= `${month}-01` && d.occurred_on <= monthEnd(month) && d.amount > 0);
+  const savedThisMonth = deposits.some((d) => d.goal_id === goal.id && paidMonth(d) === month && d.amount > 0);
   const dates = planDates(goal.plan_day, savedThisMonth ? shiftMonth(month, 1) : month, goal.created_on, goal.target_date);
   const instalments = dates.length;
   const projected = view.achieved + instalments * goal.plan_amount;

@@ -214,3 +214,12 @@ test("favorite account: one per person, and only one that holds money", async ()
   await as(BETO, "insert into accounts (kind, name, favorite) values ('savings', 'De Beto', true)");
   await as(ANA, "update accounts set favorite = false where id = $1", [nomina.id]);
 });
+
+test("paid for another month: the month is optional and must be a real month", async () => {
+  const [row] = await as(ANA, "insert into transactions (account_id, kind, amount, bill_id, occurred_on, for_month) values ($1, 'expense', 90000, $2, '2026-11-30', '2026-12') returning for_month", [visa.id, internet.id]);
+  assert.equal(row.for_month, "2026-12");
+  await assert.rejects(as(ANA, "insert into transactions (account_id, kind, amount, for_month) values ($1, 'expense', 1, '2026-13')", [visa.id]), /check constraint/);
+  const [closet] = await as(ANA, "select id from goals where name = 'Armario'");
+  await as(ANA, "insert into goal_deposits (goal_id, amount, occurred_on, for_month) values ($1, 100000, '2026-11-30', '2026-12')", [closet.id]);
+  await assert.rejects(as(ANA, "insert into goal_deposits (goal_id, amount, for_month) values ($1, 1, '26-12')", [closet.id]), /check constraint/);
+});

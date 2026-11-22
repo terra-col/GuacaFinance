@@ -159,7 +159,7 @@ export function PaymentsCalendar({
             <p className="mt-1 text-sm text-ink-3">Nada programado este día.</p>
           )}
           {!editable && chosen.length > 0 && (
-            <p className="mt-2 text-xs text-ink-3">{month > today.slice(0, 7) ? "Podrás marcarlos cuando llegue el mes." : "Mes cerrado: así quedó."}</p>
+            <p className="mt-2 text-xs text-ink-3">{month > today.slice(0, 7) ? "Podrás marcarlos desde el mes anterior." : "Mes cerrado: así quedó."}</p>
           )}
         </section>
       )}

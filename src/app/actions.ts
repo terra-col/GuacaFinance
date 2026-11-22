@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { passwordProblem } from "@/lib/auth-links";
-import { ADJUSTMENT, allowedTxKinds, balanceAt, isDebt, parsePesos, todayInBogota, type Account, type AccountKind, type Tx, type TxKind } from "@/lib/finance";
+import { ADJUSTMENT, allowedTxKinds, balanceAt, isDebt, paidMonth, parsePesos, todayInBogota, type Account, type AccountKind, type Tx, type TxKind } from "@/lib/finance";
 import { firstMonthFor } from "@/lib/installments";
 import { requestOrigin } from "@/lib/request-origin";
 import { REMEMBER_COOKIE, createClient, isSupabaseConfigured } from "@/lib/supabase/server";
@@ -406,12 +406,15 @@ export async function markPaid(_prev: FormState, form: FormData): Promise<FormSt
   if (!DATE.test(occurred_on)) return { error: "La fecha no es válida." };
   const id = text(form, "id");
   const account_id = text(form, "account_id") || null;
+  // Paid early (or late) for another month's list: that month is kept with the movement.
+  const month = text(form, "month");
+  const forMonth = MONTH.test(month) && month !== occurred_on.slice(0, 7) ? { for_month: month } : {};
 
   if (form.get("type") === "goal") {
     const { data: goal } = await supabase.from("goals").select("id").eq("id", id).maybeSingle();
     if (!goal) return { error: "Esa meta ya no existe." };
-    const { error } = await supabase.from("goal_deposits").insert({ goal_id: goal.id, amount, occurred_on });
-    if (error) return { error: `No se pudo guardar: ${error.message}` };
+    const { error } = await supabase.from("goal_deposits").insert({ goal_id: goal.id, amount, occurred_on, ...forMonth });
+    if (error) return { error: forMonthMissing(error.message) ?? `No se pudo guardar: ${error.message}` };
   } else if (form.get("type") === "income") {
     if (!account_id) return { error: "Elige a qué cuenta llegó." };
     const [{ data: income }, { data: target }] = await Promise.all([
@@ -420,8 +423,8 @@ export async function markPaid(_prev: FormState, form: FormData): Promise<FormSt
     ]);
     if (!income) return { error: "Ese ingreso ya no existe." };
     if (!target || isDebt(target)) return { error: "El ingreso debe llegar a una cuenta de ahorros o a tu efectivo." };
-    const { error } = await supabase.from("transactions").insert({ kind: "income", account_id, amount, occurred_on, income_id: income.id, description: income.name });
-    if (error) return { error: missingTable(error.message, "0007") ?? `No se pudo guardar: ${error.message}` };
+    const { error } = await supabase.from("transactions").insert({ kind: "income", account_id, amount, occurred_on, income_id: income.id, description: income.name, ...forMonth });
+    if (error) return { error: forMonthMissing(error.message) ?? missingTable(error.message, "0007") ?? `No se pudo guardar: ${error.message}` };
   } else if (form.get("type") === "bill") {
     if (!account_id) return { error: "Elige con qué pagaste." };
     const { data: bill } = await supabase.from("bills").select("id, name, category").eq("id", id).maybeSingle();
@@ -434,8 +437,9 @@ export async function markPaid(_prev: FormState, form: FormData): Promise<FormSt
       bill_id: bill.id,
       category: bill.category ?? "Recibos",
       description: bill.name,
+      ...forMonth,
     });
-    if (error) return { error: `No se pudo guardar: ${error.message}` };
+    if (error) return { error: forMonthMissing(error.message) ?? `No se pudo guardar: ${error.message}` };
   } else {
     const { data: debt } = await supabase.from("accounts").select("kind").eq("id", id).maybeSingle();
     if (!debt || !isDebt(debt)) return { error: "Esa deuda ya no existe." };
@@ -445,41 +449,49 @@ export async function markPaid(_prev: FormState, form: FormData): Promise<FormSt
     }
     const { error } = await supabase
       .from("transactions")
-      .insert({ kind: "payment", account_id: id, source_account_id: account_id, amount, occurred_on });
-    if (error) return { error: `No se pudo guardar: ${error.message}` };
+      .insert({ kind: "payment", account_id: id, source_account_id: account_id, amount, occurred_on, ...forMonth });
+    if (error) return { error: forMonthMissing(error.message) ?? `No se pudo guardar: ${error.message}` };
   }
   revalidatePath("/", "layout");
   return {};
 }
 
-/** Unticks an item by deleting the payments that ticked it in that month. */
+/** Unticks an item by deleting the payments that ticked it in that month (by their date, or marked for it). */
 export async function unmarkPaid(form: FormData) {
   const supabase = await signedIn();
   const month = text(form, "month");
-  if (!/^\d{4}-\d{2}$/.test(month)) throw new Error("Mes no válido.");
-  const [year, m] = month.split("-").map(Number);
-  const last = `${month}-${String(new Date(Date.UTC(year, m, 0)).getUTCDate()).padStart(2, "0")}`;
+  if (!MONTH.test(month)) throw new Error("Mes no válido.");
   const id = text(form, "id");
+  const type = form.get("type");
+  const failed = (message: string) => new Error(`No se pudo deshacer: ${message}`);
+  // Read whole rows and pick in code: works the same before and after migration 0013.
+  type Row = { id: string; occurred_on: string; for_month?: string | null; category?: string | null };
+  const ticking = (rows: Row[] | null) => (rows ?? []).filter((r) => paidMonth(r) === month && r.category !== ADJUSTMENT).map((r) => r.id);
 
-  if (form.get("type") === "goal") {
-    const { error } = await supabase.from("goal_deposits").delete().eq("goal_id", id).gt("amount", 0).gte("occurred_on", `${month}-01`).lte("occurred_on", last);
-    if (error) throw new Error(`No se pudo deshacer: ${error.message}`);
+  if (type === "goal") {
+    const { data, error: findError } = await supabase.from("goal_deposits").select("*").eq("goal_id", id).gt("amount", 0);
+    if (findError) throw failed(findError.message);
+    const ids = ticking(data);
+    if (ids.length === 0) return;
+    const { error } = await supabase.from("goal_deposits").delete().in("id", ids);
+    if (error) throw failed(error.message);
     revalidatePath("/", "layout");
     return;
   }
 
   // Find exactly the movements that ticked it; balance adjustments are never touched.
-  const base = supabase.from("transactions").select("id, category").gte("occurred_on", `${month}-01`).lte("occurred_on", last);
-  const type = form.get("type");
+  const base = supabase.from("transactions").select("*");
   const { data: rows, error: findError } =
     type === "bill" ? await base.eq("bill_id", id) : type === "income" ? await base.eq("income_id", id) : await base.eq("account_id", id).eq("kind", "payment");
-  if (findError) throw new Error(`No se pudo deshacer: ${findError.message}`);
-  const ids = (rows ?? []).filter((r) => r.category !== ADJUSTMENT).map((r) => r.id);
+  if (findError) throw failed(findError.message);
+  const ids = ticking(rows);
   if (ids.length === 0) return;
   const { error } = await supabase.from("transactions").delete().in("id", ids);
-  if (error) throw new Error(`No se pudo deshacer: ${error.message}`);
+  if (error) throw failed(error.message);
   revalidatePath("/", "layout");
 }
+
+const forMonthMissing = (message: string) => (/for_month/i.test(message) ? "Para marcar pagos de otro mes falta ejecutar la migración 0013 en Supabase." : null);
 
 const LOGO = /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/;
 
