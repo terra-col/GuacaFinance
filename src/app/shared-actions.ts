@@ -7,7 +7,8 @@ import { redirect } from "next/navigation";
 import { contactPhone } from "@/lib/contacts";
 import { parsePesos } from "@/lib/finance";
 import { requestOrigin } from "@/lib/request-origin";
-import { INVITE_COOKIE, splitEqual } from "@/lib/shared";
+import { INVITE_COOKIE } from "@/lib/shared";
+import { computeShares, parseSplit } from "@/lib/split";
 import { createClient } from "@/lib/supabase/server";
 
 // Every write goes through a function of migration 0016, which checks who asks and what for.
@@ -143,16 +144,39 @@ export async function saveSharedExpense(form: FormData): Promise<SharedResult> {
   if (!description) return { error: "Escribe qué fue." };
   const occurred_on = text(form, "occurred_on");
   if (!DATE.test(occurred_on)) return { error: "La fecha no es válida." };
-  const people = [...new Set(form.getAll("with").map(String))];
-  if (people.length === 0) return { error: "Elige entre quiénes se divide." };
-
-  const exact = text(form, "mode") === "exact";
-  const shares = exact
-    ? people.map((member_id) => ({ member_id, amount: parsePesos(text(form, `share-${member_id}`)) ?? 0 })).filter((s) => s.amount > 0)
-    : splitEqual(amount, people);
-  if (shares.reduce((sum, s) => sum + s.amount, 0) !== amount) return { error: "Las partes deben sumar el total." };
+  let split;
+  try {
+    split = parseSplit(JSON.parse(text(form, "split")));
+  } catch {
+    split = null;
+  }
+  if (!split) return { error: "Revisa cómo se divide." };
+  // The pesos are worked out here, never taken from the page.
+  const divided = computeShares(amount, split);
+  if (!divided.ok) return { error: divided.error };
+  const { shares } = divided;
 
   const entry = text(form, "entry");
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("shared_save_expense", {
+    p_entry: entry || null,
+    p_group: text(form, "group") || null,
+    p_description: description,
+    p_category: text(form, "category") || null,
+    p_amount: amount,
+    p_paid_by: text(form, "paid_by"),
+    p_occurred_on: occurred_on,
+    p_shares: shares,
+    p_split: split,
+    p_account: text(form, "account_id") || null,
+    p_tx: text(form, "tx") || null,
+  });
+  if (!error) {
+    revalidatePath("/", "layout");
+    return { id: String(data) };
+  }
+  if (error.code !== "PGRST202") return { error: problem(error) };
+  // Before migration 0021: the same pesos, without remembering how they were divided.
   if (entry) {
     return call("shared_update_entry", {
       p_entry: entry,

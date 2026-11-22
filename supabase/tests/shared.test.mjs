@@ -410,3 +410,28 @@ test("deleting a user also takes their contacts and requests", async () => {
   await db.exec(`delete from auth.users where id = '${user}'`);
   assert.equal((await db.query("select 1 from shared_contacts where user_id = $1", [user])).rows.length, 0);
 });
+
+// ---- 0021: how it was divided
+
+const saveExpense = (user, g, { entry = null, split = { mode: "percent", parts: [{ id: g.Ana, value: 10000 }] }, amount = 90000, shares = [{ member_id: g.Ana, amount }] } = {}) =>
+  as(user, "select shared_save_expense($1, $2, 'Taxi', null, $3, $4, '2026-11-22', $5, $6) as id", [entry, g.id, amount, g.Ana, JSON.stringify(shares), split && JSON.stringify(split)]);
+
+test("split: saved with the expense, under the same permissions", async () => {
+  const g = await group();
+  const entry = (await saveExpense(ANA, g))[0].id;
+  assert.equal((await value(BETO, "select split from shared_entries where id = $1", [entry])).mode, "percent");
+  await assert.rejects(saveExpense(EVA, g), /No haces parte/);
+  await assert.rejects(saveExpense(EVA, g, { entry }), /No haces parte/);
+  await assert.rejects(saveExpense(BETO, g, { entry }), /Solo quien lo registró o quien pagó/);
+  await assert.rejects(saveExpense(null, g), /permission denied/);
+  await assert.rejects(as(ANA, "update shared_entries set split = null where id = $1", [entry]), /permission denied/);
+});
+
+test("split: it never replaces the checked pesos, and only known ways are kept", async () => {
+  const g = await group();
+  await assert.rejects(saveExpense(ANA, g, { shares: [{ member_id: g.Ana, amount: 1 }] }), /sumar el total/);
+  await assert.rejects(saveExpense(ANA, g, { split: { mode: "inventado", parts: [] } }), /check constraint/);
+  await assert.rejects(saveExpense(ANA, g, { split: { parts: [] } }), /check constraint/);
+  await assert.rejects(saveExpense(ANA, g, { split: { mode: "equal" } }), /check constraint/);
+  assert.equal(await value(ANA, "select count(*)::int from shared_entries where group_id = $1", [g.id]), 0, "a failed one leaves nothing");
+});

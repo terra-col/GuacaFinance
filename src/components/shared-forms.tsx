@@ -15,18 +15,17 @@ import {
   removeMember,
   renameGroup,
   saveSettlement,
-  saveSharedExpense,
   type SharedResult,
 } from "@/app/shared-actions";
 import { knownByPhone, whatsappLink, type Known } from "@/lib/contacts";
 import { formatCOP } from "@/lib/finance";
 import { formatPhone } from "@/lib/phone";
-import { splitEqual, type Transfer } from "@/lib/shared";
+import type { Transfer } from "@/lib/shared";
 import { DateField } from "./date-field";
 import { useCloseModal } from "./modal";
 import { MoneyInput } from "./money-input";
 import { PeopleFields } from "./people-fields";
-import { CategoryField, SelectField, type PickOption } from "./pickers";
+import { SelectField, type PickOption } from "./pickers";
 import { Spinner } from "./submit-button";
 
 type Person = { id: string; name: string };
@@ -35,7 +34,7 @@ type Person = { id: string; name: string };
  * Sends a form without `<form action>`: React would reset it afterwards, and after an error the
  * person would have to write everything again.
  */
-function useSave(action: (form: FormData) => Promise<SharedResult>, done?: (result: SharedResult) => void) {
+export function useSave(action: (form: FormData) => Promise<SharedResult>, done?: (result: SharedResult) => void) {
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
   function submit(e: React.FormEvent<HTMLFormElement>) {
@@ -52,7 +51,7 @@ function useSave(action: (form: FormData) => Promise<SharedResult>, done?: (resu
   return { pending, error, submit };
 }
 
-function Problem({ error }: { error: string | null }) {
+export function Problem({ error }: { error: string | null }) {
   if (!error) return null;
   return (
     <p role="alert" className="alert">
@@ -61,7 +60,7 @@ function Problem({ error }: { error: string | null }) {
   );
 }
 
-function Send({ pending, disabled, className = "btn self-start", children }: { pending: boolean; disabled?: boolean; className?: string; children: React.ReactNode }) {
+export function Send({ pending, disabled, className = "btn self-start", children }: { pending: boolean; disabled?: boolean; className?: string; children: React.ReactNode }) {
   return (
     <button type="submit" className={`${className} gap-1.5`} disabled={pending || disabled} aria-busy={pending}>
       {pending && <Spinner />}
@@ -70,7 +69,7 @@ function Send({ pending, disabled, className = "btn self-start", children }: { p
   );
 }
 
-const NO_ACCOUNT: PickOption = { value: "", label: "No mover mis cuentas" };
+export const NO_ACCOUNT: PickOption = { value: "", label: "No mover mis cuentas" };
 
 /** An expense or payment already in the group, to edit. */
 export interface EditableEntry {
@@ -81,20 +80,14 @@ export interface EditableEntry {
   occurred_on: string;
   paidBy: string;
   shares: Record<string, number>;
+  /** How it was divided, as saved (migration 0021). */
+  split?: unknown;
   /** The account of the movement the group created for this person. */
   account: string | null;
   /** It is a movement this person already had and divided. */
   ownMovement: boolean;
   /** Someone else recorded it in their account. */
   othersRecorded: boolean;
-}
-
-/** Whether those shares are an equal split, to open the form the way it was made. */
-function isEqualSplit(entry: EditableEntry, members: Person[]) {
-  const equal = splitEqual(entry.amount, members.map((m) => m.id).filter((id) => id in entry.shares));
-  // The extra pesos may have fallen on others when the group was in another order.
-  const sorted = (amounts: number[]) => [...amounts].sort((a, b) => a - b).join();
-  return sorted(equal.map((s) => s.amount)) === sorted(Object.values(entry.shares));
 }
 
 /** `known` is null before migration 0020: then people are only names. */
@@ -147,161 +140,6 @@ export function GroupForm({ me, tx, known }: { me: string; tx?: string; known: K
       </label>
       <Problem error={error} />
       <Send pending={pending}>Crear</Send>
-    </form>
-  );
-}
-
-export function ExpenseForm({
-  group,
-  members,
-  me,
-  accounts,
-  favorite,
-  today,
-  tx,
-  entry,
-}: {
-  group: string;
-  members: Person[];
-  me: string;
-  accounts: PickOption[];
-  favorite: string;
-  today: string;
-  entry?: EditableEntry;
-  /** A movement the person already had and now divides: its amount and payer are fixed. */
-  tx?: { id: string; amount: number; description: string | null; category: string | null; occurred_on: string };
-}) {
-  const router = useRouter();
-  const close = useCloseModal();
-  const [amount, setAmount] = useState(tx?.amount ?? entry?.amount ?? 0);
-  const [paidBy, setPaidBy] = useState(entry?.paidBy ?? me);
-  const [mode, setMode] = useState<"equal" | "exact">(() => (entry && !isEqualSplit(entry, members) ? "exact" : "equal"));
-  const [included, setIncluded] = useState(() => members.map((m) => m.id).filter((id) => !entry || id in entry.shares));
-  const [exact, setExact] = useState<Record<string, number>>(entry?.shares ?? {});
-  // Someone else already moved their money with it: who paid and how much stay.
-  const fixed = Boolean(entry?.othersRecorded);
-  const { pending, error, submit } = useSave(saveSharedExpense, () => {
-    close();
-    if (tx) router.replace(`/compartidos/${group}`);
-  });
-
-  // In the group's order, so the extra peso of a split falls on the same people as on the server.
-  const chosen = members.filter((m) => included.includes(m.id));
-  const each = new Map(splitEqual(amount, chosen.map((m) => m.id)).map((s) => [s.member_id, s.amount]));
-  const left = amount - members.reduce((sum, m) => sum + (exact[m.id] ?? 0), 0);
-  const ready = mode === "equal" ? chosen.length > 0 : amount > 0 && left === 0;
-
-  return (
-    <form onSubmit={submit} className="flex flex-col gap-4">
-      <input type="hidden" name="group" value={group} />
-      {entry && <input type="hidden" name="entry" value={entry.id} />}
-      {fixed && (
-        <>
-          <input type="hidden" name="amount" value={amount} />
-          <input type="hidden" name="paid_by" value={paidBy} />
-          <p className="text-sm text-ink-2">
-            Son <strong className="num text-ink">{formatCOP(amount)}</strong>. Otra persona ya lo registró en su cuenta, así que el valor y quién pagó no cambian.
-          </p>
-        </>
-      )}
-      <input type="hidden" name="mode" value={mode} />
-      {(mode === "equal" ? chosen : members).map((m) => (
-        <input key={m.id} type="hidden" name="with" value={m.id} />
-      ))}
-      {tx && (
-        <>
-          <input type="hidden" name="tx" value={tx.id} />
-          <input type="hidden" name="amount" value={tx.amount} />
-          <input type="hidden" name="paid_by" value={me} />
-          <p className="text-sm text-ink-2">
-            Pagaste <strong className="num text-ink">{formatCOP(tx.amount)}</strong>. El movimiento sigue igual en tu cuenta; como gasto solo contará tu parte.
-          </p>
-        </>
-      )}
-      <div className="grid gap-4 sm:grid-cols-2">
-        {!tx && !fixed && (
-          <label className="field">
-            Cuánto fue
-            <MoneyInput name="amount" defaultValue={entry?.amount} onValue={setAmount} required />
-          </label>
-        )}
-        <label className="field">
-          Qué fue
-          <input className="input" name="description" defaultValue={entry?.description ?? tx?.description ?? ""} placeholder="Cena, arriendo, mercado…" maxLength={120} autoComplete="off" required />
-        </label>
-        {!tx && !fixed && (
-          <label className="field">
-            Quién pagó
-            <SelectField name="paid_by" value={paidBy} onChange={setPaidBy} options={members.map((m) => ({ value: m.id, label: m.id === me ? `${m.name} (tú)` : m.name }))} required />
-          </label>
-        )}
-        {!tx && paidBy === me && !entry?.ownMovement && (
-          <label className="field">
-            De qué cuenta salió
-            <SelectField name="account_id" options={entry?.account ? accounts : [...accounts, NO_ACCOUNT]} defaultValue={entry ? (entry.account ?? "") : favorite} />
-          </label>
-        )}
-        <label className="field">
-          Fecha
-          <DateField name="occurred_on" defaultValue={entry?.occurred_on ?? tx?.occurred_on ?? today} max={today} required />
-        </label>
-        <label className="field">
-          Categoría
-          <CategoryField name="category" defaultValue={entry ? (entry.category ?? "") : tx ? (tx.category ?? "") : "Otros"} />
-        </label>
-      </div>
-
-      <fieldset className="flex flex-col gap-2">
-        <legend className="mb-1.5 text-sm font-medium text-ink-2">Cómo se divide</legend>
-        <div className="flex gap-2">
-          <button type="button" className="chip" aria-pressed={mode === "equal"} onClick={() => setMode("equal")}>
-            Por partes iguales
-          </button>
-          <button type="button" className="chip" aria-pressed={mode === "exact"} onClick={() => setMode("exact")}>
-            Por montos
-          </button>
-        </div>
-        <ul className="divide-y divide-line">
-          {members.map((m) => (
-            <li key={m.id}>
-              {mode === "equal" ? (
-                <button
-                  type="button"
-                  role="checkbox"
-                  aria-checked={included.includes(m.id)}
-                  className={`flex min-h-11 w-full items-center gap-3 py-2 text-left text-sm ${included.includes(m.id) ? "" : "text-ink-3"}`}
-                  onClick={() => setIncluded(included.includes(m.id) ? included.filter((id) => id !== m.id) : [...included, m.id])}
-                >
-                  <span aria-hidden="true" className={`flex size-6 shrink-0 items-center justify-center rounded-full border text-xs font-bold ${included.includes(m.id) ? "border-brand bg-brand text-white" : "border-line-strong"}`}>
-                    {included.includes(m.id) ? "✓" : ""}
-                  </span>
-                  <span className="min-w-0 flex-1 truncate">{m.id === me ? `${m.name} (tú)` : m.name}</span>
-                  <span className="num font-semibold">{formatCOP(each.get(m.id) ?? 0)}</span>
-                </button>
-              ) : (
-                <label className="flex items-center gap-3 py-2 text-sm">
-                  <span className="min-w-0 flex-1 truncate">{m.id === me ? `${m.name} (tú)` : m.name}</span>
-                  <span className="w-40 shrink-0">
-                    <MoneyInput name={`share-${m.id}`} defaultValue={exact[m.id] || ""} onValue={(pesos) => setExact((old) => ({ ...old, [m.id]: pesos }))} />
-                  </span>
-                </label>
-              )}
-            </li>
-          ))}
-        </ul>
-        {mode === "exact" && amount > 0 && (
-          <p role="status" className="text-sm font-medium text-ink-2">
-            {left === 0 ? "✓ Suma el total" : left > 0 ? `Faltan ${formatCOP(left)}` : `Sobran ${formatCOP(-left)}`}
-          </p>
-        )}
-      </fieldset>
-      {entry?.account && paidBy !== me && <p className="text-sm text-ink-2">Como ya no pagaste tú, se borra el movimiento que esto creó en tu cuenta.</p>}
-      {entry?.ownMovement && paidBy !== me && <p className="text-sm text-ink-2">Como ya no pagaste tú, tu movimiento se conserva como un gasto normal.</p>}
-      {entry?.ownMovement && paidBy === me && amount !== entry.amount && <p className="text-sm text-ink-2">El movimiento de tu cuenta también cambia a {formatCOP(amount)}.</p>}
-      <Problem error={error} />
-      <Send pending={pending} disabled={!ready}>
-        {entry ? "Guardar cambios" : "Dividir"}
-      </Send>
     </form>
   );
 }

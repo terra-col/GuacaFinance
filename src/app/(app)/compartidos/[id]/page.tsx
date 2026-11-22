@@ -2,11 +2,13 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Icon, txIconName } from "@/components/icons";
 import { Modal } from "@/components/modal";
-import { AddPersonForm, DeleteEntryForm, DeleteGroupForm, EditPersonForm, ExpenseForm, InviteForm, RecordForm, RenameGroupForm, SettlementForm, type EditableEntry } from "@/components/shared-forms";
+import { ExpenseForm } from "@/components/expense-form";
+import { AddPersonForm, DeleteEntryForm, DeleteGroupForm, EditPersonForm, InviteForm, RecordForm, RenameGroupForm, SettlementForm, type EditableEntry } from "@/components/shared-forms";
 import { knownPeople } from "@/lib/contacts";
 import { loadData } from "@/lib/data";
 import { favoriteAccountId, favoriteFirst, formatCOP, formatDate, holdsMoney, isAdjustment } from "@/lib/finance";
 import { groupNets, memberOf, settleUp } from "@/lib/shared";
+import { parseSplit, splitTitle } from "@/lib/split";
 
 const SMALL = "text-xs font-semibold text-brand";
 
@@ -208,6 +210,7 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
                       occurred_on: entry.occurred_on,
                       paidBy: entry.paid_by,
                       shares: Object.fromEntries(parts.map((s) => [s.member_id, s.amount])),
+                      split: entry.split,
                       account: link && link.created_tx !== false ? (txs.find((t) => t.id === link.tx_id)?.account_id ?? null) : null,
                       ownMovement: link?.created_tx === false,
                       othersRecorded: recordedByOthers.has(entry.id),
@@ -227,6 +230,22 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
                       {!settled && ` · ${payer ? "pagaste tú" : `pagó ${name.get(entry.paid_by)}`}`}
                     </p>
                     {!settled && <p className="num text-xs text-ink-2">{ownPart ? `Tu parte ${formatCOP(ownPart)}` : "No te toca"}</p>}
+                    {!settled && (
+                      <details className="mt-1 text-xs">
+                        <summary className="cursor-pointer py-1 font-medium text-ink-3 hover:text-ink">Ver división</summary>
+                        <div className="rounded-xl bg-brand/6 px-2.5 py-2">
+                          {parseSplit(entry.split) && <p className="mb-1 text-ink-3">{splitTitle(parseSplit(entry.split)!.mode)}</p>}
+                          <dl className="grid grid-cols-[1fr_auto] gap-x-3 gap-y-1 text-ink-2">
+                            {parts.map((part) => (
+                              <div key={part.member_id} className="contents">
+                                <dt className="break-words">{part.member_id === me.id ? "Tú" : name.get(part.member_id)}</dt>
+                                <dd className="num font-medium text-ink">{formatCOP(part.amount)}</dd>
+                              </div>
+                            ))}
+                          </dl>
+                        </div>
+                      </details>
+                    )}
                     <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
                       {(payer || receiver) && !tx && (
                         <Modal label="Registrar en mi cuenta" title="Registrar en mi cuenta" buttonClass={SMALL}>

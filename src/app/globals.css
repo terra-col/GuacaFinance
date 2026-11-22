@@ -567,6 +567,26 @@ body::before {
   }
 }
 
+/* The split view's count and «Listo», always in sight while the window scrolls. In the page itself
+   it stays in its place: there it would fall behind the tab bar. */
+dialog .split-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 20;
+  /* The sheet's own glass, frosted again over the rows that pass under it. */
+  background: color-mix(in srgb, var(--surface) 30%, transparent);
+  -webkit-backdrop-filter: blur(24px);
+  backdrop-filter: blur(24px);
+  margin: 0 -1.25rem -1.25rem;
+  padding-inline: 1.25rem;
+}
+@media (min-width: 640px) {
+  dialog .split-footer {
+    margin: 0 -1.75rem -1.75rem;
+    padding-inline: 1.75rem;
+  }
+}
+
 /* ---- Liquid glass: frosted, bright edge on top, soft light inside, lifted shadow ---- */
 @layer components {
   .liquid {

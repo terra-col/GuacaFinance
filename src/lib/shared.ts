@@ -37,6 +37,8 @@ export interface SharedEntry {
   paid_by: string;
   occurred_on: string;
   created_by: string | null;
+  /** How it was divided, only to open it again that way (see split.ts). */
+  split?: unknown;
 }
 
 export interface SharedShare {
