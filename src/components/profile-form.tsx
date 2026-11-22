@@ -21,6 +21,7 @@ export function ProfileForm({ name, email, phone }: { name: string; email: strin
             Celular <span className="font-normal text-ink-3">(opcional)</span>
           </span>
           <input className="input num" type="tel" name="phone" inputMode="tel" defaultValue={formatPhone(phone)} autoComplete="tel-national" placeholder="300 123 4567" maxLength={20} />
+          <span className="text-xs font-normal text-ink-3">Con este número te llegan las invitaciones a dividir gastos.</span>
         </label>
         <label className="field sm:col-span-2">
           Correo

@@ -1,7 +1,7 @@
 import { APP_NAME } from "@/lib/brand";
 
 /** The mark is the product's signature gesture: what you have meeting what you owe. */
-export function Logo({ size = "text-xl" }: { size?: string }) {
+export function Logo({ size = "text-xl", compact = false }: { size?: string; compact?: boolean }) {
   return (
     <span className={`display inline-flex items-center gap-2 ${size}`}>
       <span
@@ -13,7 +13,8 @@ export function Logo({ size = "text-xl" }: { size?: string }) {
         <span className="h-1.5 flex-1 rounded-r-full bg-white/55" />
         <span className="absolute left-1/2 top-2 h-4 w-px bg-white/80" />
       </span>
-      {APP_NAME}
+      {/* In the header with five buttons, the narrowest phones keep only the mark. */}
+      <span className={compact ? "max-[379px]:sr-only" : undefined}>{APP_NAME}</span>
     </span>
   );
 }

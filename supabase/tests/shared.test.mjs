@@ -435,3 +435,151 @@ test("split: it never replaces the checked pesos, and only known ways are kept",
   await assert.rejects(saveExpense(ANA, g, { split: { mode: "equal" } }), /check constraint/);
   assert.equal(await value(ANA, "select count(*)::int from shared_entries where group_id = $1", [g.id]), 0, "a failed one leaves nothing");
 });
+
+// ---- 0022: periods of any length
+
+test("periods: the database takes the same as the app, and nothing else", async () => {
+  const bill = (every) => as(ANA, "insert into bills (name, due_day, every, starts_on) values ('Seguro', 15, $1, '2026-11-15')", [every]);
+  for (const every of ["monthly", "biweekly", "d3", "d99", "w1", "w2", "w52", "m4", "m12", "m99", "y1", "y10"]) await bill(every);
+  for (const every of ["d1", "d2", "d100", "w0", "w53", "m1", "m2", "m3", "m6", "y11", "x2", "d3 "]) await assert.rejects(bill(every), /bills_every_check/, every);
+  await assert.rejects(as(ANA, "insert into incomes (name, day, every, starts_on) values ('Salario', 15, 'z9', '2026-11-15')"), /incomes_every_check/);
+});
+
+// ---- 0023: invitations by phone, accounts between two, deleting, notices
+
+const [DUE, FAKE] = ["7", "8"].map((c) => "00000000-0000-0000-0000-00000000000" + c);
+await db.exec(
+  "insert into auth.users (id, email, email_confirmed_at, raw_user_meta_data) values " +
+    "('" + DUE + "', 'dueno@example.com', now(), '{\"name\": \"Dario\", \"phone\": \"+573009998877\"}'), " +
+    "('" + FAKE + "', 'sin@example.com', null, '{\"name\": \"Sin confirmar\", \"phone\": \"+573001112233\"}')",
+);
+const phoneGroup = async (phone = "+573009998877") => {
+  const id = await value(ANA, "select shared_create_group_people('Grupo secreto', 'Ana', $1)", [JSON.stringify([{ name: "Dario", phone, known: null }])]);
+  return { id, member: await value(ANA, "select id from shared_members where group_id = $1 and user_id is null", [id]) };
+};
+const invitesOf = (user) => as(user, "select * from shared_phone_invites()");
+
+test("phone: shows who invites and nothing of the group; nobody gets in until the inviter confirms", async () => {
+  const g = await phoneGroup();
+  const found = await invitesOf(DUE);
+  const invite = found[0];
+  assert.deepEqual(Object.keys(invite).sort(), ["from_name", "id", "waiting"]);
+  assert.equal(invite.from_name, "Ana");
+  assert.ok(!JSON.stringify(found).includes("secreto"));
+  assert.equal((await invitesOf(EVA)).length, 0);
+  assert.equal((await as(ANA, "select * from shared_phone_claims()")).length, 0, "the inviter learns nothing before they accept");
+  await assert.rejects(as(EVA, "select shared_phone_answer($1, true)", [invite.id]), /ya no está/);
+
+  await as(DUE, "select shared_phone_answer($1, true)", [invite.id]);
+  for (const table of ["shared_groups", "shared_members", "shared_entries"]) assert.equal((await as(DUE, "select * from " + table)).length, 0, table + ": still outside");
+  await assert.rejects(as(DUE, "select shared_phone_confirm($1, true)", [invite.id]), /ya no está/, "nobody confirms themselves");
+  await assert.rejects(as(EVA, "select shared_phone_confirm($1, true)", [invite.id]), /ya no está/);
+
+  const claim = (await as(ANA, "select * from shared_phone_claims()")).find((c) => c.id === invite.id);
+  assert.equal(claim.account_name, "Dario");
+  assert.equal(claim.account_email, "du•••@example.com");
+  assert.equal(await value(ANA, "select shared_phone_confirm($1, true)", [invite.id]), g.id);
+  assert.equal((await as(DUE, "select * from shared_groups where id = $1", [g.id])).length, 1);
+  assert.equal(await value(DUE, "select count(*)::int from shared_notices where group_id = $1 and kind = 'you_joined'", [g.id]), 1);
+});
+
+test("phone: an unconfirmed email gets nothing, and declining or rejecting leaves them out", async () => {
+  await phoneGroup("+573001112233");
+  assert.equal((await invitesOf(FAKE)).length, 0);
+  const g = await phoneGroup();
+  let invite = (await invitesOf(DUE))[0];
+  await as(DUE, "select shared_phone_answer($1, false)", [invite.id]);
+  assert.equal((await invitesOf(DUE)).length, 0);
+  await as(ANA, "select shared_edit_person($1, 'Dario', '+573009998877', null)", [g.member]);
+  invite = (await invitesOf(DUE))[0];
+  await as(DUE, "select shared_phone_answer($1, true)", [invite.id]);
+  await as(ANA, "select shared_phone_confirm($1, false)", [invite.id]);
+  assert.equal((await as(DUE, "select * from shared_groups where id = $1", [g.id])).length, 0);
+  assert.equal((await invitesOf(DUE)).length, 0);
+});
+
+test("phone: who changes number after accepting cannot be confirmed", async () => {
+  const g = await phoneGroup();
+  const [invite] = await invitesOf(DUE);
+  await as(DUE, "select shared_phone_answer($1, true)", [invite.id]);
+  await db.query("update auth.users set raw_user_meta_data = '{\"name\": \"Dario\"}' where id = $1", [DUE]);
+  await assert.rejects(as(ANA, "select shared_phone_confirm($1, true)", [invite.id]), /ya no tiene ese celular/);
+  assert.equal((await as(DUE, "select * from shared_groups where id = $1", [g.id])).length, 0);
+});
+
+test("phone: declining an invitation inside Guaca does not bring it back by phone", async () => {
+  await db.query("update auth.users set raw_user_meta_data = $2 where id = $1", [DUE, JSON.stringify({ name: "Dario", phone: "+573009998877" })]);
+  const first = await phoneGroup();
+  for (const invite of await invitesOf(DUE)) {
+    await as(DUE, "select shared_phone_answer($1, true)", [invite.id]);
+    await as(ANA, "select shared_phone_confirm($1, true)", [invite.id]);
+  }
+  const known = await value(ANA, "select id from shared_members where group_id = $1 and id = $2", [first.id, first.member]);
+  const id = await value(ANA, "select shared_create_group_people('Otro', 'Ana', $1)", [JSON.stringify([{ name: "Dario", phone: "+573009998877", known }])]);
+  const member = await value(ANA, "select id from shared_members where group_id = $1 and user_id is null", [id]);
+  await as(DUE, "select shared_respond($1, false)", [member]);
+  assert.equal((await invitesOf(DUE)).length, 0);
+});
+
+test("phone and notices: nothing is readable or writable around the functions", async () => {
+  for (const call of ["shared_phone_invites()", "shared_phone_claims()", "shared_pending_count()"]) await assert.rejects(as(null, "select * from " + call), /permission denied/, call);
+  await assert.rejects(as(ANA, "select * from private.shared_phone_invites"), /permission denied/);
+  await assert.rejects(as(ANA, "insert into shared_notices (user_id, kind) values ($1, 'expense')", [BETO]), /permission denied/);
+  await assert.rejects(as(ANA, "update shared_groups set deleted_at = now()"), /permission denied/);
+});
+
+test("notices: for the others of the group, never for who did it nor outsiders", async () => {
+  const g = await group();
+  const entry = await add(ANA, g);
+  const count = (user) => value(user, "select count(*)::int from shared_notices where group_id = $1 and entry_id = $2", [g.id, entry]);
+  assert.deepEqual([await count(ANA), await count(BETO), await count(EVA)], [0, 1, 0]);
+  assert.ok((await value(BETO, "select shared_pending_count()")) >= 1);
+  await as(EVA, "select shared_read_notices(now() + interval '1 day')");
+  assert.equal(await value(BETO, "select count(*)::int from shared_notices where entry_id = $1 and read_at is null", [entry]), 1);
+  await as(BETO, "select shared_read_notices(now() + interval '1 day')");
+  assert.equal(await value(BETO, "select shared_pending_count()"), 0);
+});
+
+test("between two: one per account, and never a third", async () => {
+  const g = await group();
+  const id = await value(ANA, "select shared_create_direct('Ana', 'Beto', null, $1)", [g.Beto]);
+  assert.equal(await value(ANA, "select shared_create_direct('Ana', 'Beto', null, $1)", [g.Beto]), id);
+  assert.equal(await value(ANA, "select direct from shared_groups where id = $1", [id]), true);
+  await assert.rejects(as(ANA, "select shared_add_member($1, 'Caro')", [id]), /solo entre dos/);
+  await assert.rejects(as(EVA, "select shared_create_direct('Eva', 'Beto', null, $1)", [g.Beto]), /ya compartes un grupo/);
+});
+
+test("deleting: history stays for the totals and the group takes no more writes", async () => {
+  const g = await group();
+  const acct = await account(ANA);
+  const entry = await add(ANA, g, { shares: [{ member_id: g.Ana, amount: 300000 }], account: acct });
+  await assert.rejects(as(EVA, "select shared_remove_group($1, false)", [g.id]), /No haces parte/);
+  await assert.rejects(as(BETO, "select shared_remove_group($1, false)", [g.id]), /Solo quien creó/);
+  await assert.rejects(as(ANA, "select shared_remove_group($1, true)", [g.id]), /no se puede borrar/);
+  await as(ANA, "select shared_remove_group($1, false)", [g.id]);
+  assert.equal((await as(BETO, "select * from shared_entries where id = $1", [entry])).length, 1);
+  assert.equal(await value(ANA, "select count(*)::int from transactions where account_id = $1", [acct]), 1);
+  assert.equal(await value(BETO, "select count(*)::int from shared_notices where group_id = $1 and kind = 'group_deleted'", [g.id]), 1);
+  await assert.rejects(add(ANA, g), /fue eliminado/);
+  await assert.rejects(as(ANA, "select shared_delete_entry($1)", [entry]), /fue eliminado/);
+  await assert.rejects(as(BETO, "select shared_rename_group($1, 'Otro')", [g.id]), /fue eliminado/);
+});
+
+test("deleting: not with someone else's balance pending", async () => {
+  const g = await group();
+  await add(ANA, g);
+  await assert.rejects(as(ANA, "select shared_remove_group($1, false)", [g.id]), /saldos pendientes/);
+});
+
+test("deleting a test of one's own: everything the group created goes, what one already had stays", async () => {
+  const id = await value(ANA, "select shared_create_group('Prueba', 'Ana', array['Nadie'])");
+  const me = await value(ANA, "select id from shared_members where group_id = $1 and user_id is not null", [id]);
+  const acct = await account(ANA);
+  const shares = JSON.stringify([{ member_id: me, amount: 9000 }]);
+  const own = await value(ANA, "insert into transactions (account_id, kind, amount, occurred_on) values ($1, 'expense', 9000, '2026-11-22') returning id", [acct]);
+  await as(ANA, "select shared_add_entry($1, 'expense', 'Creado', null, 9000, $2, '2026-11-22', $3, $4, null)", [id, me, shares, acct]);
+  await as(ANA, "select shared_add_entry($1, 'expense', 'Mío', null, 9000, $2, '2026-11-22', $3, null, $4)", [id, me, shares, own]);
+  await as(ANA, "select shared_remove_group($1, true)", [id]);
+  assert.equal((await as(ANA, "select * from shared_groups where id = $1", [id])).length, 0);
+  assert.deepEqual((await as(ANA, "select id from transactions where account_id = $1", [acct])).map((t) => t.id), [own]);
+});

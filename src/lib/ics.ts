@@ -1,7 +1,7 @@
 // Calendar feed (iCalendar) with the upcoming payment dates, so any calendar
 // app that subscribes to it shows them and can alert before each one.
 import { addDays, dueDates, formatCOP } from "./finance.ts";
-import { isFrequent, nextDates, type Every } from "./recurrence.ts";
+import { EVERY, isFrequent, nextDates, timesPerMonth, type Every } from "./recurrence.ts";
 
 export interface DueItem {
   id: string;
@@ -21,7 +21,9 @@ export function buildCalendar(items: DueItem[], today: string, monthsAhead = 3):
     const every = item.every ?? "monthly";
     // What repeats every few days only shows two weeks ahead, and warns only that day.
     const frequent = isFrequent(every);
-    const count = frequent ? 14 : every === "biweekly" ? monthsAhead * 2 : monthsAhead;
+    const named = EVERY.some((e) => e.value === every);
+    // The ones of migration 0017 show as always; any other, those of the months ahead or the next one.
+    const count = frequent ? 14 : every === "biweekly" ? monthsAhead * 2 : named ? monthsAhead : Math.max(1, Math.ceil(monthsAhead * timesPerMonth(every)));
     const dates = every === "monthly" ? dueDates(item.due_day, today, monthsAhead) : nextDates({ every, day: item.due_day, start: item.starts_on ?? null }, today, count);
     for (const date of dates) {
       const summary = `Pagar ${item.name}${item.monthly_payment ? ` · cuota ${formatCOP(item.monthly_payment)}` : ""}`;

@@ -16,6 +16,7 @@ import {
   type Split,
   type SplitMode,
 } from "@/lib/split";
+import { useModalBack } from "./modal";
 import { MoneyInput } from "./money-input";
 import { SelectField } from "./pickers";
 
@@ -189,6 +190,7 @@ export function SplitPanel({
     if (view === "options" && other) setView("quick");
     else onClose();
   }
+  useModalBack(back);
 
   const header = (
     <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">

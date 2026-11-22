@@ -1,9 +1,49 @@
 // How often a fixed payment or a goal's saving repeats, and which date each payment ticks.
 // Pure and free of imports, so finance.ts can build on it.
 
-export type Every = "daily" | "every2" | "biweekly" | "monthly" | "bimonthly" | "quarterly" | "semiannual";
+/** The seven of migration 0017, which keep their names, and since 0022 any other: d3, w2, m4, y1. */
+type Named = "daily" | "every2" | "biweekly" | "monthly" | "bimonthly" | "quarterly" | "semiannual";
+export type Unit = "d" | "w" | "m" | "y";
+export type Every = Named | `${Unit}${number}`;
 
-export const EVERY: { value: Every; label: string }[] = [
+/** The four units one chooses from, and up to how many of each. */
+export const UNITS: { unit: Unit; label: string; one: string; many: string; max: number }[] = [
+  { unit: "d", label: "Día", one: "día", many: "días", max: 99 },
+  { unit: "w", label: "Semana", one: "semana", many: "semanas", max: 52 },
+  { unit: "m", label: "Mes", one: "mes", many: "meses", max: 99 },
+  { unit: "y", label: "Año", one: "año", many: "años", max: 10 },
+];
+
+export function unitName(unit: Unit, count: number): string {
+  const { one, many } = UNITS.find((u) => u.unit === unit)!;
+  return count === 1 ? one : many;
+}
+
+const PERIOD: Record<Named, { unit: Unit; count: number }> = {
+  daily: { unit: "d", count: 1 },
+  every2: { unit: "d", count: 2 },
+  biweekly: { unit: "w", count: 2 },
+  monthly: { unit: "m", count: 1 },
+  bimonthly: { unit: "m", count: 2 },
+  quarterly: { unit: "m", count: 3 },
+  semiannual: { unit: "m", count: 6 },
+};
+
+/** Any periodicity as a unit and how many. */
+export function periodOf(every: Every): { unit: Unit; count: number } {
+  return every in PERIOD ? PERIOD[every as Named] : { unit: every[0] as Unit, count: Number(every.slice(1)) };
+}
+
+/**
+ * A unit and how many, as it is kept: by its name when it has one. Two weeks are a quincena of
+ * fixed days; every 14 days exactly is 'w2', chosen apart.
+ */
+export function periodToEvery(unit: Unit, count: number): Every {
+  const named = (Object.keys(PERIOD) as Named[]).find((name) => PERIOD[name].unit === unit && PERIOD[name].count === count);
+  return named ?? `${unit}${count}`;
+}
+
+export const EVERY: { value: Named; label: string }[] = [
   { value: "monthly", label: "Mensual" },
   { value: "daily", label: "Cada día" },
   { value: "every2", label: "Cada 2 días" },
@@ -13,7 +53,7 @@ export const EVERY: { value: Every; label: string }[] = [
   { value: "semiannual", label: "Semestral (cada 6 meses)" },
 ];
 
-const SHORT: Record<Every, string> = {
+const SHORT: Record<Named, string> = {
   monthly: "Mensual",
   daily: "Diario",
   every2: "Cada 2 días",
@@ -22,13 +62,32 @@ const SHORT: Record<Every, string> = {
   quarterly: "Trimestral",
   semiannual: "Semestral",
 };
-export const everyShort = (every: Every) => SHORT[every];
+export function everyShort(every: Every): string {
+  if (every in SHORT) return SHORT[every as Named];
+  const { unit, count } = periodOf(every);
+  if (count === 1) return unit === "w" ? "Semanal" : "Anual";
+  if (unit === "w" && count === 2) return "Cada 14 días";
+  return `Cada ${count} ${unitName(unit, count)}`;
+}
 
 /** A 'daily', 'every2'… from a form or the database; null for anything else. */
-export const parseEvery = (raw: string): Every | null => EVERY.find((e) => e.value === raw)?.value ?? null;
+export function parseEvery(raw: string): Every | null {
+  const named = EVERY.find((e) => e.value === raw)?.value;
+  if (named) return named;
+  const found = /^([dwmy])([1-9]\d?)$/.exec(raw);
+  if (!found) return null;
+  const [unit, count] = [found[1] as Unit, Number(found[2])];
+  if (count > UNITS.find((u) => u.unit === unit)!.max) return null;
+  // Those with a name go by their name, except every 14 days exactly.
+  return raw === "w2" || periodToEvery(unit, count) === raw ? (raw as Every) : null;
+}
 
 /** Those that repeat several times a week: the list folds what is further ahead. */
-export const isFrequent = (every: Every | undefined) => every === "daily" || every === "every2";
+export function isFrequent(every: Every | undefined): boolean {
+  if (!every) return false;
+  const { unit, count } = periodOf(every);
+  return unit === "d" && count < 7;
+}
 
 /** Those set by a date (from when, or the next one) rather than by a day of the month. */
 export const needsDate = (every: Every) => every !== "monthly" && every !== "biweekly";
@@ -48,7 +107,17 @@ const onDay = (month: string, day: number) => `${month}-${pad(Math.min(day, last
 const monthIndex = (month: string) => Number(month.slice(0, 4)) * 12 + Number(month.slice(5, 7)) - 1;
 const monthOf = (index: number) => `${Math.floor(index / 12)}-${pad((index % 12) + 1)}`;
 
-const STEP_MONTHS: Partial<Record<Every, number>> = { monthly: 1, bimonthly: 2, quarterly: 3, semiannual: 6 };
+/** Months from one date to the next; null for what goes by days. */
+function stepMonths(every: Every): number | null {
+  const { unit, count } = periodOf(every);
+  return unit === "m" ? count : unit === "y" ? count * 12 : null;
+}
+
+/** Days from one date to the next, for what goes by days. */
+function stepDays(every: Every): number {
+  const { unit, count } = periodOf(every);
+  return unit === "w" ? count * 7 : count;
+}
 
 /** The two days of a quincena: 5 is [5, 20], 15 is [15, 30], 31 is [15, 31] (the last day). */
 export function quincenaDays(day: number): [number, number] {
@@ -77,13 +146,13 @@ export function datesIn({ every, day, start }: Schedule, month: string): string[
     const dates = quincenaDays(day).map((d) => onDay(month, d));
     return [...new Set(dates)].filter((d) => d >= start);
   }
-  const months = STEP_MONTHS[every];
+  const months = stepMonths(every);
   if (months) {
     if ((monthIndex(month) - monthIndex(start)) % months !== 0) return [];
     // The anchor's own day: the 31st stays the last day, also after a February.
     return [onDay(month, Number(start.slice(8)))];
   }
-  const step = every === "every2" ? 2 : 1;
+  const step = stepDays(every);
   const out: string[] = [];
   for (let d = 1; d <= lastDay(month); d++) {
     const date = onDay(month, d);
@@ -97,8 +166,9 @@ export function datesIn({ every, day, start }: Schedule, month: string): string[
 export function nextDates(schedule: Schedule, from: string, count: number): string[] {
   const out: string[] = [];
   const begin = monthIndex(schedule.start && schedule.start > from ? schedule.start : from);
-  // Six months is the longest wait, so this always reaches `count`.
-  for (let i = begin; out.length < count && i <= begin + count * 6 + 12; i++) {
+  // Far enough for the longest wait: ten years, or 99 months, between one and the next.
+  const wait = stepMonths(schedule.every) ?? Math.ceil(stepDays(schedule.every) / 28);
+  for (let i = begin; out.length < count && i <= begin + count * wait + 12; i++) {
     for (const date of datesIn(schedule, monthOf(i))) if (date >= from && out.length < count) out.push(date);
   }
   return out;
@@ -131,10 +201,9 @@ export function assign<T extends { for_date?: string | null }>(dates: string[], 
 
 /** How many times a month it happens on average, for «al mes» figures. */
 export function timesPerMonth(every: Every): number {
-  if (every === "daily") return 365.25 / 12;
-  if (every === "every2") return 365.25 / 24;
   if (every === "biweekly") return 2;
-  return 1 / STEP_MONTHS[every]!;
+  const months = stepMonths(every);
+  return months ? 1 / months : 365.25 / 12 / stepDays(every);
 }
 
 const MONTHS = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
@@ -145,10 +214,12 @@ export function cadenceText({ every, day, start }: Schedule): string {
   if (every === "biweekly") return `quincenal, ${quincenaLabel(day)}`;
   if (every === "daily") return "cada día";
   if (every === "every2") return "cada 2 días";
-  const label = SHORT[every].toLowerCase();
+  const label = everyShort(every).toLowerCase();
   if (!start) return label;
+  if (!stepMonths(every)) return `${label}, desde el ${Number(start.slice(8))} ${MONTHS[Number(start.slice(5, 7)) - 1]}`;
   const anchor = Number(start.slice(5, 7)) - 1;
   const d = Number(start.slice(8));
   if (every === "semiannual") return `${label}: ${d} ${MONTHS[anchor]} y ${d} ${MONTHS[(anchor + 6) % 12]}`;
+  if (periodOf(every).unit === "y") return `${label}: ${d} ${MONTHS[anchor]}`;
   return `${label}, día ${d}`;
 }

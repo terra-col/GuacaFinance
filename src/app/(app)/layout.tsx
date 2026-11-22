@@ -5,6 +5,7 @@ import { CategoriesProvider } from "@/components/pickers";
 import { AdvisorButton, Nav } from "@/components/nav";
 import { aiProvider } from "@/lib/ai-provider";
 import { NavProgress } from "@/components/nav-progress";
+import { NoticeBell } from "@/components/notice-bell";
 import { QuickAdd, QuickAddButton } from "@/components/quick-add";
 import { Suspense } from "react";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -17,13 +18,13 @@ import { SharedReadyProvider } from "@/components/shared-ready";
 import { RecurrenceReadyProvider } from "@/components/recurrence-ready";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const { pending, accounts, categories, userId, tourSeen, sharedReady, recurrenceReady, incomeRecurrenceReady, today } = await loadShell();
+  const { pending, accounts, categories, userId, tourSeen, sharedReady, socialReady, noticeCount, recurrenceReady, incomeRecurrenceReady, customPeriodsReady, today } = await loadShell();
 
   return (
     // Every category field (Registrar, editing a movement, fixed bills, Wallet's inbox) offers the person's own categories too.
     <CategoriesProvider categories={categories}>
-    <SharedReadyProvider ready={sharedReady}>
-    <RecurrenceReadyProvider ready={recurrenceReady} incomes={incomeRecurrenceReady}>
+    <SharedReadyProvider ready={sharedReady} social={socialReady}>
+    <RecurrenceReadyProvider ready={recurrenceReady} incomes={incomeRecurrenceReady} custom={customPeriodsReady}>
     <div className="mx-auto w-full max-w-5xl px-4 pb-40 sm:px-6 lg:pb-16">
       <Suspense>
         <NavProgress />
@@ -31,12 +32,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       {/* Above the page so the fixed tab bar, which lives inside, stays on top of the content. */}
       <header className="relative z-40 flex items-center justify-between gap-3 py-4 sm:py-5">
         <div className="flex items-center gap-4">
-          <Logo />
+          <Logo compact={socialReady} />
           <Nav pending={pending} />
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 sm:gap-2">
           <QuickAddButton />
           <AdvisorButton />
+          {socialReady && <NoticeBell initial={noticeCount} />}
           <PrivacyToggle initial={(await cookies()).get(PRIVACY_COOKIE)?.value === "1"} />
           <ThemeToggle />
           {/* Ajustes is an icon here on every screen size. */}

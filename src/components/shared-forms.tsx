@@ -5,6 +5,7 @@ import { useState, useTransition } from "react";
 import {
   addMember,
   answerRequest,
+  createDirect,
   createGroup,
   deleteGroup,
   deleteSharedEntry,
@@ -26,6 +27,7 @@ import { useCloseModal } from "./modal";
 import { MoneyInput } from "./money-input";
 import { PeopleFields } from "./people-fields";
 import { SelectField, type PickOption } from "./pickers";
+import { useSocialReady } from "./shared-ready";
 import { Spinner } from "./submit-button";
 
 type Person = { id: string; name: string };
@@ -331,13 +333,96 @@ export function DeleteEntryForm({ entry, keepsMovement }: { entry: string; keeps
   );
 }
 
-export function DeleteGroupForm({ group }: { group: string }) {
+export function DeleteGroupForm({
+  group,
+  social,
+  hasEntries,
+  others,
+  settled,
+}: {
+  group: string;
+  /** Migration 0023: otherwise only an empty one can go. */
+  social: boolean;
+  hasEntries: boolean;
+  /** Someone else entered with their account. */
+  others: boolean;
+  settled: boolean;
+}) {
   const { pending, error, submit } = useSave(deleteGroup);
+  const canErase = hasEntries && !others;
+  const [how, setHow] = useState<"keep" | "erase" | "">(canErase ? "" : "keep");
+
+  if (hasEntries && (!social || (others && !settled))) {
+    return (
+      <p className="text-sm text-ink-2">
+        {social
+          ? "Todavía hay saldos pendientes con personas que ya se unieron. Usen «Saldar» en «Para quedar al día» (o borra los gastos que sobren) y vuelve aquí."
+          : "Por ahora solo se puede eliminar sin gastos: bórralos primero."}
+      </p>
+    );
+  }
+  const options = [
+    { value: "keep", title: "Ya terminó", text: "Sale de tus pantallas. Lo pagado y lo gastado se conserva: tus saldos y tus totales no cambian." },
+    { value: "erase", title: "Fue una prueba", text: "Borra todo, también los movimientos que se crearon en tus cuentas desde aquí: esos saldos vuelven a como estaban." },
+  ] as const;
   return (
-    <form onSubmit={submit} className="flex flex-col items-start gap-2">
+    <form onSubmit={submit} className="flex flex-col gap-4">
       <input type="hidden" name="group" value={group} />
-      <Send pending={pending} className="inline-flex items-center px-1 py-2 text-sm font-medium text-ink-3 hover:text-debt">
-        Borrar este grupo vacío
+      {social && <input type="hidden" name="how" value={how} />}
+      {canErase ? (
+        <fieldset className="flex flex-col gap-2">
+          <legend className="mb-2 text-sm font-medium text-ink-2">¿Qué pasa con lo que tiene?</legend>
+          {options.map((o) => (
+            <label key={o.value} data-how={o.value} className={`flex cursor-pointer items-start gap-3 rounded-2xl border p-3 ${how === o.value ? "border-brand bg-brand/8" : "border-line-strong"}`}>
+              <input type="radio" className="mt-1" checked={how === o.value} onChange={() => setHow(o.value)} />
+              <span>
+                <span className="block text-sm font-semibold text-ink">{o.title}</span>
+                <span className="block text-sm text-ink-2">{o.text}</span>
+              </span>
+            </label>
+          ))}
+          {!settled && how === "keep" && <p className="text-sm text-ink-2">Lo que quedó pendiente dejará de aparecer en «Te deben» y «Debes».</p>}
+        </fieldset>
+      ) : (
+        <p className="text-sm text-ink-2">
+          {hasEntries ? "Sale de la pantalla de todos. Lo pagado y lo gastado se conserva: los saldos y los totales no cambian." : "Está vacío: se borra para todos."}
+        </p>
+      )}
+      <Problem error={error} />
+      <Send pending={pending} disabled={!how}>
+        Sí, eliminar
+      </Send>
+    </form>
+  );
+}
+
+/** An account between two, with someone new or someone one already divides with. */
+export function DirectForm({ known, tx }: { known: Known[]; tx?: string }) {
+  const router = useRouter();
+  const close = useCloseModal();
+  const { pending, error, submit } = useSave(createDirect, ({ id }) => {
+    close();
+    router.push(`/compartidos/${id}${tx ? `?dividir=${tx}` : ""}`);
+  });
+  return (
+    <form onSubmit={submit} className="flex flex-col gap-4">
+      <p className="text-sm text-ink-2">Para dividir solo entre ustedes dos, sin armar un grupo.</p>
+      <PeopleFields known={known} single />
+      <Problem error={error} />
+      <Send pending={pending}>Crear</Send>
+    </form>
+  );
+}
+
+/** Goes to the account between two with someone, creating it the first time. */
+export function DirectButton({ member, tx, className = "btn h-11 self-start px-4 text-sm", children }: { member: string; tx?: string; className?: string; children: React.ReactNode }) {
+  const router = useRouter();
+  const { pending, error, submit } = useSave(createDirect, ({ id }) => router.push(`/compartidos/${id}${tx ? `?dividir=${tx}` : ""}`));
+  return (
+    <form onSubmit={submit}>
+      <input type="hidden" name="member" value={member} />
+      <Send pending={pending} className={className}>
+        {children}
       </Send>
       <Problem error={error} />
     </form>
@@ -378,6 +463,7 @@ export function EditPersonForm({
   const { pending, error, submit } = useSave(editPerson, () => close());
   const remove = useSave(removeMember, () => close());
   const account = who === "guest" ? knownByPhone(known, phone) : undefined;
+  const social = useSocialReady();
   return (
     <div className="flex flex-col gap-4">
       <form onSubmit={submit} className="flex flex-col gap-4">
@@ -394,7 +480,11 @@ export function EditPersonForm({
           <label className="field">
             Celular
             <input className="input num" type="tel" inputMode="tel" name="phone" value={phone} onChange={(e) => setPhone(e.target.value)} maxLength={22} autoComplete="off" placeholder="300 123 4567" />
-            <span className="text-xs font-normal text-ink-3">{account ? "Ya está en Guaca: al guardar le llega la invitación en la app." : "Solo lo ves tú."}</span>
+            <span className="text-xs font-normal text-ink-3">{account
+                ? "Ya está en Guaca: al guardar le llega la invitación en la app."
+                : social && who === "guest"
+                  ? "Solo lo ves tú. Al guardar, si tiene ese celular en su perfil de Guaca le aparece la invitación, y tú confirmas antes de que entre."
+                  : "Solo lo ves tú."}</span>
           </label>
         )}
         <Problem error={error} />

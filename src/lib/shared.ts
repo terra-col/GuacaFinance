@@ -8,6 +8,9 @@ export interface SharedGroup {
   name: string;
   created_by: string | null;
   created_at: string;
+  /** An account between two, rather than a group (migration 0023). */
+  direct?: boolean;
+  deleted_at?: string | null;
 }
 
 export interface SharedMember {
@@ -57,6 +60,7 @@ export interface SharedLink {
 }
 
 export interface SharedData {
+  /** The ones still open. What was recorded in deleted ones stays in the lists below, for the totals. */
   groups: SharedGroup[];
   members: SharedMember[];
   entries: SharedEntry[];
@@ -66,6 +70,8 @@ export interface SharedData {
   requests?: SharedRequest[];
   /** Whether groups, people and expenses can be edited (migration 0020). */
   editable?: boolean;
+  /** Accounts between two, deleting, invitations by phone and notices (migration 0023). */
+  social?: boolean;
 }
 
 export const NO_SHARED: SharedData = { groups: [], members: [], entries: [], shares: [], links: [] };
@@ -174,7 +180,8 @@ export function flowTxs(txs: Tx[], data: SharedData, userId: string): Tx[] {
 
 /** How a linked movement reads in a list: the group it belongs to and how much of it is one's own. */
 export interface SharedMark {
-  groupId: string;
+  /** null: that group was deleted. */
+  groupId: string | null;
   kind: SharedEntry["kind"];
   mine: number;
 }
@@ -184,9 +191,10 @@ export function sharedMarks(data: SharedData, userId: string): Record<string, Sh
   const entries = new Map(data.entries.map((e) => [e.id, e]));
   const myShare = new Map(data.shares.filter((s) => mine.has(s.member_id)).map((s) => [s.entry_id, s.amount]));
   const marks: Record<string, SharedMark> = {};
+  const open = new Set(data.groups.map((g) => g.id));
   for (const link of data.links) {
     const entry = entries.get(link.entry_id);
-    if (entry) marks[link.tx_id] = { groupId: entry.group_id, kind: entry.kind, mine: entry.kind === "expense" ? (myShare.get(entry.id) ?? 0) : 0 };
+    if (entry) marks[link.tx_id] = { groupId: open.has(entry.group_id) ? entry.group_id : null, kind: entry.kind, mine: entry.kind === "expense" ? (myShare.get(entry.id) ?? 0) : 0 };
   }
   return marks;
 }

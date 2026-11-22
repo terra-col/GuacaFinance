@@ -14,6 +14,7 @@ import { loadData } from "@/lib/data";
 import { balanceAt, byDue, daysBetween, formatCOP, isDebt, monthName, monthlyChecklist, monthlySeries, relativeDay, spendingByCategory, totals } from "@/lib/finance";
 import { goalChecklist } from "@/lib/goals";
 import { SharedSummary } from "@/components/shared-summary";
+import { loadPending, pendingCount } from "@/lib/pending";
 import { TourButton } from "@/components/tour";
 
 const LEVEL = { urgent: "Urgente", warn: "Atención", idea: "Idea" };
@@ -55,10 +56,10 @@ function greetingLine(today: string) {
 }
 
 async function Dashboard({ searchParams }: Props) {
-  const { accounts, txs, flows, position, shared, bills, inbox, incomes, budgets, skips, planReady, goals, deposits, user, today } = await loadData();
+  const { supabase, accounts, txs, flows, position, shared, bills, inbox, incomes, budgets, skips, planReady, goals, deposits, user, today } = await loadData();
   const addNow = (await searchParams).nueva === "1";
   const name = profileName(user);
-  const invitations = shared.requests?.filter((r) => r.user_id === user.id).length ?? 0;
+  const invitations = pendingCount(await loadPending(supabase, shared, user.id));
   const greeting = (
     <div className="pt-1">
       <div className="flex items-center gap-3">

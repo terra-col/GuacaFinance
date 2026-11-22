@@ -4,6 +4,7 @@ import { useState, useSyncExternalStore } from "react";
 import { fromContact, knownByPhone, type Known } from "@/lib/contacts";
 import { formatPhone } from "@/lib/phone";
 import { Icon } from "./icons";
+import { useSocialReady } from "./shared-ready";
 
 interface ContactsManager {
   select(properties: ("name" | "tel")[], options?: { multiple?: boolean }): Promise<{ name?: string[]; tel?: string[] }[]>;
@@ -28,6 +29,7 @@ interface Person {
  */
 export function PeopleFields({ known, single = false }: { known: Known[]; single?: boolean }) {
   const canPick = useCanPickContacts();
+  const social = useSocialReady();
   const [people, setPeople] = useState<Person[]>([{ key: 0, name: "", phone: "" }]);
   const [nextKey, setNextKey] = useState(1);
   const [problem, setProblem] = useState<string | null>(null);
@@ -135,7 +137,8 @@ export function PeopleFields({ known, single = false }: { known: Known[]; single
         </button>
       )}
       <p className="text-xs text-ink-3">
-        El grupo ve el nombre; el celular solo lo ves tú.
+        {single ? "La otra persona" : "El grupo"} ve el nombre; el celular solo lo ves tú.
+        {social && " Si esa persona tiene ese celular en su perfil de Guaca le aparece la invitación, y tú confirmas antes de que entre."}
         {!canPick && " Este navegador no deja abrir tus contactos: copia el número desde tu agenda. La próxima vez la persona te aparece aquí."}
       </p>
       {problem && (

@@ -11,9 +11,11 @@ const notMigrated = (error: { code?: string }) => error.code === "42P01" || erro
  * everything paid for others as one's own spending.
  */
 export async function loadShared(supabase: SupabaseClient): Promise<{ shared: SharedData; ready: boolean }> {
-  const [groups, asked] = await Promise.all([
+  const [groups, asked, noticed] = await Promise.all([
     supabase.from("shared_groups").select("*").order("created_at", { ascending: false }),
     supabase.from("shared_requests").select("member_id, group_id, user_id"),
+    // Only whether migration 0023 ran.
+    supabase.from("shared_notices").select("id").limit(1),
   ]);
   if (groups.error) {
     if (notMigrated(groups.error)) return { shared: NO_SHARED, ready: false };
@@ -22,8 +24,10 @@ export async function loadShared(supabase: SupabaseClient): Promise<{ shared: Sh
   // Editing and contacts arrived with migration 0020.
   if (asked.error && !notMigrated(asked.error)) throw new Error(`No se pudieron leer las invitaciones: ${asked.error.message}`);
   const editable = !asked.error;
+  if (noticed.error && !notMigrated(noticed.error)) throw new Error(`No se pudieron leer los avisos: ${noticed.error.message}`);
+  const social = editable && !noticed.error;
   const requests = (asked.data ?? []) as SharedRequest[];
-  if (groups.data.length === 0) return { shared: { ...NO_SHARED, editable, requests }, ready: true };
+  if (groups.data.length === 0) return { shared: { ...NO_SHARED, editable, social, requests }, ready: true };
 
   const [members, entries, shares, links, contacts] = await Promise.all([
     allPages<SharedMember>((from, to) => supabase.from("shared_members").select("*").order("created_at").order("id").range(from, to)),
@@ -44,8 +48,10 @@ export async function loadShared(supabase: SupabaseClient): Promise<{ shared: Sh
     ready: true,
     shared: {
       editable,
+      social,
       requests,
-      groups: groups.data as SharedGroup[],
+      // Deleted ones leave every screen; their entries stay, so past spending does not change.
+      groups: (groups.data as SharedGroup[]).filter((g) => !g.deleted_at),
       // Each person reads the group with the names they have in their own contacts.
       members: members.rows.map((m) => {
         const contact = contacts.rows.find((c) => c.member_id === m.id);

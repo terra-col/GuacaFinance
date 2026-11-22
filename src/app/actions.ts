@@ -32,8 +32,10 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const missingTable = (message: string, migration: string) =>
   /relation .* does not exist|schema cache|could not find the table|column .* does not exist/i.test(message) ? `Falta ejecutar la migración ${migration} en Supabase.` : null;
 
+const periodMissing = (message: string) => (/every_check/.test(message) ? "Falta ejecutar la migración 0022 en Supabase." : null);
+
 const recurrenceMissing = (message: string) =>
-  /\bevery\b|starts_on|plan_every|plan_start|for_date|date_skips/i.test(message) ? "Falta ejecutar la migración 0017 en Supabase." : null;
+  periodMissing(message) ?? (/\bevery\b|starts_on|plan_every|plan_start|for_date|date_skips/i.test(message) ? "Falta ejecutar la migración 0017 en Supabase." : null);
 
 /**
  * The periodicity a form asks for, as day and start. A quincena keeps its start while it stays a
@@ -818,7 +820,9 @@ export async function adjustBalance(_prev: FormState, form: FormData): Promise<F
 }
 
 const goalsMissing = (message: string) =>
-  /plan_every|plan_start/i.test(message)
+  periodMissing(message)
+    ? periodMissing(message)
+    : /plan_every|plan_start/i.test(message)
     ? "Falta ejecutar la migración 0017 en Supabase."
     : /plan_once/i.test(message)
     ? "Falta ejecutar la migración 0011 en Supabase."
@@ -1027,6 +1031,7 @@ export async function saveIncome(_prev: FormState, form: FormData): Promise<Form
   };
   const id = text(form, "id");
   const { error } = id ? await supabase.from("incomes").update(row).eq("id", id) : await supabase.from("incomes").insert(row);
+  if (error && periodMissing(error.message)) return { error: periodMissing(error.message)! };
   if (error && /\bevery\b|starts_on/i.test(error.message)) return { error: "Falta ejecutar la migración 0019 en Supabase." };
   if (error) return { error: missingTable(error.message, once_month ? "0008" : "0007") ?? `No se pudo guardar: ${error.message}` };
   revalidatePath("/", "layout");

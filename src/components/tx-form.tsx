@@ -4,10 +4,14 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useActionState, useState } from "react";
 import { saveTx, type FormState } from "@/app/actions";
+import { divideMovement } from "@/app/shared-actions";
+import { contactPhone } from "@/lib/contacts";
 import { DateField } from "./date-field";
 import { MoneyInput } from "./money-input";
 import { CategoryField, SelectField, type PickOption } from "./pickers";
 import { useSharedReady } from "./shared-ready";
+import { SplitPanel, draftShares, draftSplit } from "./split-panel";
+import { SplitWith, type Dividing } from "./split-with";
 import { SubmitButton } from "./submit-button";
 import {
   allowedTxKinds,
@@ -54,19 +58,41 @@ export function TxForm({
   const sharedReady = useSharedReady();
   const router = useRouter();
   const [split, setSplit] = useState(false);
+  const [dividing, setDividing] = useState<Dividing | null>(null);
+  const [splitting, setSplitting] = useState(false);
+  const [amount, setAmount] = useState(tx?.amount ?? 0);
+  const [invalid, setInvalid] = useState<string | null>(null);
+  const [kind, setKind] = useState<TxKind>(tx?.kind ?? "expense");
+  const divides = !tx && split && kind === "expense";
   const [state, action] = useActionState<FormState, FormData>(
     async (prev: FormState, form: FormData) => {
+      const chosen = divides ? dividing : null;
       const result = await saveTx(prev, form);
-      if (!result.error) {
-        onDone?.(result.message ?? "Guardado.");
-        // «Dividir»: the expense is saved, then one chooses with whom.
-        if (result.id && split) router.push(`/compartidos?dividir=${result.id}`);
+      if (result.error) return result;
+      let message = result.message ?? "Guardado.";
+      if (chosen && result.id) {
+        const order = new FormData();
+        order.set("tx", result.id);
+        order.set("split", JSON.stringify(draftSplit(chosen.draft)));
+        order.set("group", chosen.target.group ?? "");
+        order.set("person", chosen.target.person ?? "");
+        order.set("name", String(form.get("person") ?? ""));
+        order.set("phone", String(form.get("phone") ?? ""));
+        let divided = false;
+        try {
+          divided = !(await divideMovement(order)).error;
+        } catch {
+          // No connection: the movement is saved all the same.
+        }
+        message = divided ? "Registrado y dividido." : "Registrado. Falta dividirlo.";
+        // It stays saved: what is left is choosing again, never recording it twice.
+        if (!divided) router.push(`/compartidos?dividir=${result.id}`);
       }
+      onDone?.(message);
       return result;
     },
     {},
   );
-  const [kind, setKind] = useState<TxKind>(tx?.kind ?? "expense");
   const editing = Boolean(tx);
   // Keep the original values when the person flips back to the movement's own kind.
   const own = tx && kind === tx.kind ? tx : undefined;
@@ -77,7 +103,38 @@ export function TxForm({
 
   return (
     // Lives inside a sheet (new or edit), so it has no card or title of its own.
-    <form action={action} className="flex flex-col gap-4">
+    <form
+      action={action}
+      // Checked before sending: once sent, React empties the date and the note.
+      onSubmit={(e) => {
+        let problem: string | null = null;
+        if (divides && !dividing) problem = "Elige con quién lo divides.";
+        else if (divides && dividing && !dividing.target.group && !dividing.target.person) {
+          const typed = new FormData(e.currentTarget);
+          if (!String(typed.get("person") ?? "").trim()) problem = "Escribe el nombre de la persona.";
+          else if (contactPhone(String(typed.get("phone") ?? "")) === "invalid") problem = "Revisa el celular de la persona.";
+        }
+        setInvalid(problem);
+        if (problem) e.preventDefault();
+      }}
+      // Enter inside the split view would record the movement.
+      onKeyDown={(e) => {
+        if (splitting && e.key === "Enter" && e.target instanceof HTMLInputElement) e.preventDefault();
+      }}
+      className="flex flex-col gap-4"
+    >
+      {splitting && dividing && (
+        <SplitPanel
+          amount={amount}
+          members={dividing.target.members}
+          me={dividing.target.me}
+          draft={dividing.draft}
+          onChange={(draft) => setDividing({ target: dividing.target, draft })}
+          onClose={() => setSplitting(false)}
+          fixedPayer
+        />
+      )}
+      <div hidden={splitting} className="flex flex-col gap-4">
       {editing && <input type="hidden" name="id" value={tx!.id} />}
       {editing ? (
         <input type="hidden" name="kind" value={kind} />
@@ -116,6 +173,7 @@ export function TxForm({
                 name="amount"
                 placeholder="$ 85.000"
                 defaultValue={tx?.amount}
+                onValue={setAmount}
                 required
               />
             </label>
@@ -169,13 +227,24 @@ export function TxForm({
                 Dividir este gasto
               </Link>
             ) : (
-              <button type="button" className="chip self-start" aria-pressed={split} onClick={() => setSplit(!split)}>
-                {split ? "✓ " : ""}Dividir con alguien
-              </button>
+              <>
+                <button
+                  type="button"
+                  className="chip self-start"
+                  aria-pressed={split}
+                  onClick={() => {
+                    setSplit(!split);
+                    setDividing(null);
+                  }}
+                >
+                  {split ? "✓ " : ""}Dividir con alguien
+                </button>
+                {split && <SplitWith value={dividing} onChange={setDividing} amount={amount} onOpenSplit={() => setSplitting(true)} />}
+              </>
             ))}
-          {state.error && (
+          {(invalid ?? state.error) && (
             <p role="alert" className="alert">
-              {state.error}
+              {invalid ?? state.error}
             </p>
           )}
           {state.message && (
@@ -183,9 +252,16 @@ export function TxForm({
               {state.message}
             </p>
           )}
-          <SubmitButton className="btn self-start">{editing ? "Guardar cambios" : split && kind === "expense" ? "Registrar y dividir" : "Registrar"}</SubmitButton>
+          {divides && dividing && amount > 0 && !draftShares(dividing.draft, amount) ? (
+            <p role="alert" className="alert">
+              La división no cuadra con el monto: tócala para revisarla.
+            </p>
+          ) : (
+            <SubmitButton className="btn self-start" disabled={divides && !dividing}>{editing ? "Guardar cambios" : divides ? "Registrar y dividir" : "Registrar"}</SubmitButton>
+          )}
         </>
       )}
+      </div>
     </form>
   );
 }

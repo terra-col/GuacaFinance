@@ -2,11 +2,13 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Icon, txIconName } from "@/components/icons";
 import { Modal } from "@/components/modal";
+import { PeopleSection } from "@/components/people-section";
 import { ExpenseForm } from "@/components/expense-form";
 import { AddPersonForm, DeleteEntryForm, DeleteGroupForm, EditPersonForm, InviteForm, RecordForm, RenameGroupForm, SettlementForm, type EditableEntry } from "@/components/shared-forms";
 import { knownPeople } from "@/lib/contacts";
 import { loadData } from "@/lib/data";
 import { favoriteAccountId, favoriteFirst, formatCOP, formatDate, holdsMoney, isAdjustment } from "@/lib/finance";
+import { groupTitle } from "@/lib/people";
 import { groupNets, memberOf, settleUp } from "@/lib/shared";
 import { parseSplit, splitTitle } from "@/lib/split";
 
@@ -27,6 +29,11 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
   const nets = groupNets(id, shared);
   const transfers = settleUp(nets);
   const mine = nets.get(me.id) ?? 0;
+  const direct = Boolean(group.direct);
+  const title = groupTitle(group, shared, user.id);
+  const other = direct ? members.find((m) => m.id !== me.id) : undefined;
+  const canRemove = direct || group.created_by === null || group.created_by === user.id;
+  const creator = members.find((m) => m.user_id && m.user_id === group.created_by);
 
   const option = (a: { id: string; name: string; favorite?: boolean }) => ({ value: a.id, label: a.name, star: Boolean(a.favorite) });
   const payable = favoriteFirst(accounts.filter((a) => a.kind !== "loan")).map(option);
@@ -60,8 +67,13 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
         </Link>
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div className="min-w-0">
-            <h1 className="display text-3xl break-words">{group.name}</h1>
-            {known && (
+            <h1 className="display text-3xl break-words">{title}</h1>
+            {other && (
+              <Link href={`/compartidos/persona/${other.id}`} className={SMALL}>
+                Solo ustedes dos · ver todo con {other.name}
+              </Link>
+            )}
+            {known && !direct && (
               <Modal label="Editar grupo" title="Editar grupo" buttonClass={SMALL}>
                 <RenameGroupForm group={id} name={group.name} />
               </Modal>
@@ -84,6 +96,55 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
           )}
         </div>
       </div>
+
+      <PeopleSection
+        people={members.map((m) => ({ id: m.id, name: m.name, me: m.id === me.id }))}
+        waiting={members.filter((m) => !m.user_id).length}
+        action={
+          !direct && (
+            <Modal label="+ Agregar" title="Agregar persona" buttonClass="btn-quiet h-9 px-3 text-sm">
+              <AddPersonForm group={id} known={addable ?? null} />
+            </Modal>
+          )
+        }
+      >
+        {[me, ...members.filter((m) => m.id !== me.id)].map((m) => {
+          const net = nets.get(m.id) ?? 0;
+          const inHistory = entries.some((e) => e.paid_by === m.id) || shares.some((s) => s.member_id === m.id);
+          const removable = !direct && !m.user_id && !inHistory;
+          return (
+            <li key={m.id} className="flex items-center justify-between gap-2 py-2 text-sm">
+              <div className="min-w-0">
+                <p className="truncate font-semibold">
+                  {m.name}
+                  {m.id === me.id ? " (tú)" : ""}
+                </p>
+                <p className="num text-xs text-ink-3">
+                  {net > 0 ? `le deben ${formatCOP(net)}` : net < 0 ? `debe ${formatCOP(-net)}` : "al día"}
+                  {!m.user_id && ` · ${pending.has(m.id) ? "Invitación enviada" : "Sin unirse"}`}
+                </p>
+              </div>
+              <div className="flex shrink-0 gap-3">
+                {!m.user_id && (
+                  <Modal label="Invitar" title={`Invitar a ${m.name}`} buttonClass={SMALL}>
+                    <InviteForm member={{ id: m.id, name: m.name }} groupName={group.name} phone={m.phone ?? ""} removable={!known && removable} />
+                  </Modal>
+                )}
+                {known && (
+                  <Modal label="Editar" title={m.id === me.id ? "Tu nombre aquí" : `Editar a ${m.name}`} buttonClass={SMALL}>
+                    <EditPersonForm
+                      member={{ id: m.id, name: m.name, phone: m.phone ?? "" }}
+                      who={m.id === me.id ? "me" : m.user_id ? "joined" : "guest"}
+                      known={addable ?? []}
+                      removable={removable}
+                    />
+                  </Modal>
+                )}
+              </div>
+            </li>
+          );
+        })}
+      </PeopleSection>
 
       {dividing && (
         <section className="card flex flex-col gap-4" aria-labelledby="split-title">
@@ -131,57 +192,6 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
           </ul>
         </section>
       )}
-
-      <section className="card" aria-labelledby="people-title">
-        <div className="flex items-center justify-between gap-3">
-          <h2 id="people-title" className="display text-2xl">
-            Personas
-          </h2>
-          <Modal label="+ Agregar" title="Agregar persona" buttonClass="btn-quiet h-9 px-3 text-sm">
-            <AddPersonForm group={id} known={addable ?? null} />
-          </Modal>
-        </div>
-        <ul className="mt-1 divide-y divide-line">
-          {members.map((m) => {
-            const net = nets.get(m.id) ?? 0;
-            const inHistory = entries.some((e) => e.paid_by === m.id) || shares.some((s) => s.member_id === m.id);
-            return (
-              <li key={m.id} className="flex items-center justify-between gap-3 py-3">
-                <div className="min-w-0">
-                  <p className="truncate font-semibold">
-                    {m.name}
-                    {m.id === me.id ? " (tú)" : ""}
-                  </p>
-                  <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-ink-3">
-                    {!m.user_id && (
-                      <>
-                        {pending.has(m.id) ? "Invitación enviada" : "Sin unirse"}
-                        <Modal label="Invitar" title={`Invitar a ${m.name}`} buttonClass={SMALL}>
-                          <InviteForm member={{ id: m.id, name: m.name }} groupName={group.name} phone={m.phone ?? ""} removable={!known && !inHistory} />
-                        </Modal>
-                      </>
-                    )}
-                    {known && (
-                      <Modal label="Editar" title={m.id === me.id ? "Tu nombre en el grupo" : `Editar a ${m.name}`} buttonClass={SMALL}>
-                        <EditPersonForm
-                          member={{ id: m.id, name: m.name, phone: m.phone ?? "" }}
-                          who={m.id === me.id ? "me" : m.user_id ? "joined" : "guest"}
-                          known={addable ?? []}
-                          removable={!m.user_id && !inHistory}
-                        />
-                      </Modal>
-                    )}
-                  </div>
-                </div>
-                <p className="shrink-0 text-right">
-                  <span className="block text-xs text-ink-3">{net > 0 ? "le deben" : net < 0 ? "debe" : "al día"}</span>
-                  {net !== 0 && <span className="num block font-semibold">{formatCOP(Math.abs(net))}</span>}
-                </p>
-              </li>
-            );
-          })}
-        </ul>
-      </section>
 
       <section className="card" aria-labelledby="entries-title">
         <h2 id="entries-title" className="display text-2xl">
@@ -276,7 +286,21 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
         )}
       </section>
 
-      {entries.length === 0 && group.created_by === user.id && <DeleteGroupForm group={id} />}
+      <div className="flex justify-center">
+        {canRemove ? (
+          <Modal label={direct ? "Eliminar esta cuenta" : "Eliminar grupo"} title={direct ? "Eliminar esta cuenta" : "Eliminar grupo"} buttonClass="btn-quiet h-11 gap-2 px-4 text-sm hover:text-debt">
+            <DeleteGroupForm
+              group={id}
+              social={Boolean(shared.social)}
+              hasEntries={entries.length > 0}
+              others={members.some((m) => m.user_id && m.id !== me.id)}
+              settled={[...nets.values()].every((net) => net === 0)}
+            />
+          </Modal>
+        ) : (
+          <p className="text-center text-xs text-ink-3">Este grupo lo puede eliminar {creator?.name ?? "quien lo creó"}, que lo creó.</p>
+        )}
+      </div>
     </>
   );
 }

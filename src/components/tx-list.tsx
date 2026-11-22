@@ -60,7 +60,7 @@ export function TxList({
   const [editing, setEditing] = useState<Tx | null>(null);
   const router = useRouter();
   // A shared one is edited in its group.
-  const edit = (tx: Tx) => (shared[tx.id] ? router.push(`/compartidos/${shared[tx.id].groupId}`) : setEditing(tx));
+  const edit = (tx: Tx) => (shared[tx.id]?.groupId ? router.push(`/compartidos/${shared[tx.id].groupId}`) : setEditing(tx));
   const closeEditor = useCallback(() => setEditing(null), []);
   // Only one row stays swiped open at a time.
   const [swiped, setSwiped] = useState<string | null>(null);

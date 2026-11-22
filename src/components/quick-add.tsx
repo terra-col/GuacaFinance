@@ -61,7 +61,7 @@ export function QuickAdd({ accounts, today }: { accounts: Pick<Account, "id" | "
         <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" aria-hidden="true">
           <path d="M12 5v14M5 12h14" />
         </svg>
-        Registrar
+        Registrar movimiento
       </button>
 
       <Sheet open={open} onClose={close} title="Nuevo movimiento">
@@ -96,7 +96,7 @@ export function QuickAddButton() {
       <span aria-hidden="true" className="text-lg leading-none">
         +
       </span>
-      Registrar
+      Registrar movimiento
     </button>
   );
 }

@@ -5,7 +5,7 @@ import { monthPlan } from "./budget.ts";
 import { billStatus, monthlyChecklist, type Account, type Bill, type Tx } from "./finance.ts";
 import { goalChecklist, goalView, planDates, planOutlook, type Goal, type GoalDeposit } from "./goals.ts";
 import { buildCalendar } from "./ics.ts";
-import { assign, cadenceText, datesIn, nextDates, quincenaFrom, timesPerMonth } from "./recurrence.ts";
+import { assign, cadenceText, datesIn, everyShort, isFrequent, nextDates, parseEvery, periodOf, periodToEvery, quincenaFrom, timesPerMonth } from "./recurrence.ts";
 
 const bank: Account = {
   id: "bank", kind: "savings", name: "Banco", institution: null, opening_balance: 5_000_000, opening_date: "2026-01-01",
@@ -163,4 +163,47 @@ test("incomes: each quincena is received on its own", async () => {
   assert.equal(monthPlan(items, [], []).income, 4_000_000);
   assert.equal(monthPlan(items, [], []).incomePending, 2_000_000);
   assert.equal(nextIncomeDate(salary, "2026-11-22"), "2026-11-30");
+});
+
+test("a unit and how many: the usual ones keep their names", () => {
+  const named = [["d", 1, "daily"], ["d", 2, "every2"], ["w", 2, "biweekly"], ["m", 1, "monthly"], ["m", 2, "bimonthly"], ["m", 3, "quarterly"], ["m", 6, "semiannual"], ["d", 3, "d3"], ["w", 1, "w1"], ["m", 4, "m4"], ["y", 1, "y1"]] as const;
+  for (const [unit, count, every] of named) {
+    assert.equal(periodToEvery(unit, count), every);
+    assert.deepEqual(periodOf(every), { unit, count });
+    assert.equal(parseEvery(every), every);
+  }
+  assert.equal(parseEvery("w2"), "w2", "every 14 days exactly is its own");
+  for (const bad of ["d1", "d2", "m1", "m6", "d0", "d100", "w53", "y11", "x3", "d-3", "d3.5", ""]) assert.equal(parseEvery(bad), null, bad);
+});
+
+test("dates of any period", () => {
+  const dates = (every: Parameters<typeof periodOf>[0], start: string, count = 4) => nextDates({ every, day: Number(start.slice(8)), start }, start, count);
+  assert.deepEqual(dates("d3", "2026-11-28"), ["2026-11-28", "2026-12-01", "2026-12-04", "2026-12-07"]);
+  assert.deepEqual(dates("w1", "2026-12-25"), ["2026-12-25", "2027-01-01", "2027-01-08", "2027-01-15"]);
+  assert.deepEqual(dates("w2", "2026-11-20"), ["2026-11-20", "2026-12-04", "2026-12-18", "2027-01-01"]);
+  assert.deepEqual(dates("w52", "2026-11-20", 3), ["2026-11-20", "2027-11-19", "2028-11-17"]);
+  assert.deepEqual(dates("m4", "2026-10-31"), ["2026-10-31", "2027-02-28", "2027-06-30", "2027-10-31"]);
+  assert.deepEqual(dates("y1", "2028-02-29"), ["2028-02-29", "2029-02-28", "2030-02-28", "2031-02-28"]);
+  assert.deepEqual(dates("y10", "2026-11-22", 3), ["2026-11-22", "2036-11-22", "2046-11-22"]);
+  assert.deepEqual(dates("m99", "2026-01-15", 2), ["2026-01-15", "2034-04-15"]);
+  assert.deepEqual(dates("d99", "2026-01-01", 3), ["2026-01-01", "2026-04-10", "2026-07-18"]);
+});
+
+test("custom periods: how they read and what they weigh", () => {
+  assert.equal(timesPerMonth("y1"), 1 / 12);
+  assert.ok(Math.abs(timesPerMonth("w1") - 4.348) < 0.001);
+  assert.deepEqual(["d3", "w1", "w2", "m4", "y1", "y2"].map((e) => everyShort(parseEvery(e)!)), ["Cada 3 días", "Semanal", "Cada 14 días", "Cada 4 meses", "Anual", "Cada 2 años"]);
+  assert.equal(cadenceText({ every: "y1", day: 15, start: "2027-03-15" }), "anual: 15 mar");
+  assert.deepEqual([isFrequent("d3"), isFrequent("d7"), isFrequent("w1")], [true, false, false]);
+});
+
+test("a yearly bill is listed only in its month, and the calendar has the next one", () => {
+  const insurance = bill({ every: "y1", starts_on: "2027-03-15", due_day: 15 });
+  assert.equal(list(insurance, [], "2026-11").length, 0);
+  assert.equal(list(insurance, [], "2027-03").length, 1);
+  assert.equal(list(insurance, [], "2028-03").length, 1);
+  assert.equal(list(insurance, [], "2027-04").length, 0);
+  const ics = buildCalendar([{ id: "b", name: "Seguro", due_day: 15, monthly_payment: null, every: "y1", starts_on: "2027-03-15" }], "2026-11-22");
+  assert.equal(ics.split("BEGIN:VEVENT").length - 1, 1);
+  assert.match(ics, /DTSTART;VALUE=DATE:20270315/);
 });

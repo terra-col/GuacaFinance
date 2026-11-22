@@ -4,10 +4,13 @@ import { createHash, randomBytes } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { profileName } from "@/lib/brand";
 import { contactPhone } from "@/lib/contacts";
 import { parsePesos } from "@/lib/finance";
 import { requestOrigin } from "@/lib/request-origin";
-import { INVITE_COOKIE } from "@/lib/shared";
+import { PENDING_ME, PENDING_OTHER, peopleWith, splitTargets, type SplitTarget } from "@/lib/people";
+import { INVITE_COOKIE, memberOf } from "@/lib/shared";
+import { loadShared } from "@/lib/shared-data";
 import { computeShares, parseSplit } from "@/lib/split";
 import { createClient } from "@/lib/supabase/server";
 
@@ -26,7 +29,7 @@ const DATE = /^\d{4}-\d{2}-\d{2}$/;
 function problem(error: { code?: string; message: string }): string {
   if (error.code === "P0001") return error.message;
   if (error.code === "23505") return "Ya hay alguien con ese nombre en el grupo, o eso ya quedó registrado.";
-  if (error.code === "PGRST202") return "Falta ejecutar la migración 0016 o la 0020 en Supabase.";
+  if (error.code === "PGRST202") return "Falta ejecutar en Supabase una migración de Compartidos (0016, 0020 o 0023).";
   if (error.code === "23514") return "Revisa los datos: hay un nombre, monto o texto que no es válido.";
   return "No se pudo guardar. Intenta de nuevo.";
 }
@@ -116,7 +119,10 @@ export async function removeMember(form: FormData): Promise<SharedResult> {
 }
 
 export async function deleteGroup(form: FormData): Promise<SharedResult> {
-  const result = await call("shared_delete_group", { p_group: text(form, "group") });
+  const how = text(form, "how");
+  const p_group = text(form, "group");
+  // Without a «how» it is an empty group before migration 0023.
+  const result = await (how ? call("shared_remove_group", { p_group, p_erase: how === "erase" }) : call("shared_delete_group", { p_group }));
   if (result.error) return result;
   // From here, so the deleted group's page is never drawn again.
   redirect("/compartidos");
@@ -201,6 +207,115 @@ export async function saveSharedExpense(form: FormData): Promise<SharedResult> {
     p_account: text(form, "account_id") || null,
     p_tx: text(form, "tx") || null,
   });
+}
+
+async function currentPerson() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+  const { shared } = await loadShared(supabase);
+  // The name of the profile; else the one they already go by in a group.
+  const name = profileName(user) || shared.members.find((m) => m.user_id === user.id)?.name || "";
+  return { supabase, user, shared, name };
+}
+
+/**
+ * The account between two with someone: the one there is, or a new one. `member` is one of their
+ * places (someone one already divides with); without it, a name and maybe a phone.
+ */
+async function openDirect(member: string, typed: Person | null): Promise<SharedResult> {
+  const { shared, user, name } = await currentPerson();
+  const same = (a: string, b: string) => a.trim().toLocaleLowerCase("es") === b.trim().toLocaleLowerCase("es");
+  const person = peopleWith(shared, user.id).find((p) =>
+    member ? p.members.includes(member) : typed?.phone ? p.phone === typed.phone : !p.phone && typed && same(p.name, typed.name),
+  );
+  if (member && !person && !typed) return { error: "Esa persona ya no está en tus grupos." };
+  if (person?.direct) return { id: person.direct };
+  if (!name) return { error: "Escribe tu nombre en Ajustes: así te verá la otra persona." };
+  const other = person?.name ?? typed?.name ?? "";
+  if (!other) return { error: "Escribe el nombre de la persona." };
+  if (same(other, name)) return { error: "Tiene tu mismo nombre: distínguelos con un apellido." };
+  return call("shared_create_direct", {
+    p_my_name: name,
+    p_name: other,
+    p_phone: person?.phone || typed?.phone || null,
+    p_known: person?.joined ? person.member : (typed?.known ?? null),
+  });
+}
+
+export async function createDirect(form: FormData): Promise<SharedResult> {
+  const member = text(form, "member");
+  if (member) return openDirect(member, null);
+  const read = readPeople(form);
+  return "error" in read ? read : openDirect(read.people[0].known ?? "", read.people[0]);
+}
+
+/** Who one can divide with, asked when «Dividir con alguien» is tapped. */
+export async function loadSplitTargets(): Promise<{ targets: SplitTarget[]; name: string; social: boolean }> {
+  const { shared, user, name } = await currentPerson();
+  const targets = splitTargets(shared, user.id, name || "Tú");
+  // Before migration 0023 there are no accounts between two to create.
+  return { targets: shared.social ? targets : targets.filter((t) => t.group), name: name || "Tú", social: Boolean(shared.social) };
+}
+
+/**
+ * Divides a movement just recorded, with a group, a person, or someone new. The amount and the rest
+ * are the movement's own: only with whom and how come from the page.
+ */
+export async function divideMovement(form: FormData): Promise<SharedResult> {
+  let split;
+  try {
+    split = parseSplit(JSON.parse(text(form, "split")));
+  } catch {
+    split = null;
+  }
+  if (!split) return { error: "Revisa cómo se divide." };
+  const { supabase } = await currentPerson();
+  const { data: tx } = await supabase.from("transactions").select("id, amount, description, category, occurred_on").eq("id", text(form, "tx")).maybeSingle();
+  if (!tx) return { error: "Ese movimiento ya no existe." };
+
+  let group = text(form, "group");
+  if (!group) {
+    const phone = contactPhone(text(form, "phone"));
+    if (phone === "invalid") return { error: "Revisa el celular." };
+    const made = await openDirect(text(form, "person"), { name: text(form, "name").slice(0, 60), phone, known: null });
+    if (!made.id) return made;
+    group = made.id;
+  }
+  const { shared, user } = await currentPerson();
+  const mine = memberOf(group, shared, user.id);
+  if (!mine) return { error: "No haces parte de ese grupo." };
+  const other = shared.members.find((m) => m.group_id === group && m.id !== mine.id);
+  const real = (id: string) => (id === PENDING_ME ? mine.id : id === PENDING_OTHER ? (other?.id ?? id) : id);
+
+  const expense = new FormData();
+  expense.set("group", group);
+  expense.set("tx", tx.id);
+  expense.set("amount", String(tx.amount));
+  expense.set("description", tx.description || tx.category || "Gasto");
+  expense.set("category", tx.category ?? "");
+  expense.set("occurred_on", tx.occurred_on);
+  expense.set("paid_by", mine.id);
+  expense.set("split", JSON.stringify({ mode: split.mode, parts: split.parts.map((p) => ({ ...p, id: real(p.id) })) }));
+  const saved = await saveSharedExpense(expense);
+  return saved.error ? saved : { id: group };
+}
+
+export async function answerPhoneInvite(form: FormData): Promise<SharedResult> {
+  return call("shared_phone_answer", { p_invite: text(form, "invite"), p_accept: text(form, "accept") === "1" });
+}
+
+export async function confirmPhoneInvite(form: FormData): Promise<SharedResult> {
+  return call("shared_phone_confirm", { p_invite: text(form, "invite"), p_accept: text(form, "accept") === "1" });
+}
+
+/** No redraw: what was new stays marked while one reads it. */
+export async function readNotices(until: string): Promise<void> {
+  if (Number.isNaN(Date.parse(until))) return;
+  const supabase = await createClient();
+  await supabase.rpc("shared_read_notices", { p_until: until });
 }
 
 export async function saveSettlement(form: FormData): Promise<SharedResult> {
