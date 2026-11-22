@@ -314,6 +314,35 @@ export async function deleteContact(form: FormData): Promise<SharedResult> {
   redirect("/compartidos");
 }
 
+/**
+ * An expense with one person, from their screen: their account between two is opened the first
+ * time, without one having to go anywhere.
+ */
+export async function savePersonExpense(form: FormData): Promise<SharedResult> {
+  let group = text(form, "group");
+  if (!group) {
+    const made = await openDirect(text(form, "person"), null);
+    if (!made.id) return made;
+    group = made.id;
+  }
+  const { shared, user } = await currentPerson();
+  const mine = memberOf(group, shared, user.id);
+  if (!mine) return { error: "No haces parte de ese grupo." };
+  const other = shared.members.find((m) => m.group_id === group && m.id !== mine.id);
+  const real = (id: string) => (id === PENDING_ME ? mine.id : id === PENDING_OTHER ? (other?.id ?? id) : id);
+  let split;
+  try {
+    split = parseSplit(JSON.parse(text(form, "split")));
+  } catch {
+    split = null;
+  }
+  if (!split) return { error: "Revisa cómo se divide." };
+  form.set("group", group);
+  form.set("paid_by", real(text(form, "paid_by")));
+  form.set("split", JSON.stringify({ mode: split.mode, parts: split.parts.map((p) => ({ ...p, id: real(p.id) })) }));
+  return saveSharedExpense(form);
+}
+
 export async function answerPhoneInvite(form: FormData): Promise<SharedResult> {
   return call("shared_phone_answer", { p_invite: text(form, "invite"), p_accept: text(form, "accept") === "1" });
 }

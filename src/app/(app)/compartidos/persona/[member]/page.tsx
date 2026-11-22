@@ -3,9 +3,14 @@ import { notFound } from "next/navigation";
 import { SharedBeam } from "@/components/balance-beam";
 import { Modal } from "@/components/modal";
 import { DeleteContactForm } from "@/components/remove-forms";
-import { DirectButton } from "@/components/shared-forms";
+import { ExpenseForm } from "@/components/expense-form";
+import { FoldSection, GroupMark } from "@/components/fold-section";
+import { savePersonExpense } from "@/app/shared-actions";
+import { profileName } from "@/lib/brand";
+import { PENDING_ME, PENDING_OTHER } from "@/lib/people";
+import { memberOf } from "@/lib/shared";
 import { loadData } from "@/lib/data";
-import { formatCOP, formatDate } from "@/lib/finance";
+import { favoriteAccountId, favoriteFirst, formatCOP, formatDate } from "@/lib/finance";
 import { formatPhone } from "@/lib/phone";
 import { movesWith, peopleWith } from "@/lib/people";
 import { groupNets } from "@/lib/shared";
@@ -13,7 +18,7 @@ import { groupNets } from "@/lib/shared";
 /** One person: what is pending with them in all, and where it comes from. */
 export default async function PersonPage({ params }: { params: Promise<{ member: string }> }) {
   const { member } = await params;
-  const { shared, user } = await loadData();
+  const { shared, accounts, user, today } = await loadData();
   const person = peopleWith(shared, user.id, { deletedToo: true }).find((p) => p.members.includes(member));
   if (!person) notFound();
   const directs = person.places.filter((p) => p.group.direct).map((p) => p.group.id);
@@ -26,6 +31,13 @@ export default async function PersonPage({ params }: { params: Promise<{ member:
     : null;
   const inGroups = person.places.filter((p) => !p.group.direct);
   const moves = movesWith(shared, user.id, person);
+  // The expense is written here; their account between two is only how it is kept.
+  const mine = person.direct ? memberOf(person.direct, shared, user.id) : undefined;
+  const two =
+    person.direct && mine
+      ? { group: person.direct, me: mine.id, members: shared.members.filter((m) => m.group_id === person.direct && !m.removed_at).map(({ id, name }) => ({ id, name })) }
+      : { group: "", me: PENDING_ME, members: [{ id: PENDING_ME, name: profileName(user) || "Tú" }, { id: PENDING_OTHER, name: person.name }] };
+  const payable = favoriteFirst(accounts.filter((a) => a.kind !== "loan")).map((a) => ({ value: a.id, label: a.name, star: Boolean(a.favorite) }));
 
   return (
     <>
@@ -58,17 +70,16 @@ export default async function PersonPage({ params }: { params: Promise<{ member:
         owes={person.places.reduce((sum, p) => sum + Math.max(0, -p.net), 0)}
       />
 
-      {shared.social && !person.direct && <DirectButton member={person.member}>+ Gasto solo entre ustedes dos</DirectButton>}
 
       <section className="card" aria-labelledby="moves-title">
         <div className="flex items-center justify-between gap-3">
           <h2 id="moves-title" className="display text-2xl">
             Gastos y pagos
           </h2>
-          {person.direct && (
-            <Link href={`/compartidos/${person.direct}`} className="btn-quiet h-9 shrink-0 px-3 text-sm">
-              + Gasto
-            </Link>
+          {(person.direct || shared.social) && (
+            <Modal label="+ Gasto" title={`Gasto con ${person.name}`} buttonClass="btn h-10 shrink-0 rounded-2xl px-4 text-sm">
+              <ExpenseForm {...two} person={person.member} accounts={payable} favorite={favoriteAccountId(accounts) ?? ""} today={today} action={savePersonExpense} />
+            </Modal>
           )}
         </div>
         {moves.length === 0 ? (
@@ -107,24 +118,24 @@ export default async function PersonPage({ params }: { params: Promise<{ member:
       </section>
 
       {inGroups.length > 0 && (
-        <section className="card" aria-labelledby="common-title">
-          <h2 id="common-title" className="display text-2xl">
-            En qué grupos están
-          </h2>
-          <ul className="mt-1 divide-y divide-line">
+        <FoldSection kind="groups" title="En qué grupos están" count={inGroups.length}>
+          <ul className="flex flex-col gap-2" aria-label="Grupos en común">
             {inGroups.map(({ group, net }) => (
               <li key={group.id}>
-                <Link href={`/compartidos/${group.id}`} className="flex items-center justify-between gap-3 py-3.5">
-                  <span className="min-w-0 truncate font-semibold">{group.name}</span>
-                  <span className="shrink-0 text-right">
-                    <span className="block text-xs text-ink-3">{net > 0 ? "te debe" : net < 0 ? "le debes" : "al día"}</span>
-                    {net !== 0 && <span className="num block font-semibold">{formatCOP(Math.abs(net))}</span>}
+                <Link href={`/compartidos/${group.id}`} className="flex items-center gap-3 rounded-2xl border border-line-strong px-3 py-2.5 transition-colors hover:border-brand">
+                  <GroupMark house={Boolean(group.house)} />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-semibold">{group.name}</span>
+                    <span className="num block text-xs text-ink-3">{net > 0 ? `te debe ${formatCOP(net)}` : net < 0 ? `le debes ${formatCOP(-net)}` : "al día"}</span>
+                  </span>
+                  <span className="shrink-0 text-brand" aria-hidden="true">
+                    ›
                   </span>
                 </Link>
               </li>
             ))}
           </ul>
-        </section>
+        </FoldSection>
       )}
     </>
   );

@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { saveSharedExpense } from "@/app/shared-actions";
+import { saveSharedExpense, type SharedResult } from "@/app/shared-actions";
 import { formatCOP } from "@/lib/finance";
 import { splitOf } from "@/lib/split";
 import { DateField } from "./date-field";
@@ -25,8 +25,14 @@ export function ExpenseForm({
   today,
   tx,
   entry,
+  action = saveSharedExpense,
+  person,
 }: {
+  /** "" when it is with one person and their account is opened on saving. */
   group: string;
+  /** Who to open that account with. */
+  person?: string;
+  action?: (form: FormData) => Promise<SharedResult>;
   members: { id: string; name: string }[];
   me: string;
   accounts: PickOption[];
@@ -49,7 +55,7 @@ export function ExpenseForm({
     if (splitting) divided.current = true;
     else if (divided.current) opener.current?.focus();
   }, [splitting]);
-  const { pending, error, submit } = useSave(saveSharedExpense, () => {
+  const { pending, error, submit } = useSave(action, () => {
     close();
     if (tx) router.replace(`/compartidos/${group}`);
   });
@@ -70,6 +76,7 @@ export function ExpenseForm({
       className="flex flex-col gap-4"
     >
       <input type="hidden" name="group" value={group} />
+      {person && <input type="hidden" name="person" value={person} />}
       <input type="hidden" name="paid_by" value={paidBy} />
       <input type="hidden" name="split" value={JSON.stringify(draftSplit(draft))} />
       {entry && <input type="hidden" name="entry" value={entry.id} />}
