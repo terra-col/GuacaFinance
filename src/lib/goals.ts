@@ -1,6 +1,7 @@
 // Goals: save an amount by a date, or clear a debt by a date. Pure, so it is tested.
 import { monthlyRate } from "./advice.ts";
-import { balanceAt, daysBetween, dueDates, paidMonth, shiftMonth, type Account, type ChecklistItem, type Skip, type Tx } from "./finance.ts";
+import { balanceAt, daysBetween, dueDates, findSkip, paidMonth, shiftMonth, type Account, type ChecklistItem, type Skip, type Tx } from "./finance.ts";
+import { assign, datesIn, type Every, type Schedule } from "./recurrence.ts";
 
 export type GoalKind = "save" | "payoff";
 
@@ -14,10 +15,12 @@ export interface Goal {
   account_id: string | null;
   start_balance: number | null;
   created_on: string;
-  /** Savings plan: what is set aside each month, on which day, and (optionally) from which income. */
+  /** Savings plan: what is set aside each time (monthly unless plan_every says otherwise), on which day, and (optionally) from which income. */
   plan_amount?: number | null;
   plan_day?: number | null;
   plan_income_id?: string | null;
+  plan_every?: Every;
+  plan_start?: string | null;
   /** Saved or paid in one go on its date (no monthly plan): shows up once in Pagos, never "behind". */
   plan_once?: boolean;
 }
@@ -29,6 +32,8 @@ export interface GoalDeposit {
   occurred_on: string;
   /** The month of the plan it covers, when not the month of its date (saved early). */
   for_month?: string | null;
+  /** The plan's date it covers, when the plan is not monthly. */
+  for_date?: string | null;
 }
 
 /** «scheduled»: a goal with no pace to keep (one payment on its date, or no plan): only its date matters. */
@@ -53,6 +58,11 @@ export interface GoalView {
 }
 
 const roundUp = (n: number) => (n <= 0 ? 0 : Math.ceil(n / 1000) * 1000);
+
+export const goalSchedule = (goal: Goal): Schedule => ({ every: goal.plan_every ?? "monthly", day: goal.plan_day ?? 1, start: goal.plan_start ?? null });
+
+/** A plan's dates in a month when it is not monthly: none before the goal existed nor after its date. */
+const datesOfPlan = (goal: Goal, month: string) => datesIn(goalSchedule(goal), month).filter((d) => d >= goal.created_on && d <= goal.target_date);
 
 /** The fixed monthly payment that clears `balance` in `months` at `annualPct` (plain division at 0%). */
 export function paymentToClear(balance: number, months: number, annualPct: number | null): number {
@@ -100,7 +110,7 @@ export function goalView(goal: Goal, deposits: GoalDeposit[], accounts: Account[
     const elapsed = Math.min(span, Math.max(0, daysBetween(goal.created_on, today)));
     expected = (target * elapsed) / span;
   } else if (goal.plan_amount && goal.plan_day) {
-    const due = planDates(goal.plan_day, goal.created_on.slice(0, 7), goal.created_on, goal.target_date).filter((d) => d <= today).length;
+    const due = planDates(goal.plan_day, goal.created_on.slice(0, 7), goal.created_on, goal.target_date, goal.plan_every, goal.plan_start).filter((d) => d <= today).length;
     expected = Math.min(target, due * goal.plan_amount);
     ahead = goal.plan_amount;
   } else {
@@ -140,11 +150,15 @@ export function goalView(goal: Goal, deposits: GoalDeposit[], accounts: Account[
 /**
  * The plan's instalment dates from month `from` up to the goal's date: the plan's day each month,
  * never after the goal's date and never before the goal existed (a plan made on the 21st with
- * day 15 starts next month).
+ * day 15 starts next month). Other periodicities: each of their dates in that span.
  */
-export function planDates(planDay: number, from: string, createdOn: string, targetDate: string): string[] {
+export function planDates(planDay: number, from: string, createdOn: string, targetDate: string, every: Every = "monthly", start: string | null = null): string[] {
   const dates: string[] = [];
   for (let m = from; m <= targetDate.slice(0, 7); m = shiftMonth(m, 1)) {
+    if (every !== "monthly") {
+      for (const date of datesIn({ every, day: planDay, start }, m)) if (date >= createdOn && date <= targetDate) dates.push(date);
+      continue;
+    }
     const planned = dueDates(planDay, `${m}-01`, 1)[0];
     const date = planned > targetDate ? targetDate : planned;
     if (date >= createdOn) dates.push(date);
@@ -174,12 +188,16 @@ export function goalChecklist(goals: Goal[], deposits: GoalDeposit[], month: str
     const monthly = Boolean(goal.plan_amount && goal.plan_day);
     if (!monthly && !goal.plan_once) continue;
     if (month < goal.created_on.slice(0, 7) || month > goal.target_date.slice(0, 7)) continue;
+    if (monthly && !goal.plan_once && goalSchedule(goal).every !== "monthly") {
+      items.push(...savingsByDate(goal, deposits, month, today, skips));
+      continue;
+    }
     // A one-time goal: only the month of its date.
     if (goal.plan_once && month !== goal.target_date.slice(0, 7)) continue;
     const thisMonth = deposits.filter((d) => d.goal_id === goal.id && paidMonth(d) === month && d.amount > 0);
     const missing = goal.target_amount - savedBy(goal, deposits, first);
     if (missing <= 0 && thisMonth.length === 0) continue;
-    const skip = skips.find((s) => s.item_type === "goal" && s.item_id === goal.id && s.month === month) ?? null;
+    const skip = findSkip(skips, "goal", goal.id, month);
     // The plan's day, but never after the goal's own date.
     const planned = goal.plan_once ? goal.target_date : dueDates(goal.plan_day!, first, 1)[0];
     const due = planned > goal.target_date ? goal.target_date : planned;
@@ -204,6 +222,38 @@ export function goalChecklist(goals: Goal[], deposits: GoalDeposit[], month: str
   return items;
 }
 
+/** A plan that is not monthly: one row per date, each asking for what is still missing at most. */
+function savingsByDate(goal: Goal, deposits: GoalDeposit[], month: string, today: string, skips: Skip[]): ChecklistItem[] {
+  const own = deposits.filter((d) => d.goal_id === goal.id);
+  const slots = assign(datesOfPlan(goal, month), own.filter((d) => d.amount > 0 && paidMonth(d) === month));
+  let left = goal.target_amount! - own.reduce((sum, d) => sum + d.amount, 0);
+  const items: ChecklistItem[] = [];
+  for (const { date, payments } of slots) {
+    const paid = payments.length > 0;
+    if (!paid && left <= 0) continue;
+    const skip = date && !paid ? findSkip(skips, "goal", goal.id, month, date) : null;
+    const expected = paid ? goal.plan_amount! : Math.min(goal.plan_amount!, left);
+    if (!paid && !skip) left -= expected;
+    items.push({
+      type: "goal",
+      id: goal.id,
+      name: `Ahorro: ${goal.name}`,
+      every: goal.plan_every,
+      forDate: date ?? undefined,
+      due: date ?? payments[0].occurred_on,
+      expected,
+      paid,
+      paidAmount: payments.reduce((sum, d) => sum + d.amount, 0),
+      paidOn: payments[0]?.occurred_on ?? null,
+      paidIds: payments.map((d) => d.id),
+      overdue: !paid && !skip && date !== null && date < today,
+      skipped: skip,
+      quick: { amount: expected, accountId: null },
+    });
+  }
+  return items;
+}
+
 export interface PlanOutlook {
   /** Plan instalments still ahead, up to the goal's date (this month's counts if not yet saved). */
   instalments: number;
@@ -222,7 +272,16 @@ export function planOutlook(view: GoalView, deposits: GoalDeposit[], today: stri
   if (goal.kind !== "save" || !goal.plan_amount || !goal.plan_day) return null;
   const month = today.slice(0, 7);
   const savedThisMonth = deposits.some((d) => d.goal_id === goal.id && paidMonth(d) === month && d.amount > 0);
-  const dates = planDates(goal.plan_day, savedThisMonth ? shiftMonth(month, 1) : month, goal.created_on, goal.target_date);
+  let dates: string[] = [];
+  if (goalSchedule(goal).every === "monthly") dates = planDates(goal.plan_day, savedThisMonth ? shiftMonth(month, 1) : month, goal.created_on, goal.target_date);
+  else {
+    const own = deposits.filter((d) => d.goal_id === goal.id && d.amount > 0);
+    for (let m = month; m <= goal.target_date.slice(0, 7); m = shiftMonth(m, 1)) {
+      for (const slot of assign(datesOfPlan(goal, m), own.filter((d) => paidMonth(d) === m))) {
+        if (slot.date && slot.payments.length === 0) dates.push(slot.date);
+      }
+    }
+  }
   const instalments = dates.length;
   const projected = view.achieved + instalments * goal.plan_amount;
   return {

@@ -14,6 +14,8 @@ import { MoneyInput } from "./money-input";
 import { SubmitButton } from "./submit-button";
 import { SelectField, CategoryField } from "./pickers";
 import { MonthField } from "./month-field";
+import { todayInBogota } from "@/lib/finance";
+import { EveryFields, type EveryValue } from "./every-fields";
 
 /**
  * A fixed bill, new or (with `bill`) edited in place. `onDone` runs once it is saved; `inModal`:
@@ -31,6 +33,7 @@ export function BillForm({ bill, onDone, inModal = false }: { bill?: Bill; onDon
     }
     return result;
   }, {});
+  const [schedule, setSchedule] = useState<EveryValue>({ every: bill?.every ?? "monthly", day: bill?.due_day ?? "", start: bill?.every && bill.every !== "monthly" ? (bill.starts_on ?? "") : "" });
   return (
     <form action={action} className={bare ? "flex flex-col gap-4" : "card flex flex-col gap-4"}>
       {!bare && <h2 className="display text-2xl">Nuevo pago fijo</h2>}
@@ -41,14 +44,11 @@ export function BillForm({ bill, onDone, inModal = false }: { bill?: Bill; onDon
           <input className="input" name="name" defaultValue={bill?.name} placeholder="Internet, arriendo, Netflix…" required />
         </label>
         <label className="field">
-          Valor
+          {schedule.every === "monthly" ? "Valor" : "Valor cada vez"}
           <MoneyInput name="amount" defaultValue={bill?.amount} placeholder="$ 90.000" />
-          <span className="text-xs font-normal text-ink-3">Vacío si cambia cada mes (servicios).</span>
+          <span className="text-xs font-normal text-ink-3">Vacío si cambia (servicios).</span>
         </label>
-        <label className="field">
-          Día de pago
-          <input className="input" type="number" name="due_day" min={1} max={31} defaultValue={bill?.due_day} required />
-        </label>
+        <EveryFields value={schedule} onChange={setSchedule} today={todayInBogota()} names={{ every: "every", day: "due_day", start: "starts_on" }} editing={editing} what="pago" />
         <label className="field">
           Categoría
           <CategoryField name="category" defaultValue={bill ? (bill.category ?? "") : "Hogar"} />

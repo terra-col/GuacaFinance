@@ -16,8 +16,10 @@ import {
   totals,
   type Account,
   type Bill,
+  type Skip,
   type Tx,
 } from "./finance.ts";
+import { isFrequent } from "./recurrence.ts";
 
 export interface Advice {
   id: string;
@@ -47,13 +49,14 @@ function monthAfter(today: string, months: number): string {
 }
 
 /** `flows`: what counts as spending, when it is not simply the movements (shared expenses). */
-export function advise(accounts: Account[], txs: Tx[], today: string, bills: Bill[] = [], flows: Tx[] = txs): Advice[] {
+export function advise(accounts: Account[], txs: Tx[], today: string, bills: Bill[] = [], flows: Tx[] = txs, skips: Skip[] = []): Advice[] {
   const out: Advice[] = [];
 
   // 0. A fixed bill is overdue or due within three days and has not been paid this month.
   for (const bill of bills) {
-    const status = billStatus(bill, txs, today);
-    if (status.paidThisMonth || status.days > 3) continue;
+    const status = billStatus(bill, txs, today, skips);
+    // A daily one would be urgent every single day: only when one is late.
+    if (status.paidThisMonth || status.days > 3 || (isFrequent(bill.every) && status.days >= 0)) continue;
     out.push({
       id: `bill-${bill.id}`,
       level: "urgent",

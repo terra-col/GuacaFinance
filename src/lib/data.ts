@@ -3,6 +3,7 @@ import { knownCategories, todayInBogota, type Account, type Bill, type Skip, typ
 import type { Budget, Income } from "./budget";
 import type { Goal, GoalDeposit } from "./goals";
 import type { CardPurchase } from "./installments";
+import { allPages } from "./paging";
 import { flowTxs, myPosition } from "./shared";
 import { loadShared } from "./shared-data";
 
@@ -20,7 +21,7 @@ const PAGE = 1000; // Supabase returns at most 1000 rows per request
 /** What every screen's frame needs: accounts for the quick «new movement» sheet and the Wallet inbox count. */
 export async function loadShell() {
   const supabase = await createClient();
-  const [session, inbox, withFavorite, usedInTxs, usedInBills, groups] = await Promise.all([
+  const [session, inbox, withFavorite, usedInTxs, usedInBills, groups, dated] = await Promise.all([
     // Read from the cookie, no network: only to tell this person's things apart on the device (the
     // advisor's saved conversation), never to authorize anything.
     supabase.auth.getSession(),
@@ -31,6 +32,8 @@ export async function loadShell() {
     supabase.from("bills").select("category").not("category", "is", null),
     // Only whether Compartidos exists yet (migration 0016).
     supabase.from("shared_groups").select("id").limit(1),
+    // And whether periodicity does (migration 0017).
+    supabase.from("date_skips").select("id").limit(1),
   ]);
   // Until migration 0012 runs there is no favourite column: ask again without it.
   const accounts = withFavorite.error ? await supabase.from("accounts").select("id, name, kind").order("created_at") : withFavorite;
@@ -42,6 +45,7 @@ export async function loadShell() {
     tourSeen: Boolean(session.data.session?.user.user_metadata?.tour_seen),
     categories: knownCategories([...(usedInTxs.data ?? []), ...(usedInBills.data ?? [])].map((r) => r.category as string)),
     sharedReady: !groups.error,
+    recurrenceReady: !dated.error,
     today: todayInBogota(),
   };
 }
@@ -72,16 +76,18 @@ export async function loadData() {
     if (data.length < PAGE) break;
   }
 
-  const [bills, inbox, goals, deposits, budgets, skips, incomes, purchases, sharing] = await Promise.all([
+  const [bills, inbox, goals, deposits, budgets, skips, incomes, purchases, sharing, dateSkips] = await Promise.all([
     supabase.from("bills").select("*").order("due_day"),
     supabase.from("wallet_inbox").select("*").order("received_at", { ascending: false }),
     supabase.from("goals").select("*").order("target_date"),
-    supabase.from("goal_deposits").select("*").order("occurred_on", { ascending: false }),
+    // Daily savings pass 1000 rows: every page.
+    allPages<GoalDeposit>((from, to) => supabase.from("goal_deposits").select("*").order("occurred_on", { ascending: false }).order("id").range(from, to)),
     supabase.from("budgets").select("*").order("category"),
     supabase.from("checklist_skips").select("*"),
     supabase.from("incomes").select("*").order("day"),
     supabase.from("card_purchases").select("*").order("first_due_month"),
     loadShared(supabase),
+    allPages<Skip>((from, to) => supabase.from("date_skips").select("*").order("for_date").order("id").range(from, to)),
   ]);
   // Card purchases in instalments arrived with migration 0009.
   const purchasesReady = !purchases.error;
@@ -105,10 +111,11 @@ export async function loadData() {
     bills: bills.data as Bill[],
     inbox: inbox.data as InboxItem[],
     goals: goalsMissing ? [] : (goals.data as Goal[]),
-    deposits: goalsMissing ? [] : (deposits.data as GoalDeposit[]),
+    deposits: goalsMissing ? [] : deposits.rows,
     goalsReady: !goalsMissing,
     budgets: planMissing ? [] : (budgets.data as Budget[]),
-    skips: planMissing ? [] : (skips.data as Skip[]),
+    // By month (monthly) and by date (the rest; none before migration 0017).
+    skips: [...(planMissing ? [] : (skips.data as Skip[])), ...(dateSkips.error ? [] : dateSkips.rows.map((s) => ({ ...s, month: s.for_date!.slice(0, 7) })))],
     incomes: planMissing ? [] : (incomes.data as Income[]),
     planReady: !planMissing,
     purchases: purchasesReady ? (purchases.data as CardPurchase[]) : [],

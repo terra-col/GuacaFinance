@@ -97,7 +97,7 @@ test("wallet_ingest: zero amount or unknown card goes to the review inbox, not t
 test("calendar_feed: only the token owner's debts with a due day, and no balances", async () => {
   const rows = await as(null, "select * from calendar_feed('c-ana')");
   assert.deepEqual(rows.map((r) => [r.name, r.kind, r.due_day]), [["Internet", "bill", 5], ["Visa", "credit_card", 20]]);
-  assert.deepEqual(Object.keys(rows[0]).sort(), ["due_day", "id", "kind", "monthly_payment", "name"]);
+  assert.deepEqual(Object.keys(rows[0]).sort(), ["due_day", "every", "id", "kind", "monthly_payment", "name", "starts_on"]);
   assert.equal((await as(null, "select * from calendar_feed('w-ana')")).length, 0);
 });
 
@@ -254,4 +254,32 @@ test("account order: a position per account, never negative, only on one's own",
   await assert.rejects(as(ANA, "update accounts set position = -1 where id = $1", [visa.id]), /check constraint/);
   await as(BETO, "update accounts set position = 0 where id = $1", [visa.id]);
   assert.equal((await as(ANA, "select position from accounts where id = $1", [visa.id]))[0].position, 2, "Beto cannot reorder Ana's cards");
+});
+
+test("periodicity: monthly by default, the rest need a date, and only known ones", async () => {
+  const [plain] = await as(ANA, "insert into bills (name, due_day) values ('Agua', 9) returning every, starts_on");
+  assert.deepEqual([plain.every, plain.starts_on], ["monthly", null], "a bill saved as before stays monthly");
+  await as(ANA, "insert into bills (name, due_day, every, starts_on) values ('Universidad', 15, 'semiannual', '2027-01-15')");
+  await assert.rejects(as(ANA, "insert into bills (name, due_day, every) values ('X', 15, 'quarterly')"), /check constraint/, "no date");
+  await assert.rejects(as(ANA, "insert into bills (name, due_day, every, starts_on) values ('X', 15, 'weekly', '2027-01-15')"), /check constraint/);
+  const [closet] = await as(ANA, "select id, plan_every from goals where name = 'Armario'");
+  assert.equal(closet.plan_every, "monthly");
+  await assert.rejects(as(ANA, "update goals set plan_every = 'daily' where id = $1", [closet.id]), /check constraint/);
+});
+
+test("periodicity: one skip per date, each person their own, none without a session", async () => {
+  const sql = "insert into date_skips (item_type, item_id, for_date) values ('bill', $1, '2026-11-15')";
+  await as(ANA, sql, [internet.id]);
+  await assert.rejects(as(ANA, sql, [internet.id]), /duplicate key/);
+  await as(ANA, "insert into date_skips (item_type, item_id, for_date) values ('bill', $1, '2026-11-30')", [internet.id]);
+  assert.equal((await as(BETO, "select * from date_skips")).length, 0);
+  await assert.rejects(as(ANA, "insert into date_skips (user_id, item_type, item_id, for_date) values ($1, 'bill', $2, '2026-12-15')", [BETO, internet.id]), /row-level security/);
+  await assert.rejects(as(null, "select * from date_skips"), /permission denied/);
+});
+
+test("periodicity: the calendar feed still works with its token only, and carries the periodicity", async () => {
+  const rows = await as(null, "select * from calendar_feed('c-ana')");
+  assert.equal(rows.find((r) => r.name === "Universidad").every, "semiannual");
+  assert.equal(rows.find((r) => r.name === "Visa").every, "monthly");
+  assert.equal((await as(null, "select * from calendar_feed('nope')")).length, 0);
 });

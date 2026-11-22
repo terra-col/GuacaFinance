@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { formatCOP, formatDate } from "@/lib/finance";
 import { planDates } from "@/lib/goals";
+import { needsDate, quincenaFrom, type Every } from "@/lib/recurrence";
+import { EveryFields, type EveryValue } from "./every-fields";
 import { MoneyInput } from "./money-input";
 import { SelectField } from "./pickers";
 
@@ -15,8 +17,9 @@ export interface IncomeOption {
 const roundUp = (n: number) => (n <= 0 ? 0 : Math.ceil(n / 1000) * 1000);
 
 /**
- * «¿Cómo vas a ahorrar?»: a monthly amount on a day of the month, optionally tied to an income
- * (the day follows it). With a plan the saving shows up every month in Pagos and the calendar.
+ * «¿Cómo vas a ahorrar?»: an amount each time (monthly unless another periodicity is chosen),
+ * optionally tied to an income (the day follows it). With a plan the saving shows up in Pagos and
+ * the calendar each time it falls.
  * Below, live: whether keeping it arrives on time, and the amount that would.
  */
 export function GoalPlanFields({
@@ -38,18 +41,28 @@ export function GoalPlanFields({
   /** First month that still counts: next month when this month's saving is already in. */
   fromMonth?: string;
   incomes: IncomeOption[];
-  initial?: { amount: number | null; day: number | null; incomeId: string | null; once?: boolean };
+  initial?: { amount: number | null; day: number | null; incomeId: string | null; once?: boolean; every?: Every; start?: string | null };
 }) {
   const [mode, setMode] = useState<"monthly" | "once" | "none">(initial ? (initial.once ? "once" : initial.amount !== null ? "monthly" : "none") : "monthly");
   const on = mode === "monthly";
   const [amount, setAmount] = useState(initial?.amount ?? 0);
   const [amountKey, setAmountKey] = useState(0);
-  const [day, setDay] = useState(initial?.day ?? incomes[0]?.day ?? 30);
+  const [schedule, setSchedule] = useState<EveryValue>({ every: initial?.every ?? "monthly", day: initial?.day ?? incomes[0]?.day ?? 30, start: initial?.start ?? "" });
   const [incomeId, setIncomeId] = useState(initial?.incomeId ?? "");
 
   const remaining = Math.max(0, target - achieved);
-  const ready = remaining > 0 && /^\d{4}-\d{2}-\d{2}$/.test(targetDate) && targetDate >= today && day >= 1 && day <= 31;
-  const dates = ready ? planDates(day, fromMonth, createdOn > today ? createdOn : today, targetDate) : [];
+  const { every } = schedule;
+  const monthly = every === "monthly";
+  const day = Number(schedule.day);
+  const ready =
+    remaining > 0 &&
+    /^\d{4}-\d{2}-\d{2}$/.test(targetDate) &&
+    targetDate >= today &&
+    (needsDate(every) ? /^\d{4}-\d{2}-\d{2}$/.test(schedule.start) : day >= 1 && day <= 31);
+  const since = createdOn > today ? createdOn : today;
+  const dates = ready
+    ? planDates(day, monthly ? fromMonth : today.slice(0, 7), since, targetDate, every, every === "biweekly" ? today : schedule.start)
+    : [];
   const suggested = roundUp(remaining / Math.max(1, dates.length));
   const projected = achieved + amount * dates.length;
 
@@ -64,7 +77,7 @@ export function GoalPlanFields({
       <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Cómo lo vas a juntar">
         {(
           [
-            ["monthly", "Abonos cada mes"],
+            ["monthly", "Con abonos"],
             ["once", "En un solo pago"],
             ["none", "Sin plan"],
           ] as const
@@ -77,17 +90,17 @@ export function GoalPlanFields({
       </div>
       <p className="text-xs text-ink-3">
         {mode === "monthly"
-          ? "Cada mes te aparece en Pagos y en el calendario como un compromiso más; al marcarlo se suma a la meta."
+          ? "Cada abono te aparece en Pagos y en el calendario como un compromiso más; al marcarlo se suma a la meta."
           : mode === "once"
-            ? `Te aparece una sola vez en Pagos${/^d{4}-d{2}-d{2}$/.test(targetDate) ? `, el ${formatDate(targetDate)},` : " en su fecha"} por lo que falte. Sin abonos mensuales ni avisos de atraso.`
+            ? `Te aparece una sola vez en Pagos${/^\d{4}-\d{2}-\d{2}$/.test(targetDate) ? `, el ${formatDate(targetDate)},` : " en su fecha"} por lo que falte. Sin abonos mensuales ni avisos de atraso.`
             : "Queda guardada con su fecha y abonas cuando quieras. Sin recordatorios ni avisos de atraso."}
       </p>
 
       {on && (
         <>
-          <div className="grid gap-4 sm:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2">
             <label className="field">
-              Cuánto al mes
+              {monthly ? "Cuánto al mes" : "Cuánto cada vez"}
               <MoneyInput key={amountKey} name="plan_amount" defaultValue={amount || null} placeholder={suggested ? formatCOP(suggested) : "$ 100.000"} required onValue={setAmount} />
             </label>
             <label className="field">
@@ -99,20 +112,17 @@ export function GoalPlanFields({
                 onChange={(id) => {
                   setIncomeId(id);
                   const income = incomes.find((i) => i.id === id);
-                  if (income) setDay(income.day);
+                  if (income) setSchedule((s) => ({ ...s, day: s.every === "biweekly" ? quincenaFrom(income.day) : income.day }));
                 }}
               />
             </label>
-            <label className="field">
-              Día del mes
-              <input className="input num" type="number" name="plan_day" min={1} max={31} value={day} onChange={(e) => setDay(Number(e.target.value))} required />
-            </label>
+            <EveryFields value={schedule} onChange={setSchedule} today={today} names={{ every: "plan_every", day: "plan_day", start: "plan_start" }} editing={Boolean(initial?.start)} what="abono" />
           </div>
 
           {ready && (
             <div className="rounded-xl bg-brand/8 p-3 text-sm">
               {dates.length === 0 ? (
-                <p>No queda ningún día {day} antes de la fecha de la meta. Elige un día más cercano.</p>
+                <p>{monthly ? `No queda ningún día ${day}` : "No cae ningún abono"} antes de la fecha de la meta. Elige una fecha más cercana.</p>
               ) : amount > 0 ? (
                 projected >= target ? (
                   <p>
@@ -132,7 +142,7 @@ export function GoalPlanFields({
               )}
               {dates.length > 0 && amount !== suggested && (
                 <button type="button" className="mt-2 font-semibold text-brand" onClick={applySuggested}>
-                  Usar {formatCOP(suggested)} al mes
+                  Usar {formatCOP(suggested)} {monthly ? "al mes" : "cada vez"}
                 </button>
               )}
             </div>

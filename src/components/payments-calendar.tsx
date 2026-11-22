@@ -112,7 +112,7 @@ export function PaymentsCalendar({
                 {entries.length > 0 && (
                   <span className="flex items-center gap-0.5 sm:gap-1">
                     {entries.slice(0, 3).map((e) => (
-                      <Dot key={`${e.type}-${e.id}`} {...tone(e)} onAccent={isSelected} />
+                      <Dot key={`${e.type}-${e.id}-${e.date}`} {...tone(e)} onAccent={isSelected} />
                     ))}
                     {entries.length > 3 && <span className="text-[9px] leading-none sm:text-xs">+{entries.length - 3}</span>}
                   </span>
@@ -146,7 +146,7 @@ export function PaymentsCalendar({
             <ul className="mt-1 divide-y divide-line">
               {chosen.map((item) => (
                 <ChecklistRow
-                  key={`${item.type}-${item.id}`}
+                  key={`${item.type}-${item.id}-${item.forDate ?? ""}`}
                   item={item}
                   month={month}
                   today={today}
@@ -178,7 +178,7 @@ export function PaymentsCalendar({
             {[...overdue, ...upcoming].map((e) => {
               const t = tone(e);
               return (
-                <li key={`${e.type}-${e.id}`}>
+                <li key={`${e.type}-${e.id}-${e.date}`}>
                   <button type="button" className="-mx-2 flex w-[calc(100%+1rem)] items-center gap-3 rounded-xl px-2 py-2.5 text-left text-sm transition-colors hover:bg-line/40" onClick={() => setSelected(e.date)}>
                     <span className="num w-12 shrink-0 rounded-lg bg-line/50 py-1 text-center text-xs font-semibold">
                       {Number(e.date.slice(8))} {MONTHS[Number(e.date.slice(5, 7)) - 1].slice(0, 3)}

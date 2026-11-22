@@ -6,7 +6,8 @@ import { PaidGroup } from "@/components/paid-group";
 import { MonthPlanCard } from "@/components/month-plan";
 import { incomeChecklist, incomeRow, monthPlan, nextIncomeDate } from "@/lib/budget";
 import { loadData } from "@/lib/data";
-import { byDue, favoriteFirst, formatCOP, monthName, monthlyChecklist, nextDueDate, pendingFirst, shiftMonth } from "@/lib/finance";
+import { byDue, favoriteFirst, formatCOP, monthName, monthlyChecklist, nextBillDate, pendingFirst, rowKey, shiftMonth } from "@/lib/finance";
+import { isFrequent } from "@/lib/recurrence";
 import { ScheduledList, type ScheduledRow } from "@/components/scheduled-list";
 import { goalChecklist } from "@/lib/goals";
 import { PaymentsCalendar } from "@/components/payments-calendar";
@@ -136,8 +137,16 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
     // Incomes and fixed bills with their next date (even in a coming month), soonest first.
     const scheduled: ScheduledRow[] = [
       ...visibleIncomes.map((income) => ({ kind: "income" as const, income, next: nextIncomeDate(income, today) })),
-      ...bills.map((bill) => ({ kind: "bill" as const, bill, next: nextDueDate(bill.due_day, today) })),
+      ...bills.map((bill) => ({ kind: "bill" as const, bill, next: nextBillDate(bill, today) })),
     ].sort((a, b) => (a.next ?? "9999").localeCompare(b.next ?? "9999"));
+    // What repeats every day or two shows up to today plus the next one; the rest folds away.
+    const later = new Set<string>();
+    const nextShown = new Set<string>();
+    for (const item of items) {
+      if (!isFrequent(item.every) || item.paid || !item.due || item.due <= today) continue;
+      if (nextShown.has(item.id)) later.add(rowKey(item));
+      else nextShown.add(item.id);
+    }
     const counted = items.filter((i) => !i.skipped);
     const done = counted.filter((i) => i.paid).length;
     const skippedCount = items.length - counted.length;
@@ -239,13 +248,18 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
               </p>
             )}
             <ul className="mt-3 divide-y divide-line">
-              {sorted.filter((i) => !i.paid).map((item) => (
-                <ChecklistRow key={`${item.type}-${item.id}`} item={item} month={month} today={today} editable={editable} accounts={item.type === "bill" ? spendable : savings} />
+              {sorted.filter((i) => !i.paid && !later.has(rowKey(i))).map((item) => (
+                <ChecklistRow key={rowKey(item)} item={item} month={month} today={today} editable={editable} accounts={item.type === "bill" ? spendable : savings} />
               ))}
             </ul>
+            <PaidGroup id="pagos-despues" label="Más adelante este mes" count={later.size}>
+              {sorted.filter((i) => later.has(rowKey(i))).map((item) => (
+                <ChecklistRow key={rowKey(item)} item={item} month={month} today={today} editable={editable} accounts={item.type === "bill" ? spendable : savings} />
+              ))}
+            </PaidGroup>
             <PaidGroup id="pagos" label="Ya pagados" count={sorted.filter((i) => i.paid).length}>
               {sorted.filter((i) => i.paid).map((item) => (
-                <ChecklistRow key={`${item.type}-${item.id}`} item={item} month={month} today={today} editable={editable} accounts={item.type === "bill" ? spendable : savings} />
+                <ChecklistRow key={rowKey(item)} item={item} month={month} today={today} editable={editable} accounts={item.type === "bill" ? spendable : savings} />
               ))}
             </PaidGroup>
           </section>

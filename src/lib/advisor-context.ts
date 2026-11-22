@@ -6,6 +6,7 @@ import { debtView } from "./debts.ts";
 import {
   KIND_LABEL,
   balanceAt,
+  billSchedule,
   formatCOP,
   holdsMoney,
   isDebt,
@@ -21,9 +22,10 @@ import {
   type Tx,
   monthlyChecklist,
 } from "./finance.ts";
-import { goalChecklist, goalView, planOutlook, type Goal, type GoalDeposit } from "./goals.ts";
+import { goalChecklist, goalSchedule, goalView, planOutlook, type Goal, type GoalDeposit } from "./goals.ts";
 import { purchaseView, type CardPurchase } from "./installments.ts";
 import { planDebts, simulate } from "./planner.ts";
+import { cadenceText } from "./recurrence.ts";
 
 interface Snapshot {
   accounts: Account[];
@@ -104,8 +106,8 @@ export function advisorContext({ accounts, txs, bills, goals, deposits, incomes 
   }
 
   if (bills.length) {
-    lines.push("\n## Pagos fijos mensuales");
-    for (const b of bills) lines.push(`- ${b.name}: ${b.amount ? formatCOP(b.amount) : "valor variable"}, día ${b.due_day}`);
+    lines.push("\n## Pagos fijos (el valor es por cada vez)");
+    for (const b of bills) lines.push(`- ${b.name}: ${b.amount ? formatCOP(b.amount) : "valor variable"}, ${cadenceText(billSchedule(b))}`);
   }
 
   const months = lastMonths(today, 3);
@@ -153,7 +155,7 @@ export function advisorContext({ accounts, txs, bills, goals, deposits, incomes 
       const v = goalView(g, deposits, accounts, txs, today);
       const o = planOutlook(v, deposits, today);
       const plan = o
-        ? `; plan: abona ${formatCOP(g.plan_amount!)} el día ${g.plan_day} de cada mes (${o.instalments} abonos más, ${o.enough ? "llega a tiempo" : `le faltarían ${formatCOP(o.shortfall)}`})`
+        ? `; plan: abona ${formatCOP(g.plan_amount!)}, ${cadenceText(goalSchedule(g))} (${o.instalments} abonos más, ${o.enough ? "llega a tiempo" : `le faltarían ${formatCOP(o.shortfall)}`})`
         : g.plan_once
           ? "; se junta o paga en un solo pago en su fecha (no se mide por ritmo)"
           : g.kind === "save"
@@ -165,7 +167,7 @@ export function advisorContext({ accounts, txs, bills, goals, deposits, incomes 
     }
   }
 
-  const alerts = advise(accounts, txs, today, bills, flows);
+  const alerts = advise(accounts, txs, today, bills, flows, skips);
   if (alerts.length) {
     lines.push("\n## Alertas de la app");
     for (const a of alerts) lines.push(`- ${a.title}. ${a.detail}`);

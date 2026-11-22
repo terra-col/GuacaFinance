@@ -3,6 +3,7 @@
 import { useEffect, useOptimistic, useState, useTransition } from "react";
 import { deleteBill, deleteIncome, markPaid, skipItem, unmarkPaid, unskipItem, updatePaid, updateRecurring } from "@/app/actions";
 import { daysBetween, formatCOP, formatDate, relativeDay, type ChecklistItem } from "@/lib/finance";
+import { everyShort } from "@/lib/recurrence";
 import { DateField } from "./date-field";
 import { MoneyInput } from "./money-input";
 import { SelectField } from "./pickers";
@@ -42,6 +43,14 @@ export function ChecklistRow({ item, month, today, editable, accounts }: Props) 
   // A goal's monthly saving: recorded as a deposit to the goal, no account involved.
   const saving = item.type === "goal";
   const skipped = Boolean(item.skipped) && !paid;
+  const when = item.forDate ? "esta vez" : "este mes";
+  // What is not monthly is marked, skipped and unticked by its date.
+  const occurrence = item.forDate ? (
+    <>
+      <input type="hidden" name="for_date" value={item.forDate} />
+      <input type="hidden" name="paid_ids" value={item.paidIds?.join(",") ?? ""} />
+    </>
+  ) : null;
   const [celebrate, setCelebrate] = useState(false);
   const [undoable, setUndoable] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -85,6 +94,7 @@ export function ChecklistRow({ item, month, today, editable, accounts }: Props) 
     form.set("account_id", item.quick!.accountId ?? "");
     form.set("occurred_on", today);
     form.set("month", month);
+    if (item.forDate) form.set("for_date", item.forDate);
     pay(form);
   }
 
@@ -98,6 +108,10 @@ export function ChecklistRow({ item, month, today, editable, accounts }: Props) 
       form.set("type", item.type);
       form.set("id", item.id);
       form.set("month", month);
+      if (item.forDate) {
+        form.set("for_date", item.forDate);
+        form.set("paid_ids", item.paidIds?.join(",") ?? "");
+      }
       try {
         const result = await unmarkPaid(form);
         if (result.error) setError(result.error);
@@ -158,6 +172,7 @@ export function ChecklistRow({ item, month, today, editable, accounts }: Props) 
     startTransition(async () => {
       const form = new FormData();
       form.set("id", item.skipped!.id);
+      if (item.forDate) form.set("for_date", item.forDate);
       try {
         await unskipItem(form);
       } catch {
@@ -183,7 +198,7 @@ export function ChecklistRow({ item, month, today, editable, accounts }: Props) 
       ? `¡${doneWord}!`
       : `${doneWord}${item.paidAmount ? `: ${formatCOP(item.paidAmount)}` : ""}`
     : skipped
-      ? `Omitido este mes${item.skipped!.note ? `: ${item.skipped!.note}` : ""}`
+      ? `Omitido ${when}${item.skipped!.note ? `: ${item.skipped!.note}` : ""}`
       : item.due === null
       ? "Sin día de pago"
       : !editable
@@ -194,7 +209,7 @@ export function ChecklistRow({ item, month, today, editable, accounts }: Props) 
 
   const doneLower = doneWord.toLowerCase();
   const label = skipped
-    ? `${item.name}: omitido este mes. Volver a incluir`
+    ? `${item.name}: omitido ${when}. Volver a incluir`
     : paid
       ? `${item.name}: ${doneLower}. Editar o desmarcar`
       : item.quick
@@ -253,6 +268,7 @@ export function ChecklistRow({ item, month, today, editable, accounts }: Props) 
           <p className={`text-sm ${paid ? "font-medium text-ink-2" : item.overdue ? "font-semibold text-ink" : "text-ink-3"}`}>
             {item.overdue && !paid && <span className="pill pill-urgent mr-1.5">{income ? "Atrasado" : "Vencido"}</span>}
             {status}
+            {item.every && <span className="text-ink-3"> · {everyShort(item.every)}</span>}
           </p>
         </button>
 
@@ -293,6 +309,7 @@ export function ChecklistRow({ item, month, today, editable, accounts }: Props) 
               <input type="hidden" name="type" value={item.type} />
               <input type="hidden" name="id" value={item.id} />
               <input type="hidden" name="month" value={month} />
+              {occurrence}
               <label className="field">
                 {income ? "Cuánto llegó" : saving ? "Cuánto abonas" : "Cuánto pagaste"}
                 <MoneyInput name="amount" defaultValue={item.expected} required autoFocus />
@@ -322,7 +339,7 @@ export function ChecklistRow({ item, month, today, editable, accounts }: Props) 
                   </span>
                 )}
                 <button type="button" className="btn-quiet flex-1 sm:flex-none" onClick={() => setPanel("skip")}>
-                  Omitir este mes
+                  Omitir {when}
                 </button>
                 <button className="btn flex-1 sm:flex-none" disabled={pending}>
                   Marcar {doneLower}
@@ -341,8 +358,9 @@ export function ChecklistRow({ item, month, today, editable, accounts }: Props) 
               <input type="hidden" name="type" value={item.type} />
               <input type="hidden" name="id" value={item.id} />
               <input type="hidden" name="month" value={month} />
+              {occurrence}
               <label className="field">
-                {income ? "¿Por qué no llega este mes? (opcional)" : "¿Por qué no aplica este mes? (opcional)"}
+                {income ? "¿Por qué no llega este mes? (opcional)" : `¿Por qué no aplica ${when}? (opcional)`}
                 <input className="input" name="note" maxLength={200} placeholder={income ? "Vacaciones sin pago" : "Rediferida con el banco"} autoFocus />
               </label>
               <div className="flex gap-2">
@@ -358,7 +376,7 @@ export function ChecklistRow({ item, month, today, editable, accounts }: Props) 
           {editable && panel === "unskip" && skipped && (
             <div className="mt-3 flex flex-col gap-3 rounded-2xl bg-line/40 p-3 sm:ml-14 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-sm">
-                <span className="font-semibold">{item.name}</span> no cuenta este mes. ¿Lo vuelves a incluir?
+                <span className="font-semibold">{item.name}</span> no cuenta {when}. ¿Lo vuelves a incluir?
               </p>
               <div className="flex shrink-0 gap-2">
                 <button type="button" className="btn-quiet" onClick={() => setPanel("none")}>
@@ -388,10 +406,14 @@ export function ChecklistRow({ item, month, today, editable, accounts }: Props) 
                 Valor (vacío si cambia)
                 <MoneyInput name="amount" defaultValue={item.expected} />
               </label>
-              <label className="field">
-                Día del mes
-                <input className="input num" type="number" name="day" min={1} max={31} defaultValue={item.day ?? (item.due ? Number(item.due.slice(8)) : "")} required />
-              </label>
+              {item.every ? (
+                <p className="text-xs text-ink-3">Los días y cada cuánto se cambian en Programados.</p>
+              ) : (
+                <label className="field">
+                  Día del mes
+                  <input className="input num" type="number" name="day" min={1} max={31} defaultValue={item.day ?? (item.due ? Number(item.due.slice(8)) : "")} required />
+                </label>
+              )}
               <p className="text-xs text-ink-3 sm:col-span-3">Cambia {income ? "el ingreso" : "el pago fijo"} desde ahora; lo que ya registraste no se toca.</p>
               <div className="flex justify-end gap-2 sm:col-span-3">
                 <button type="button" className="btn-quiet" onClick={() => setPanel(paid ? "edit" : "form")}>
@@ -431,6 +453,7 @@ export function ChecklistRow({ item, month, today, editable, accounts }: Props) 
               <input type="hidden" name="type" value={item.type} />
               <input type="hidden" name="id" value={item.id} />
               <input type="hidden" name="month" value={month} />
+              {occurrence}
               <label className="field">
                 {income ? "Cuánto llegó" : saving ? "Cuánto abonaste" : "Cuánto pagaste"}
                 <MoneyInput name="amount" defaultValue={item.paidAmount || item.expected} required />

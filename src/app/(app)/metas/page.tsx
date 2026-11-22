@@ -6,7 +6,8 @@ import { LinkPending } from "@/components/link-pending";
 import { Modal } from "@/components/modal";
 import { loadData } from "@/lib/data";
 import { balanceAt, formatCOP, formatDate, isDebt } from "@/lib/finance";
-import { goalView, planOutlook, type GoalView } from "@/lib/goals";
+import { goalSchedule, goalView, planOutlook, type GoalView } from "@/lib/goals";
+import { cadenceText, timesPerMonth } from "@/lib/recurrence";
 import type { GoalDeposit as Deposit } from "@/lib/goals";
 
 function GoalCard({ view, deposits, today, index }: { view: GoalView; deposits: Deposit[]; today: string; index: number }) {
@@ -27,7 +28,7 @@ function GoalCard({ view, deposits, today, index }: { view: GoalView; deposits: 
         <div className="rounded-2xl bg-brand/8 p-3 text-sm">
           {outlook ? (
             <p>
-              <span className="font-semibold">Plan:</span> {formatCOP(goal.plan_amount!)} el día {goal.plan_day} de cada mes
+              <span className="font-semibold">Plan:</span> {formatCOP(goal.plan_amount!)}, {cadenceText(goalSchedule(goal))}
               {outlook.next ? `, el próximo el ${formatDate(outlook.next).replace(/ \d{4}$/, "")}` : ""}.{" "}
               {outlook.enough ? (
                 <span className="text-ink-2">Llegas a tiempo.</span>
@@ -78,7 +79,7 @@ export default async function GoalsPage() {
   // What the goals take each month: savings with a monthly plan, and what clearing each debt on time takes.
   // One-time goals and goals with no plan have no monthly amount.
   const paced = active.filter((v) => v.goal.kind === "payoff" || v.goal.plan_amount);
-  const monthly = paced.reduce((sum, v) => sum + (v.goal.plan_amount ?? v.perMonth), 0);
+  const monthly = paced.reduce((sum, v) => sum + (v.goal.plan_amount ? Math.round(v.goal.plan_amount * timesPerMonth(goalSchedule(v.goal).every)) : v.perMonth), 0);
 
   return (
     <>

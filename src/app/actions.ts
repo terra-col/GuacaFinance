@@ -10,6 +10,7 @@ import { firstMonthFor } from "@/lib/installments";
 import { allPages } from "@/lib/paging";
 import { normalizePhone } from "@/lib/phone";
 import { PHONE_TAKEN, emailForPhone, phoneLoginReady, phoneTaken } from "@/lib/phone-login";
+import { halfStart, needsDate, parseEvery, quincenaFrom, type Every } from "@/lib/recurrence";
 import { requestOrigin } from "@/lib/request-origin";
 import { INVITE_COOKIE, invitePath } from "@/lib/shared";
 import { REMEMBER_COOKIE, createClient, isSupabaseConfigured } from "@/lib/supabase/server";
@@ -30,6 +31,38 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 /** Supabase's answer when a table from a migration that has not run yet is queried. */
 const missingTable = (message: string, migration: string) =>
   /relation .* does not exist|schema cache|could not find the table|column .* does not exist/i.test(message) ? `Falta ejecutar la migración ${migration} en Supabase.` : null;
+
+const recurrenceMissing = (message: string) =>
+  /\bevery\b|starts_on|plan_every|plan_start|for_date|date_skips/i.test(message) ? "Falta ejecutar la migración 0017 en Supabase." : null;
+
+/**
+ * The periodicity a form asks for, as day and start. A quincena keeps its start while it stays a
+ * quincena; otherwise it starts where `quincenaStart` says.
+ */
+function readSchedule(
+  form: FormData,
+  names: { every: string; day: string; start: string },
+  before: { every?: Every; start?: string | null },
+  quincenaStart: string,
+): { error: string } | { every: Every; day: number; start: string | null } {
+  // No field: before migration 0017, or a screen that does not ask. It stays as it was.
+  const asked = text(form, names.every);
+  const every = asked ? parseEvery(asked) : (before.every ?? "monthly");
+  if (!every) return { error: "Elige cada cuánto se repite." };
+  if (needsDate(every)) {
+    const start = text(form, names.start);
+    if (!DATE.test(start) || Number.isNaN(Date.parse(start))) return { error: "Elige la fecha." };
+    return { every, day: Number(start.slice(8)), start };
+  }
+  const day = Number(text(form, names.day));
+  if (!Number.isInteger(day) || day < 1 || day > 31) return { error: "El día debe estar entre 1 y 31." };
+  if (every === "monthly") {
+    // Back to monthly: from this month, so past ones are not shown as unpaid.
+    const start = before.every && before.every !== "monthly" ? `${todayInBogota().slice(0, 7)}-01` : (before.start ?? null);
+    return { every, day, start };
+  }
+  return { every, day: quincenaFrom(day), start: before.every === every && before.start ? before.start : quincenaStart };
+}
 
 async function signedIn() {
   const supabase = await createClient();
@@ -323,16 +356,19 @@ export async function saveBill(_prev: FormState, form: FormData): Promise<FormSt
   const supabase = await signedIn();
   const name = text(form, "name");
   if (!name) return { error: "Ponle un nombre al recibo." };
-  const due_day = optionalDay(form, "due_day");
-  if (due_day === null || due_day === "invalid") return { error: "El día de pago debe estar entre 1 y 31." };
+  const id = text(form, "id");
+  const { data: current } = id ? await supabase.from("bills").select("*").eq("id", id).maybeSingle() : { data: null };
+  const schedule = readSchedule(form, { every: "every", day: "due_day", start: "starts_on" }, { every: current?.every, start: current?.starts_on }, halfStart(todayInBogota()));
+  if ("error" in schedule) return schedule;
   const amountRaw = text(form, "amount");
   const amount = amountRaw ? parsePesos(amountRaw) : null;
   if (amountRaw && !amount) return { error: "El valor no es válido." };
 
-  const row = { name, due_day, amount, category: text(form, "category") || null };
-  const id = text(form, "id");
+  // Only when it is not plain monthly, so saving keeps working before migration 0017.
+  const repeats = schedule.every !== "monthly" || (current?.every && current.every !== "monthly") ? { every: schedule.every, starts_on: schedule.start } : {};
+  const row: Record<string, unknown> = { name, due_day: schedule.day, amount, category: text(form, "category") || null, ...repeats };
   const { error } = id ? await supabase.from("bills").update(row).eq("id", id) : await supabase.from("bills").insert(row);
-  if (error) return { error: `No se pudo guardar: ${error.message}` };
+  if (error) return { error: recurrenceMissing(error.message) ?? `No se pudo guardar: ${error.message}` };
   revalidatePath("/", "layout");
   return { message: id ? `${name} quedó actualizado.` : `${name} quedó registrado.` };
 }
@@ -347,14 +383,16 @@ export async function updateRecurring(_prev: FormState, form: FormData): Promise
   if (type !== "bill" && type !== "income") return { error: "Eso no se puede editar aquí." };
   const name = text(form, "name");
   if (!name) return { error: "Ponle un nombre." };
+  // What is not monthly has its days in Programados: only name and amount come from its row.
+  const keepsDay = type === "bill" && !form.has("day");
   const day = optionalDay(form, "day");
-  if (day === null || day === "invalid") return { error: "El día debe estar entre 1 y 31." };
+  if (!keepsDay && (day === null || day === "invalid")) return { error: "El día debe estar entre 1 y 31." };
   const amountRaw = text(form, "amount");
   const amount = amountRaw ? parsePesos(amountRaw) : null;
   if (amountRaw && !amount) return { error: "El valor no es válido." };
   const { error } =
     type === "bill"
-      ? await supabase.from("bills").update({ name, amount, due_day: day }).eq("id", text(form, "id"))
+      ? await supabase.from("bills").update({ name, amount, ...(keepsDay ? {} : { due_day: day }) }).eq("id", text(form, "id"))
       : await supabase.from("incomes").update({ name, amount, day }).eq("id", text(form, "id"));
   if (error) return { error: `No se pudo guardar: ${error.message}` };
   revalidatePath("/", "layout");
@@ -447,7 +485,13 @@ export async function markPaid(_prev: FormState, form: FormData): Promise<FormSt
   const account_id = text(form, "account_id") || null;
   // Paid early (or late) for another month's list: that month is kept with the movement.
   const month = text(form, "month");
-  const forMonth = MONTH.test(month) && month !== occurred_on.slice(0, 7) ? { for_month: month } : {};
+  // What is not monthly also keeps the date it ticks.
+  const forDate = text(form, "for_date");
+  if (forDate && (!DATE.test(forDate) || forDate.slice(0, 7) !== month)) return { error: "Esa fecha del pago no es válida." };
+  const forMonth = {
+    ...(MONTH.test(month) && month !== occurred_on.slice(0, 7) ? { for_month: month } : {}),
+    ...(forDate && (form.get("type") === "bill" || form.get("type") === "goal") ? { for_date: forDate } : {}),
+  };
 
   if (form.get("type") === "goal") {
     const { data: goal } = await supabase.from("goals").select("id").eq("id", id).maybeSingle();
@@ -504,11 +548,17 @@ export async function unmarkPaid(form: FormData): Promise<FormState> {
   const type = form.get("type");
   const failed = (message: string) => new Error(`No se pudo deshacer: ${message}`);
   // Read whole rows and pick in code: works the same before and after migration 0013.
-  type Row = { id: string; occurred_on: string; for_month?: string | null; category?: string | null };
-  const ticking = (rows: Row[] | null) => (rows ?? []).filter((r) => paidMonth(r) === month && r.category !== ADJUSTMENT).map((r) => r.id);
+  type Row = { id: string; occurred_on: string; for_month?: string | null; for_date?: string | null; category?: string | null };
+  // A date of something not monthly unticks only itself, never the month's other dates.
+  const date = text(form, "for_date");
+  const listed = new Set(text(form, "paid_ids").split(",").filter(Boolean));
+  const ticking = (rows: Row[] | null) =>
+    (rows ?? [])
+      .filter((r) => paidMonth(r) === month && r.category !== ADJUSTMENT && (!date || r.for_date === date || listed.has(r.id)))
+      .map((r) => r.id);
 
   if (type === "goal") {
-    const { data, error: findError } = await supabase.from("goal_deposits").select("*").eq("goal_id", id).gt("amount", 0);
+    const { data, error: findError } = await supabase.from("goal_deposits").select("*").eq("goal_id", id).gt("amount", 0).order("occurred_on", { ascending: false });
     if (findError) throw failed(findError.message);
     const ids = ticking(data);
     if (ids.length === 0) return {};
@@ -519,7 +569,8 @@ export async function unmarkPaid(form: FormData): Promise<FormState> {
   }
 
   // Find exactly the movements that ticked it; balance adjustments are never touched.
-  const base = supabase.from("transactions").select("*");
+  // Newest first: what can be unticked is recent, and a daily payment passes 1000 rows.
+  const base = supabase.from("transactions").select("*").order("occurred_on", { ascending: false });
   const { data: rows, error: findError } =
     type === "bill" ? await base.eq("bill_id", id) : type === "income" ? await base.eq("income_id", id) : await base.eq("account_id", id).eq("kind", "payment");
   if (findError) throw failed(findError.message);
@@ -755,7 +806,9 @@ export async function adjustBalance(_prev: FormState, form: FormData): Promise<F
 }
 
 const goalsMissing = (message: string) =>
-  /plan_once/i.test(message)
+  /plan_every|plan_start/i.test(message)
+    ? "Falta ejecutar la migración 0017 en Supabase."
+    : /plan_once/i.test(message)
     ? "Falta ejecutar la migración 0011 en Supabase."
     : /plan_amount|plan_day|plan_income_id|checklist_skips_item_type/i.test(message)
     ? "Falta ejecutar la migración 0010 en Supabase."
@@ -763,23 +816,29 @@ const goalsMissing = (message: string) =>
       ? "Falta ejecutar la migración 0006 en Supabase."
       : null;
 
-type GoalPlan = { plan_amount: number | null; plan_day: number | null; plan_income_id: string | null; plan_once: boolean };
+type GoalPlan = { plan_amount: number | null; plan_day: number | null; plan_income_id: string | null; plan_once: boolean; plan_every?: Every; plan_start?: string | null };
 
 /**
  * How a savings goal is reached (`plan_mode`): «monthly» (an amount on a day of each month, maybe from
  * an income), «once» (all on its date) or «none» (no plan, no pace).
  */
-function goalPlan(form: FormData): { error: string } | { plan: GoalPlan } {
+function goalPlan(form: FormData, before: { every?: Every; start?: string | null } = {}): { error: string } | { plan: GoalPlan } {
   const mode = text(form, "plan_mode") || "none";
-  if (mode === "once") return { plan: { plan_amount: null, plan_day: null, plan_income_id: null, plan_once: true } };
-  if (mode !== "monthly") return { plan: { plan_amount: null, plan_day: null, plan_income_id: null, plan_once: false } };
+  // The periodicity goes only when there is or was one, so this works before migration 0017.
+  const changed = before.every && before.every !== "monthly";
+  const cleared = changed ? { plan_every: "monthly" as const, plan_start: null } : {};
+  if (mode === "once") return { plan: { plan_amount: null, plan_day: null, plan_income_id: null, plan_once: true, ...cleared } };
+  if (mode !== "monthly") return { plan: { plan_amount: null, plan_day: null, plan_income_id: null, plan_once: false, ...cleared } };
   const plan_amount = parsePesos(text(form, "plan_amount"));
-  if (!plan_amount) return { error: "Escribe cuánto vas a abonar cada mes." };
-  const plan_day = Number(text(form, "plan_day"));
-  if (!Number.isInteger(plan_day) || plan_day < 1 || plan_day > 31) return { error: "El día del abono debe estar entre 1 y 31." };
+  if (!plan_amount) return { error: "Escribe cuánto vas a abonar cada vez." };
+  // A plan starts today: a date that already passed is not owed.
+  const schedule = readSchedule(form, { every: "plan_every", day: "plan_day", start: "plan_start" }, before, todayInBogota());
+  if ("error" in schedule) return schedule;
+  const plan_day = schedule.day;
+  const repeats = schedule.every !== "monthly" ? { plan_every: schedule.every, plan_start: schedule.start } : cleared;
   const plan_income_id = text(form, "plan_income_id") || null;
   if (plan_income_id && !UUID.test(plan_income_id)) return { error: "Ese ingreso no es válido." };
-  return { plan: { plan_amount, plan_day, plan_income_id, plan_once: false } };
+  return { plan: { plan_amount, plan_day, plan_income_id, plan_once: false, ...repeats } };
 }
 
 export async function saveGoal(_prev: FormState, form: FormData): Promise<FormState> {
@@ -816,7 +875,7 @@ export async function saveGoal(_prev: FormState, form: FormData): Promise<FormSt
 export async function updateGoal(_prev: FormState, form: FormData): Promise<FormState> {
   const supabase = await signedIn();
   const id = text(form, "id");
-  const { data: current } = await supabase.from("goals").select("kind").eq("id", id).maybeSingle();
+  const { data: current } = await supabase.from("goals").select("*").eq("id", id).maybeSingle();
   if (!current) return { error: "Esa meta ya no existe." };
   const name = text(form, "name");
   if (!name) return { error: "Ponle un nombre a la meta." };
@@ -826,7 +885,7 @@ export async function updateGoal(_prev: FormState, form: FormData): Promise<Form
   if (current.kind === "save") {
     const target_amount = parsePesos(text(form, "target_amount"));
     if (!target_amount) return { error: "Escribe cuánto quieres juntar." };
-    const plan = goalPlan(form);
+    const plan = goalPlan(form, { every: current.plan_every, start: current.plan_start });
     if ("error" in plan) return plan;
     row = { ...row, target_amount, ...plan.plan };
   }
@@ -871,6 +930,14 @@ export async function skipItem(_prev: FormState, form: FormData): Promise<FormSt
   const month = text(form, "month");
   if (!["bill", "debt", "income", "goal"].includes(item_type) || !UUID.test(item_id) || !MONTH.test(month)) return { error: "No se pudo omitir." };
   const note = text(form, "note").slice(0, 200) || null;
+  const for_date = text(form, "for_date");
+  if (for_date) {
+    if ((item_type !== "bill" && item_type !== "goal") || !DATE.test(for_date)) return { error: "No se pudo omitir." };
+    const { error } = await supabase.from("date_skips").upsert({ item_type, item_id, for_date, note }, { onConflict: "user_id,item_type,item_id,for_date" });
+    if (error) return { error: recurrenceMissing(error.message) ?? `No se pudo omitir: ${error.message}` };
+    revalidatePath("/", "layout");
+    return { message: "Omitido esta vez." };
+  }
   const { error } = await supabase.from("checklist_skips").upsert({ item_type, item_id, month, note }, { onConflict: "user_id,item_type,item_id,month" });
   if (error) return { error: missingTable(error.message, "0007") ?? `No se pudo omitir: ${error.message}` };
   revalidatePath("/", "layout");
@@ -879,7 +946,8 @@ export async function skipItem(_prev: FormState, form: FormData): Promise<FormSt
 
 export async function unskipItem(form: FormData) {
   const supabase = await signedIn();
-  const { error } = await supabase.from("checklist_skips").delete().eq("id", text(form, "id"));
+  const table = text(form, "for_date") ? "date_skips" : "checklist_skips";
+  const { error } = await supabase.from(table).delete().eq("id", text(form, "id"));
   if (error) throw new Error(`No se pudo deshacer: ${error.message}`);
   revalidatePath("/", "layout");
 }

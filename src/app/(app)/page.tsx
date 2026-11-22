@@ -104,7 +104,7 @@ async function Dashboard({ searchParams }: Props) {
   const previous = started.includes(lastMonth) ? lastMonth : null;
   const spending = spendingByCategory(flows, today.slice(0, 7));
   const spent = spending.reduce((sum, c) => sum + c.amount, 0);
-  const advice = advise(accounts, txs, today, bills, flows);
+  const advice = advise(accounts, txs, today, bills, flows, skips);
   const debts = accounts.filter(isDebt);
 
   const month = today.slice(0, 7);
@@ -113,7 +113,8 @@ async function Dashboard({ searchParams }: Props) {
     .filter((i) => !i.skipped);
   const paid = checklist.filter((i) => i.paid).length;
   // What is still to pay this month, soonest first.
-  const upcoming = checklist.filter((i) => !i.paid).slice(0, 4);
+  // Each payment once: something daily would fill the four places by itself.
+  const upcoming = checklist.filter((i, at, all) => !i.paid && all.findIndex((x) => !x.paid && x.type === i.type && x.id === i.id) === at).slice(0, 4);
   const plan = planReady && incomes.length > 0 ? monthPlan(incomeChecklist(incomes, txs, month, today, skips), checklist, budgets) : null;
   const cardLimit = debts.reduce((sum, a) => sum + (a.credit_limit ?? 0), 0);
   const cardUsed = debts.filter((a) => a.credit_limit).reduce((sum, a) => sum + Math.max(0, balanceAt(a, txs)), 0);

@@ -7,7 +7,8 @@ import { GoalSummary } from "@/components/goal-summary";
 import { SubmitButton } from "@/components/submit-button";
 import { loadData } from "@/lib/data";
 import { formatCOP, formatDate, monthEnd, shiftMonth } from "@/lib/finance";
-import { goalView, planOutlook } from "@/lib/goals";
+import { goalSchedule, goalView, planOutlook } from "@/lib/goals";
+import { cadenceText } from "@/lib/recurrence";
 
 /** One goal: how it is going, its savings plan (which also shows up in Pagos), its deposits, editing. */
 export default async function GoalPage({ params }: { params: Promise<{ id: string }> }) {
@@ -54,7 +55,7 @@ export default async function GoalPage({ params }: { params: Promise<{ id: strin
           ) : outlook ? (
             <>
               <p className="text-ink-2">
-                Abonas <span className="num font-semibold text-ink">{formatCOP(goal.plan_amount!)}</span> el día {goal.plan_day} de cada mes
+                Abonas <span className="num font-semibold text-ink">{formatCOP(goal.plan_amount!)}</span>, {cadenceText(goalSchedule(goal))}
                 {income ? `, de tu ${income.name.toLowerCase()}` : ""}.
                 {outlook.next ? ` El próximo es el ${formatDate(outlook.next)} y te aparece en Pagos.` : ""}
               </p>
@@ -66,7 +67,7 @@ export default async function GoalPage({ params }: { params: Promise<{ id: strin
               ) : (
                 <p className="rounded-xl bg-[var(--warn)]/15 p-3 text-sm">
                   Con este plan llegarías a {formatCOP(outlook.projected)}: <span className="font-semibold">te faltarían {formatCOP(outlook.shortfall)}</span>. Para llegar,
-                  abona {formatCOP(Math.ceil((view.remaining / Math.max(1, outlook.instalments)) / 1000) * 1000)} al mes.{" "}
+                  abona {formatCOP(Math.ceil((view.remaining / Math.max(1, outlook.instalments)) / 1000) * 1000)} {goalSchedule(goal).every === "monthly" ? "al mes" : "cada vez"}.{" "}
                   <Link href="#editar" className="font-semibold text-brand">
                     Ajustar el plan
                   </Link>

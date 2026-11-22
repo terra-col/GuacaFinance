@@ -1,5 +1,6 @@
 // Pure balance logic. No framework imports, so it runs under `node --test`.
 // Dates are 'YYYY-MM-DD' strings throughout to stay clear of timezone shifts.
+import { assign, datesIn, nextDates, type Every, type Schedule } from "./recurrence.ts";
 
 export type AccountKind = "savings" | "cash" | "credit_card" | "loan";
 export type TxKind = "income" | "expense" | "payment";
@@ -68,6 +69,8 @@ export interface Tx {
   income_id?: string | null;
   /** The month it pays in Pagos when that is not the month of its date (next month's rent paid early). */
   for_month?: string | null;
+  /** The date it ticks, for what does not repeat monthly (the quincena of the 15th). */
+  for_date?: string | null;
 }
 
 /** The month a payment ticks in Pagos: the one it was marked for, else the month of its date. */
@@ -79,6 +82,8 @@ export interface Skip {
   item_type: "bill" | "debt" | "income" | "goal";
   item_id: string;
   month: string;
+  /** Only that date, for what does not repeat monthly. */
+  for_date?: string | null;
   note: string | null;
 }
 
@@ -369,6 +374,21 @@ export interface Bill {
   category: string | null;
   /** When the bill was registered (ISO timestamp); months before it do not list the bill. */
   created_at?: string;
+  /** How often it repeats; absent (before migration 0017) is monthly. */
+  every?: Every;
+  starts_on?: string | null;
+}
+
+export const billSchedule = (bill: Bill): Schedule => ({ every: bill.every ?? "monthly", day: bill.due_day, start: bill.starts_on ?? null });
+
+/** The next date a bill falls on, today included. */
+export const nextBillDate = (bill: Bill, today: string) => nextDates(billSchedule(bill), today, 1)[0] ?? null;
+
+/**
+ * Whether «this time does not apply»: by date for what is not monthly, by month for the rest.
+ */
+export function findSkip(skips: Skip[], type: Skip["item_type"], id: string, month: string, date?: string | null): Skip | null {
+  return skips.find((s) => s.item_type === type && s.item_id === id && (date ? s.for_date === date : !s.for_date && s.month === month)) ?? null;
 }
 
 export interface BillStatus {
@@ -379,10 +399,27 @@ export interface BillStatus {
   days: number;
 }
 
-/** A bill counts as paid for the month once a movement dated in that month references it. */
-export function billStatus(bill: Bill, txs: Tx[], today: string): BillStatus {
+/**
+ * A monthly bill counts as paid for the month once a movement dated in that month references it
+ * (or once it is skipped). The others: their first date still open, from this month on.
+ */
+export function billStatus(bill: Bill, txs: Tx[], today: string, skips: Skip[] = []): BillStatus {
   const month = today.slice(0, 7);
-  const paidThisMonth = txs.some((t) => t.bill_id === bill.id && paidMonth(t) === month);
+  const schedule = billSchedule(bill);
+  if (schedule.every !== "monthly") {
+    const own = txs.filter((t) => t.bill_id === bill.id);
+    for (let i = 0; i <= 12; i++) {
+      const m = shiftMonth(month, i);
+      for (const slot of assign(datesIn(schedule, m), own.filter((t) => paidMonth(t) === m))) {
+        if (!slot.date || slot.payments.length || findSkip(skips, "bill", bill.id, m, slot.date)) continue;
+        return { date: slot.date, paidThisMonth: false, days: daysBetween(today, slot.date) };
+      }
+    }
+    // Nothing open in a year (it starts later): nothing to warn about.
+    const date = nextBillDate(bill, today) ?? today;
+    return { date, paidThisMonth: true, days: daysBetween(today, date) };
+  }
+  const paidThisMonth = txs.some((t) => t.bill_id === bill.id && paidMonth(t) === month) || findSkip(skips, "bill", bill.id, month) !== null;
   const [thisMonth, nextMonth] = dueDates(bill.due_day, `${month}-01`, 2);
   const date = paidThisMonth ? nextMonth : thisMonth;
   return { date, paidThisMonth, days: daysBetween(today, date) };
@@ -416,7 +453,14 @@ export interface ChecklistItem {
   paidFrom?: string | null;
   /** Bills and incomes: the day of the month as set (a «31» shows as the 30th in November). */
   day?: number;
+  /** Bills and savings that are not monthly: how often, the date this row ticks, and what ticked it. */
+  every?: Every;
+  forDate?: string;
+  paidIds?: string[];
 }
+
+/** A row's key: what is not monthly appears several times in one month. */
+export const rowKey = (item: Pick<ChecklistItem, "type" | "id" | "forDate">) => `${item.type}-${item.id}${item.forDate ? `-${item.forDate}` : ""}`;
 
 /**
  * The month's obligatory payments: every fixed bill, plus every card and loan
@@ -436,7 +480,7 @@ export const pendingFirst = <T extends Pick<ChecklistItem, "paid" | "skipped" | 
 export const byDue = (a: ChecklistItem, b: ChecklistItem) => (a.due ?? "9999").localeCompare(b.due ?? "9999") || a.name.localeCompare(b.name);
 
 export function monthlyChecklist(accounts: Account[], bills: Bill[], txs: Tx[], month: string, today: string, skips: Skip[] = []): ChecklistItem[] {
-  const skipOf = (type: Skip["item_type"], id: string) => skips.find((s) => s.item_type === type && s.item_id === id && s.month === month) ?? null;
+  const skipOf = (type: Skip["item_type"], id: string) => findSkip(skips, type, id, month);
   const first = `${month}-01`;
   const last = monthEnd(month);
   const inMonth = (t: Tx) => paidMonth(t) === month;
@@ -448,11 +492,39 @@ export function monthlyChecklist(accounts: Account[], bills: Bill[], txs: Tx[], 
 
   for (const bill of bills) {
     // created_at is a UTC timestamp: read it as a date in Bogotá before comparing months.
-    if (bill.created_at && todayInBogota(new Date(bill.created_at)).slice(0, 7) > month) continue;
+    const schedule = billSchedule(bill);
+    const monthly = schedule.every === "monthly";
+    if (monthly && bill.created_at && todayInBogota(new Date(bill.created_at)).slice(0, 7) > month) continue;
     const payments = txs.filter((t) => t.bill_id === bill.id && inMonth(t));
+    // Monthly again after having another periodicity: earlier months show only what was paid.
+    if (monthly && payments.length === 0 && schedule.start && month < schedule.start.slice(0, 7)) continue;
     const due = dueIn(bill.due_day);
     const lastUsed = txs.find((t) => t.bill_id === bill.id)?.account_id; // txs come newest first
     const accountId = favorite ?? (accounts.some((a) => a.id === lastUsed) ? lastUsed! : spendable.length === 1 ? spendable[0].id : null);
+    if (!monthly) {
+      for (const { date, payments: ticked } of assign(datesIn(schedule, month), payments)) {
+        const paid = ticked.length > 0;
+        const skip = date && !paid ? findSkip(skips, "bill", bill.id, month, date) : null;
+        items.push({
+          type: "bill",
+          id: bill.id,
+          name: bill.name,
+          every: schedule.every,
+          forDate: date ?? undefined,
+          due: date ?? ticked[0].occurred_on,
+          expected: bill.amount,
+          paid,
+          paidAmount: ticked.reduce((sum, t) => sum + t.amount, 0),
+          paidOn: ticked[0]?.occurred_on ?? null,
+          paidFrom: ticked[0]?.account_id ?? null,
+          paidIds: ticked.map((t) => t.id),
+          overdue: !paid && !skip && date !== null && date < today,
+          skipped: skip,
+          quick: bill.amount && accountId ? { amount: bill.amount, accountId } : null,
+        });
+      }
+      continue;
+    }
     items.push({
       type: "bill",
       id: bill.id,

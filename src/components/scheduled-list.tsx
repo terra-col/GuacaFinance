@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { deleteBill, deleteIncome } from "@/app/actions";
 import type { Income } from "@/lib/budget";
-import { formatCOP, formatDate, monthName, type Bill } from "@/lib/finance";
+import { billSchedule, formatCOP, formatDate, monthName, type Bill } from "@/lib/finance";
+import { cadenceText } from "@/lib/recurrence";
 import { BillForm, IncomeForm } from "./bill-forms";
 import { SubmitButton } from "./submit-button";
 
@@ -13,7 +14,10 @@ export type ScheduledRow = { kind: "income"; income: Income; next: string | null
 
 /** "Cada mes, día 30", "jun y dic, día 20", "una vez, 30 de diciembre". */
 function cadence(row: ScheduledRow): string {
-  if (row.kind === "bill") return `Cada mes, día ${row.bill.due_day}`;
+  if (row.kind === "bill") {
+    const text = cadenceText(billSchedule(row.bill));
+    return text[0].toUpperCase() + text.slice(1);
+  }
   const { income } = row;
   if (income.once_month) return `Una vez, en ${monthName(income.once_month)}${income.once_month.slice(0, 4) !== new Date().getFullYear().toString() ? ` ${income.once_month.slice(0, 4)}` : ""}`;
   if (income.months) {

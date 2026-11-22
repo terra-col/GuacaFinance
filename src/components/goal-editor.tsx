@@ -113,7 +113,7 @@ export function GoalEditor({
           createdOn={goal.created_on}
           fromMonth={fromMonth}
           incomes={incomes}
-          initial={{ amount: goal.plan_amount ?? null, day: goal.plan_day ?? null, incomeId: goal.plan_income_id ?? null, once: goal.plan_once }}
+          initial={{ amount: goal.plan_amount ?? null, day: goal.plan_day ?? null, incomeId: goal.plan_income_id ?? null, once: goal.plan_once, every: goal.plan_every, start: goal.plan_start }}
         />
       )}
       {state.error && (
