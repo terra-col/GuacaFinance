@@ -60,42 +60,56 @@ export default async function PersonPage({ params }: { params: Promise<{ member:
 
       {shared.social && !person.direct && <DirectButton member={person.member}>+ Gasto solo entre ustedes dos</DirectButton>}
 
-      <section className="card" aria-labelledby="where-title">
-        <h2 id="where-title" className="display text-2xl">
-          De dónde viene
-        </h2>
+      <section className="card" aria-labelledby="moves-title">
+        <div className="flex items-center justify-between gap-3">
+          <h2 id="moves-title" className="display text-2xl">
+            Gastos y pagos
+          </h2>
+          {person.direct && (
+            <Link href={`/compartidos/${person.direct}`} className="btn-quiet h-9 shrink-0 px-3 text-sm">
+              + Gasto
+            </Link>
+          )}
+        </div>
         {moves.length === 0 ? (
-          <p className="mt-1 text-sm text-ink-3">Todavía no hay movimientos entre ustedes.</p>
+          <p className="mt-1 text-sm text-ink-3">Todavía no hay gastos ni pagos entre ustedes.</p>
         ) : (
           <ul className="mt-1 divide-y divide-line" data-moves>
             {moves.map((m) => (
-              <li key={m.id}>
-                <Link href={`/compartidos/${m.group.id}`} className="flex items-center justify-between gap-3 py-3">
-                  <span className="min-w-0">
-                    <span className="block truncate font-semibold">{m.group.direct ? (m.kind === "settlement" ? "Pago para saldar" : m.description) : "Movimiento de grupo"}</span>
-                    <span className="block truncate text-xs text-ink-3">
-                      {m.group.direct ? "" : `${m.group.name} · ${m.kind === "settlement" ? "pago para saldar" : m.description} · `}
-                      {formatDate(m.on)}
-                    </span>
+              <li key={m.id} className="flex items-center justify-between gap-3 py-3">
+                <span className="min-w-0">
+                  <span className="block truncate font-semibold">{m.kind === "settlement" ? "Pago para saldar" : m.description}</span>
+                  <span className="block truncate text-xs text-ink-3">
+                    {formatDate(m.on)}
+                    {!m.group.direct && (
+                      <>
+                        {" · del grupo "}
+                        <Link href={`/compartidos/${m.group.id}`} className="font-semibold text-brand">
+                          {m.group.name}
+                        </Link>
+                      </>
+                    )}
                   </span>
-                  <span className="shrink-0 text-right">
-                    <span className="block text-xs text-ink-3">{m.kind === "settlement" ? (m.net > 0 ? "le pagaste" : "te pagó") : m.net > 0 ? "te debe" : "le debes"}</span>
-                    <span className="num block font-semibold">{formatCOP(Math.abs(m.net))}</span>
+                </span>
+                {/* Green when they owe it to one; red when one owes it to them. The words say it too. */}
+                <span className="shrink-0 text-right" style={{ color: `color-mix(in oklab, var(--${m.net > 0 ? "savings" : "debt"}) ${m.net > 0 ? 55 : 60}%, var(--ink))` }}>
+                  <span className="block text-xs font-medium">{m.kind === "settlement" ? (m.net > 0 ? "le pagaste" : "te pagó") : m.net > 0 ? "te debe" : "le debes"}</span>
+                  <span className="num block font-semibold">
+                    {m.net > 0 ? "+" : "−"}
+                    {formatCOP(Math.abs(m.net))}
                   </span>
-                </Link>
+                </span>
               </li>
             ))}
           </ul>
         )}
-        {inGroups.length > 0 && moves.length > 0 && (
-          <p className="mt-2 text-xs text-ink-3">En los grupos el total puede ser distinto a la suma: las deudas se cruzan entre todos, como en «Para quedar al día».</p>
-        )}
+        {inGroups.length > 0 && moves.length > 0 && <p className="mt-2 text-xs text-ink-3">En los grupos las deudas se cruzan entre todos, así que el total puede no ser la suma.</p>}
       </section>
 
       {inGroups.length > 0 && (
         <section className="card" aria-labelledby="common-title">
           <h2 id="common-title" className="display text-2xl">
-            Grupos en común
+            En qué grupos están
           </h2>
           <ul className="mt-1 divide-y divide-line">
             {inGroups.map(({ group, net }) => (
