@@ -96,7 +96,7 @@ export async function loadData() {
     supabase.from("checklist_skips").select("*"),
     supabase.from("incomes").select("*").order("day"),
     supabase.from("card_purchases").select("*").order("first_due_month"),
-    loadShared(supabase),
+    loadShared(supabase, user.id),
     allPages<Skip>((from, to) => supabase.from("date_skips").select("*").order("for_date").order("id").range(from, to)),
   ]);
   // Card purchases in instalments arrived with migration 0009.

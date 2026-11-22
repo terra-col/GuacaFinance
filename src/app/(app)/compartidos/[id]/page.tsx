@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { Icon, txIconName } from "@/components/icons";
 import { Modal } from "@/components/modal";
 import { PeopleSection } from "@/components/people-section";
+import { RemovePersonForm, RestorePersonButton } from "@/components/remove-forms";
 import { ExpenseForm } from "@/components/expense-form";
 import { AddPersonForm, DeleteEntryForm, DeleteGroupForm, EditPersonForm, InviteForm, RecordForm, RenameGroupForm, SettlementForm, type EditableEntry } from "@/components/shared-forms";
 import { knownPeople } from "@/lib/contacts";
@@ -22,7 +23,11 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
   if (!group || !me) notFound();
 
   const members = shared.members.filter((m) => m.group_id === id);
-  const people = members.map(({ id, name }) => ({ id, name }));
+  // Who was taken out stays only in what already happened.
+  const active = members.filter((m) => !m.removed_at);
+  const gone = members.filter((m) => m.removed_at);
+  const goneIds = new Set(gone.map((m) => m.id));
+  const people = active.map(({ id, name }) => ({ id, name }));
   const name = new Map(members.map((m) => [m.id, m.name]));
   const entries = shared.entries.filter((e) => e.group_id === id);
   const shares = shared.shares.filter((s) => s.group_id === id);
@@ -98,22 +103,43 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
       </div>
 
       <PeopleSection
-        people={members.map((m) => ({ id: m.id, name: m.name, me: m.id === me.id }))}
-        waiting={members.filter((m) => !m.user_id).length}
+        people={active.map((m) => ({ id: m.id, name: m.name, me: m.id === me.id }))}
+        waiting={active.filter((m) => !m.user_id).length}
         action={
           !direct && (
-            <Modal label="+ Agregar" title="Agregar persona" buttonClass="btn-quiet h-9 px-3 text-sm">
-              <AddPersonForm group={id} known={addable ?? null} />
-            </Modal>
+            <div className="flex flex-col items-start gap-3">
+              <Modal label="+ Agregar" title="Agregar persona" buttonClass="btn-quiet h-9 px-3 text-sm">
+                <AddPersonForm group={id} known={addable ?? null} />
+              </Modal>
+              {gone.length > 0 && (
+                <div className="w-full border-t border-line pt-2" data-gone>
+                  <p className="eyebrow">Ya no están</p>
+                  <ul>
+                    {gone.map((m) => (
+                      <li key={m.id} className="flex items-center justify-between gap-3 py-1.5 text-sm text-ink-3">
+                        <span className="min-w-0 truncate">{m.name}</span>
+                        {pending.has(m.id) ? (
+                          <span className="shrink-0 text-xs">Invitación enviada</span>
+                        ) : (
+                          (!m.user_id || canRemove) && <RestorePersonButton member={m.id} />
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
           )
         }
       >
-        {[me, ...members.filter((m) => m.id !== me.id)].map((m) => {
+        {[me, ...active.filter((m) => m.id !== me.id)].map((m) => {
           const net = nets.get(m.id) ?? 0;
           const inHistory = entries.some((e) => e.paid_by === m.id) || shares.some((s) => s.member_id === m.id);
-          const removable = !direct && !m.user_id && !inHistory;
+          const canQuit = !direct && m.id !== me.id && Boolean(shared.removable);
+          // Before migration 0024, only who has no history, from its «Editar».
+          const removable = !shared.removable && !direct && !m.user_id && !inHistory;
           return (
-            <li key={m.id} className="flex items-center justify-between gap-2 py-2 text-sm">
+            <li key={m.id} className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5 py-2 text-sm">
               <div className="min-w-0">
                 <p className="truncate font-semibold">
                   {m.name}
@@ -124,7 +150,7 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
                   {!m.user_id && ` · ${pending.has(m.id) ? "Invitación enviada" : "Sin unirse"}`}
                 </p>
               </div>
-              <div className="flex shrink-0 gap-3">
+              <div className="ml-auto flex shrink-0 gap-3">
                 {!m.user_id && (
                   <Modal label="Invitar" title={`Invitar a ${m.name}`} buttonClass={SMALL}>
                     <InviteForm member={{ id: m.id, name: m.name }} groupName={group.name} phone={m.phone ?? ""} removable={!known && removable} />
@@ -137,6 +163,19 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
                       who={m.id === me.id ? "me" : m.user_id ? "joined" : "guest"}
                       known={addable ?? []}
                       removable={removable}
+                    />
+                  </Modal>
+                )}
+                {canQuit && (
+                  <Modal label="Quitar" title={`Quitar a ${m.name}`} buttonClass="text-xs font-medium text-ink-3 hover:text-debt">
+                    <RemovePersonForm
+                      member={m.id}
+                      name={m.name}
+                      net={net}
+                      hasHistory={inHistory}
+                      joined={Boolean(m.user_id)}
+                      allowed={!m.user_id || canRemove}
+                      creator={creator?.name ?? "quien lo creó"}
                     />
                   </Modal>
                 )}
@@ -208,10 +247,12 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
               const receiver = settled && parts[0]?.member_id === me.id;
               const ownPart = parts.find((s) => s.member_id === me.id)?.amount ?? 0;
               const tx = linkOf.get(entry.id);
-              const canDelete = entry.created_by === user.id || (entry.created_by === null && payer);
+              // With someone who left, it stays as it was.
+              const frozen = goneIds.has(entry.paid_by) || parts.some((s) => goneIds.has(s.member_id));
+              const canDelete = !frozen && (entry.created_by === user.id || (entry.created_by === null && payer));
               const link = shared.links.find((l) => l.entry_id === entry.id);
               const editable: EditableEntry | null =
-                known && (entry.created_by === user.id || payer)
+                known && !frozen && (entry.created_by === user.id || payer)
                   ? {
                       id: entry.id,
                       amount: entry.amount,
@@ -256,6 +297,7 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
                         </div>
                       </details>
                     )}
+                    {frozen && <p className="text-xs text-ink-3">Con alguien que ya no está: queda como fue.</p>}
                     <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
                       {(payer || receiver) && !tx && (
                         <Modal label="Registrar en mi cuenta" title="Registrar en mi cuenta" buttonClass={SMALL}>

@@ -44,17 +44,24 @@ export function knownPeople(data: SharedData, me: string): Known[] {
   const accountOfPhone = new Map<string, string>();
   for (const m of data.members) if (m.phone && m.user_id && m.user_id !== me) accountOfPhone.set(m.phone, m.user_id);
   const people = new Map<string, Known>();
+  const hidden = new Set(data.hidden);
+  // A deleted contact is not offered again.
+  const offered = new Set<string>();
   for (const m of data.members) {
     if (m.user_id === me) continue;
     const userId = m.user_id ?? (m.phone ? (accountOfPhone.get(m.phone) ?? null) : null);
     const key = userId ?? m.phone ?? `name:${m.name.toLocaleLowerCase("es")}`;
+    if (!hidden.has(m.id)) offered.add(key);
     const seen = people.get(key);
     // The joined place is the one an invitation can point at.
     const member = !seen || (m.user_id && m.user_id === userId) ? m.id : seen.member;
     const named = !seen || (!seen.phone && m.phone);
     people.set(key, { member, name: named ? m.name : seen.name, phone: seen?.phone || m.phone || "", userId });
   }
-  return [...people.values()].sort((a, b) => a.name.localeCompare(b.name, "es"));
+  return [...people]
+    .filter(([key]) => offered.has(key))
+    .map(([, person]) => person)
+    .sort((a, b) => a.name.localeCompare(b.name, "es"));
 }
 
 /** The known person with an account behind a typed or picked number. */

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { groupTitle, peopleWith, splitTargets } from "./people.ts";
+import { knownPeople } from "./contacts.ts";
+import { groupTitle, peopleWith, placesOf, splitTargets } from "./people.ts";
 import { myPosition, sharedMarks, type SharedData } from "./shared.ts";
 
 const base = (): SharedData => ({
@@ -71,4 +72,32 @@ test("who to divide with: people first, without repeating their account as a gro
   const targets = splitTargets(base(), "ana", "Ana");
   assert.deepEqual(targets.map((t) => [t.kind, t.name, t.group]), [["person", "Caro", null], ["person", "Beto", "d"], ["group", "Viaje", "g"]]);
   assert.equal(targets[0].me, "me");
+});
+
+test("who was taken out is in no list nor split, and their past still counts", () => {
+  const data = base();
+  data.entries = [];
+  data.shares = [];
+  data.members.find((m) => m.id === "gc")!.removed_at = "2026-11-22T12:00:00Z";
+  assert.deepEqual(peopleWith(data, "ana").map((p) => p.name), ["Beto"]);
+  assert.deepEqual(splitTargets(data, "ana", "Ana").find((t) => t.kind === "group")!.members.map((m) => m.name), ["Ana", "Beto"]);
+  assert.deepEqual(placesOf(data, "ana", "gc"), ["gc"]);
+});
+
+test("a deleted contact leaves the list and the suggestions, and returns with something pending or somewhere new", () => {
+  const data = base();
+  data.entries = [];
+  data.shares = [];
+  data.hidden = placesOf(data, "ana", "gb");
+  assert.deepEqual(data.hidden, ["gb", "db"]);
+  assert.deepEqual(peopleWith(data, "ana").map((p) => p.name), ["Caro"]);
+  assert.deepEqual(knownPeople(data, "ana").map((p) => p.name), ["Caro"]);
+  assert.equal(peopleWith(data, "ana", { deletedToo: true }).length, 2);
+  assert.deepEqual(peopleWith(data, "beto").map((p) => p.name).sort(), ["Ana", "Caro"]);
+
+  const owing = { ...base(), hidden: ["gb", "db"] };
+  assert.ok(peopleWith(owing, "ana").some((p) => p.name === "Beto"), "money pending is never hidden");
+  data.groups.push({ id: "n", name: "Nuevo", created_by: "ana", created_at: "" });
+  data.members.push({ id: "na", group_id: "n", user_id: "ana", name: "Ana" }, { id: "nb", group_id: "n", user_id: "beto", name: "Beto" });
+  assert.ok(peopleWith(data, "ana").some((p) => p.name === "Beto"), "somewhere new");
 });

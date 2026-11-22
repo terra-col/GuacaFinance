@@ -583,3 +583,116 @@ test("deleting a test of one's own: everything the group created goes, what one 
   assert.equal((await as(ANA, "select * from shared_groups where id = $1", [id])).length, 0);
   assert.deepEqual((await as(ANA, "select id from transactions where account_id = $1", [acct])).map((t) => t.id), [own]);
 });
+
+// ---- 0024: taking a person out, deleting a contact
+
+/** A group where Beto paid exactly his own part: at zero, with history. */
+async function groupWithHistory() {
+  const g = await group();
+  const entry = await add(BETO, g, { by: g.Beto, amount: 50000, shares: [{ member_id: g.Beto, amount: 50000 }], account: await account(BETO) });
+  return { ...g, entry };
+}
+
+test("remove: only who may, and never with something pending", async () => {
+  const g = await group();
+  await assert.rejects(as(EVA, "select shared_remove_person($1)", [g.Caro]), /No haces parte/);
+  await assert.rejects(as(null, "select shared_remove_person($1)", [g.Caro]), /permission denied/);
+  await assert.rejects(as(ANA, "select shared_remove_person($1)", [g.Ana]), /contigo/);
+  await assert.rejects(as(BETO, "select shared_remove_person($1)", [g.Ana]), /solo lo puede quitar quien creó/);
+  await add(ANA, g);
+  await assert.rejects(as(ANA, "select shared_remove_person($1)", [g.Beto]), /Primero salda/);
+  await assert.rejects(as(ANA, "select shared_remove_person($1)", [g.Caro]), /Primero salda/);
+});
+
+test("remove: without history the place is deleted", async () => {
+  const g = await group();
+  await as(BETO, "select shared_remove_person($1)", [g.Caro]);
+  assert.equal((await as(ANA, "select * from shared_members where id = $1", [g.Caro])).length, 0);
+  await as(ANA, "select shared_remove_person($1)", [g.Beto]);
+  for (const table of ["shared_members", "shared_entries"]) assert.equal((await as(BETO, "select * from " + table + " where group_id = $1", [g.id])).length, 0, table);
+  assert.equal((await as(BETO, "select * from shared_groups where id = $1", [g.id])).length, 0);
+});
+
+test("remove: who leaves keeps what was, and reads nothing that comes after", async () => {
+  const g = await groupWithHistory();
+  await as(ANA, "select shared_remove_person($1)", [g.Beto]);
+  assert.equal((await as(BETO, "select * from shared_entries where id = $1", [g.entry])).length, 1, "their past");
+  assert.equal((await as(BETO, "select * from shared_shares where entry_id = $1", [g.entry])).length, 1, "their own share, for their totals");
+  assert.equal((await as(BETO, "select * from shared_links where entry_id = $1", [g.entry])).length, 1);
+  assert.equal(await value(BETO, "select is_shared_member($1)", [g.id]), false);
+
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  const later = await add(ANA, g, { amount: 9000, shares: [{ member_id: g.Ana, amount: 9000 }] });
+  const someone = await value(ANA, "select shared_add_member($1, 'Nueva')", [g.id]);
+  assert.equal((await as(BETO, "select * from shared_entries where id = $1", [later])).length, 0, "nothing after");
+  assert.equal((await as(BETO, "select * from shared_shares where entry_id = $1", [later])).length, 0);
+  assert.equal((await as(BETO, "select * from shared_members where id = $1", [someone])).length, 0);
+  assert.equal(await value(BETO, "select count(*)::int from shared_notices where entry_id = $1", [later]), 0, "nor notices");
+  assert.equal(await value(BETO, "select count(*)::int from shared_notices where group_id = $1 and kind = 'you_removed'", [g.id]), 1);
+
+  await assert.rejects(as(BETO, "select shared_add_member($1, 'Intruso')", [g.id]), /No haces parte/);
+  await assert.rejects(as(BETO, "select shared_delete_entry($1)", [g.entry]), /No haces parte/);
+  await assert.rejects(as(BETO, "select shared_create_direct('Beto', 'Ana', null, $1)", [g.Ana]), /ya compartes un grupo/, "nor use it as a shared group");
+});
+
+test("remove: their balance cannot be moved afterwards", async () => {
+  const g = await groupWithHistory();
+  const both = await add(ANA, g, { amount: 2000, shares: [{ member_id: g.Ana, amount: 2000 }] });
+  await as(ANA, "select shared_remove_person($1)", [g.Beto]);
+  await assert.rejects(add(ANA, g, { amount: 9000, shares: [{ member_id: g.Beto, amount: 9000 }] }), /ya no es del grupo/);
+  await assert.rejects(add(ANA, g, { amount: 9000, by: g.Beto, shares: [{ member_id: g.Ana, amount: 9000 }] }), /ya no es del grupo/);
+  const update = (entry, by, member) =>
+    as(ANA, "select shared_update_entry($1, 'Cambio', null, 2000, $2, '2026-11-22', $3)", [entry, by, JSON.stringify([{ member_id: member, amount: 2000 }])]);
+  await assert.rejects(update(both, g.Beto, g.Ana), /ya no es del grupo/);
+  await assert.rejects(update(both, g.Ana, g.Beto), /ya no es del grupo/);
+
+  const h = await group();
+  const mixed = await add(ANA, h, { amount: 6000, shares: [{ member_id: h.Beto, amount: 6000 }] });
+  await add(ANA, h, { kind: "settlement", amount: 6000, by: h.Beto, shares: [{ member_id: h.Ana, amount: 6000 }] });
+  await as(ANA, "select shared_remove_person($1)", [h.Beto]);
+  await assert.rejects(as(ANA, "select shared_delete_entry($1)", [mixed]), /ya no es del grupo/);
+});
+
+test("restore: with an account only by accepting, without one at once", async () => {
+  const g = await groupWithHistory();
+  await as(ANA, "select shared_remove_person($1)", [g.Beto]);
+  await assert.rejects(as(BETO, "select shared_restore_person($1)", [g.Beto]), /No haces parte/);
+  assert.equal(await value(ANA, "select shared_restore_person($1)", [g.Beto]), false);
+  assert.equal(await value(BETO, "select is_shared_member($1)", [g.id]), false, "not before accepting");
+  assert.equal(await value(BETO, "select count(*)::int from shared_my_requests() where member_id = $1", [g.Beto]), 1);
+  assert.equal(await value(BETO, "select shared_respond($1, true)", [g.Beto]), g.id);
+  assert.equal(await value(BETO, "select is_shared_member($1)", [g.id]), true);
+
+  await add(ANA, g, { amount: 7000, shares: [{ member_id: g.Caro, amount: 7000 }] });
+  await add(ANA, g, { kind: "settlement", amount: 7000, by: g.Caro, shares: [{ member_id: g.Ana, amount: 7000 }] });
+  await as(ANA, "select shared_remove_person($1)", [g.Caro]);
+  assert.equal(await value(BETO, "select shared_restore_person($1)", [g.Caro]), true);
+});
+
+test("remove: a test group is still erased whole", async () => {
+  const id = await value(ANA, "select shared_create_group('Prueba', 'Ana', array['Nadie'])");
+  const other = await value(ANA, "select id from shared_members where group_id = $1 and user_id is null", [id]);
+  await as(ANA, "select shared_add_entry($1, 'expense', 'Algo', null, 5000, $2, '2026-11-22', $3, null, null)", [id, other, JSON.stringify([{ member_id: other, amount: 5000 }])]);
+  await as(ANA, "select shared_remove_person($1)", [other]);
+  await as(ANA, "select shared_remove_group($1, true)", [id]);
+  assert.equal((await as(ANA, "select * from shared_groups where id = $1", [id])).length, 0);
+});
+
+test("contact: deleting it is only for oneself", async () => {
+  const g = await group();
+  await assert.rejects(as(EVA, "select shared_delete_contact($1, '{}', false)", [[g.Beto]]), /no es tuyo/);
+  await assert.rejects(as(ANA, "select shared_delete_contact($1, '{}', false)", [[g.Ana]]), /no es tuyo/);
+  await assert.rejects(as(ANA, "select shared_delete_contact($1, $2, false)", [[g.Beto], [g.id]]), /no es con ese contacto/, "never a group");
+  await as(ANA, "select shared_delete_contact($1, '{}', false)", [[g.Beto]]);
+  assert.equal(await value(ANA, "select count(*)::int from shared_hidden_contacts where member_id = $1", [g.Beto]), 1);
+  assert.equal(await value(BETO, "select count(*)::int from shared_hidden_contacts where member_id = $1", [g.Beto]), 0);
+  assert.equal(await value(BETO, "select is_shared_member($1)", [g.id]), true, "still in the group");
+  await assert.rejects(as(ANA, "insert into shared_hidden_contacts values ($1, $2)", [BETO, g.Ana]), /permission denied/);
+});
+
+test("contact: closes the account between two, all or nothing", async () => {
+  const id = await value(ANA, "select shared_create_direct('Ana', 'Gina', null, null)");
+  const gina = await value(ANA, "select id from shared_members where group_id = $1 and user_id is null", [id]);
+  await as(ANA, "select shared_delete_contact($1, $2, false)", [[gina], [id]]);
+  assert.equal((await as(ANA, "select * from shared_groups where id = $1", [id])).length, 0);
+});

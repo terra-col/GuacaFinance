@@ -154,13 +154,13 @@ export default async function SharedPage({ searchParams }: { searchParams: Promi
               </h2>
               <ul className="mt-1 divide-y divide-line" aria-label="Tus grupos">
                 {groups.map((group) => {
-                  const count = shared.members.filter((m) => m.group_id === group.id).length;
+                  const count = shared.members.filter((m) => m.group_id === group.id && !m.removed_at).length;
                   return (
                     <li key={group.id}>
                       <Link href={`/compartidos/${group.id}${query}`} className="flex items-center justify-between gap-3 py-4">
                         <span className="min-w-0">
                           <span className="block truncate font-semibold">{group.name}</span>
-                          <span className="block text-sm text-ink-3">{count === 2 ? "Solo ustedes dos" : `${count} personas`}</span>
+                          <span className="block text-sm text-ink-3">{count === 1 ? "Solo tú" : count === 2 ? "Solo ustedes dos" : `${count} personas`}</span>
                         </span>
                         {tx ? <Pick /> : <Balance net={position.byGroup.get(group.id) ?? 0} />}
                       </Link>

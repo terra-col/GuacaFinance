@@ -1,6 +1,6 @@
 // The person's people: each one once, with what is pending with them across their accounts between
 // two and their groups. Pure, so it is tested.
-import { groupNets, memberOf, settleUp, type SharedData, type SharedGroup } from "./shared.ts";
+import { groupNets, memberOf, settleUp, type SharedData, type SharedGroup, type SharedMember } from "./shared.ts";
 
 export interface PersonPlace {
   group: SharedGroup;
@@ -26,14 +26,34 @@ export interface Person {
   direct: string | null;
 }
 
-/**
- * By account, else by phone, else by name. An account is also known by a pending invitation and by
- * a phone whose owner joined. In a group, what is pending with each is what «Para quedar al día» says.
- */
-export function peopleWith(data: SharedData, me: string): Person[] {
+/** Who someone is, wherever they are. */
+function identify(data: SharedData, me: string) {
   const accountOfPhone = new Map<string, string>();
   for (const m of data.members) if (m.phone && m.user_id && m.user_id !== me) accountOfPhone.set(m.phone, m.user_id);
   const invited = new Map(data.requests?.map((r) => [r.member_id, r.user_id]));
+  return (m: SharedMember) => {
+    const userId = m.user_id ?? invited.get(m.id) ?? (m.phone ? (accountOfPhone.get(m.phone) ?? null) : null);
+    return { userId, key: userId ?? m.phone ?? `name:${m.name.trim().toLocaleLowerCase("es")}` };
+  };
+}
+
+/** Every place of that person, also in deleted groups and where they were taken out: what deleting a contact hides. */
+export function placesOf(data: SharedData, me: string, member: string): string[] {
+  const found = data.members.find((m) => m.id === member);
+  if (!found) return [];
+  const who = identify(data, me);
+  const { key } = who(found);
+  return data.members.filter((m) => m.user_id !== me && who(m).key === key).map((m) => m.id);
+}
+
+/**
+ * By account, else by phone, else by name. An account is also known by a pending invitation and by
+ * a phone whose owner joined. In a group, what is pending with each is what «Para quedar al día» says.
+ * A deleted contact is left out until something is pending with them or they are in somewhere new;
+ * `deletedToo` lists them all the same.
+ */
+export function peopleWith(data: SharedData, me: string, { deletedToo = false } = {}): Person[] {
+  const who = identify(data, me);
 
   const people = new Map<string, Person>();
   for (const group of data.groups) {
@@ -41,9 +61,8 @@ export function peopleWith(data: SharedData, me: string): Person[] {
     if (!mine) continue;
     const transfers = settleUp(groupNets(group.id, data));
     for (const m of data.members) {
-      if (m.group_id !== group.id || m.id === mine.id) continue;
-      const userId = m.user_id ?? invited.get(m.id) ?? (m.phone ? (accountOfPhone.get(m.phone) ?? null) : null);
-      const key = userId ?? m.phone ?? `name:${m.name.trim().toLocaleLowerCase("es")}`;
+      if (m.group_id !== group.id || m.id === mine.id || m.removed_at) continue;
+      const { userId, key } = who(m);
       let person = people.get(key);
       if (!person) {
         person = { member: m.id, members: [], name: m.name, phone: m.phone ?? "", userId, joined: false, total: 0, places: [], direct: null };
@@ -70,7 +89,10 @@ export function peopleWith(data: SharedData, me: string): Person[] {
   }
   for (const person of people.values()) person.places.sort((a, b) => Number(Boolean(b.group.direct)) - Number(Boolean(a.group.direct)));
   // What is pending first, the largest on top.
-  return [...people.values()].sort((a, b) => Math.abs(b.total) - Math.abs(a.total) || a.name.localeCompare(b.name, "es"));
+  const hidden = new Set(data.hidden);
+  return [...people.values()]
+    .filter((p) => deletedToo || p.members.some((id) => !hidden.has(id)) || p.places.some((place) => place.net !== 0))
+    .sort((a, b) => Math.abs(b.total) - Math.abs(a.total) || a.name.localeCompare(b.name, "es"));
 }
 
 /** An account between two is called by the other person, as one has them. */
@@ -97,7 +119,7 @@ export const PENDING_ME = "me";
 export const PENDING_OTHER = "other";
 
 export function splitTargets(data: SharedData, me: string, myName: string): SplitTarget[] {
-  const inGroup = (group: string) => data.members.filter((m) => m.group_id === group).map(({ id, name }) => ({ id, name }));
+  const inGroup = (group: string) => data.members.filter((m) => m.group_id === group && !m.removed_at).map(({ id, name }) => ({ id, name }));
   const people = peopleWith(data, me).map((p): SplitTarget => {
     const base = { key: `p:${p.member}`, kind: "person" as const, name: p.name, person: p.member };
     const mine = p.direct ? memberOf(p.direct, data, me) : undefined;

@@ -10,12 +10,14 @@ const notMigrated = (error: { code?: string }) => error.code === "42P01" || erro
  * `ready` is false. Any other failure throws: treated as «no groups» it would silently show
  * everything paid for others as one's own spending.
  */
-export async function loadShared(supabase: SupabaseClient): Promise<{ shared: SharedData; ready: boolean }> {
-  const [groups, asked, noticed] = await Promise.all([
+export async function loadShared(supabase: SupabaseClient, userId: string): Promise<{ shared: SharedData; ready: boolean }> {
+  const [groups, asked, noticed, deleted] = await Promise.all([
     supabase.from("shared_groups").select("*").order("created_at", { ascending: false }),
     supabase.from("shared_requests").select("member_id, group_id, user_id"),
     // Only whether migration 0023 ran.
     supabase.from("shared_notices").select("id").limit(1),
+    // Contacts one deleted, which is also whether migration 0024 ran.
+    allPages<{ member_id: string }>((from, to) => supabase.from("shared_hidden_contacts").select("member_id").order("member_id").range(from, to)),
   ]);
   if (groups.error) {
     if (notMigrated(groups.error)) return { shared: NO_SHARED, ready: false };
@@ -26,8 +28,11 @@ export async function loadShared(supabase: SupabaseClient): Promise<{ shared: Sh
   const editable = !asked.error;
   if (noticed.error && !notMigrated(noticed.error)) throw new Error(`No se pudieron leer los avisos: ${noticed.error.message}`);
   const social = editable && !noticed.error;
+  if (deleted.error && !notMigrated(deleted.error)) throw new Error(`No se pudieron leer tus contactos: ${deleted.error.message}`);
+  const removable = social && !deleted.error;
+  const hidden = deleted.error ? [] : deleted.rows.map((d) => d.member_id);
   const requests = (asked.data ?? []) as SharedRequest[];
-  if (groups.data.length === 0) return { shared: { ...NO_SHARED, editable, social, requests }, ready: true };
+  if (groups.data.length === 0) return { shared: { ...NO_SHARED, editable, social, removable, hidden, requests }, ready: true };
 
   const [members, entries, shares, links, contacts] = await Promise.all([
     allPages<SharedMember>((from, to) => supabase.from("shared_members").select("*").order("created_at").order("id").range(from, to)),
@@ -44,14 +49,17 @@ export async function loadShared(supabase: SupabaseClient): Promise<{ shared: Sh
   ]);
   const error = members.error ?? entries.error ?? shares.error ?? links.error ?? contacts.error;
   if (error) throw new Error(`No se pudieron leer los gastos compartidos: ${error.message}`);
+  const left = new Set(members.rows.filter((m) => m.user_id === userId && m.removed_at).map((m) => m.group_id));
   return {
     ready: true,
     shared: {
       editable,
       social,
+      removable,
+      hidden,
       requests,
-      // Deleted ones leave every screen; their entries stay, so past spending does not change.
-      groups: (groups.data as SharedGroup[]).filter((g) => !g.deleted_at),
+      // Deleted ones, and those one was taken out of, leave every screen; their entries stay, so past spending does not change.
+      groups: (groups.data as SharedGroup[]).filter((g) => !g.deleted_at && !left.has(g.id)),
       // Each person reads the group with the names they have in their own contacts.
       members: members.rows.map((m) => {
         const contact = contacts.rows.find((c) => c.member_id === m.id);

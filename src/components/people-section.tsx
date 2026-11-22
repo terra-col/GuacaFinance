@@ -36,7 +36,7 @@ export function PeopleSection({
         </span>
         <span className="min-w-0 flex-1">
           <span className="block text-sm font-semibold text-ink">
-            <span id="people-title">{people.length} personas</span>
+            <span id="people-title">{people.length === 1 ? "1 persona" : `${people.length} personas`}</span>
             {waiting > 0 && <span className="font-normal text-ink-3"> · {waiting} sin unirse</span>}
           </span>
           <span className="block truncate text-xs text-ink-3">{names}</span>

@@ -333,6 +333,32 @@ export function DeleteEntryForm({ entry, keepsMovement }: { entry: string; keeps
   );
 }
 
+export type End = "keep" | "erase";
+
+const ENDS = [
+  { value: "keep", title: "Ya terminó", text: "Sale de tus pantallas. Lo pagado y lo gastado se conserva: tus saldos y tus totales no cambian." },
+  { value: "erase", title: "Fue una prueba", text: "Borra todo, también los movimientos que se crearon en tus cuentas desde aquí: esos saldos vuelven a como estaban." },
+] as const;
+
+/** «Ya terminó» or «Fue una prueba»: asked wherever an account only one's own is closed. */
+export function EndChoice({ how, onChange, settled }: { how: End | ""; onChange: (how: End) => void; settled: boolean }) {
+  return (
+    <fieldset className="flex flex-col gap-2">
+      <legend className="mb-2 text-sm font-medium text-ink-2">¿Qué pasa con lo que tiene?</legend>
+      {ENDS.map((o) => (
+        <label key={o.value} data-how={o.value} className={`flex cursor-pointer items-start gap-3 rounded-2xl border p-3 ${how === o.value ? "border-brand bg-brand/8" : "border-line-strong"}`}>
+          <input type="radio" className="mt-1" checked={how === o.value} onChange={() => onChange(o.value)} />
+          <span>
+            <span className="block text-sm font-semibold text-ink">{o.title}</span>
+            <span className="block text-sm text-ink-2">{o.text}</span>
+          </span>
+        </label>
+      ))}
+      {!settled && how === "keep" && <p className="text-sm text-ink-2">Lo que quedó pendiente dejará de aparecer en «Te deben» y «Debes».</p>}
+    </fieldset>
+  );
+}
+
 export function DeleteGroupForm({
   group,
   social,
@@ -350,7 +376,7 @@ export function DeleteGroupForm({
 }) {
   const { pending, error, submit } = useSave(deleteGroup);
   const canErase = hasEntries && !others;
-  const [how, setHow] = useState<"keep" | "erase" | "">(canErase ? "" : "keep");
+  const [how, setHow] = useState<End | "">(canErase ? "" : "keep");
 
   if (hasEntries && (!social || (others && !settled))) {
     return (
@@ -361,28 +387,12 @@ export function DeleteGroupForm({
       </p>
     );
   }
-  const options = [
-    { value: "keep", title: "Ya terminó", text: "Sale de tus pantallas. Lo pagado y lo gastado se conserva: tus saldos y tus totales no cambian." },
-    { value: "erase", title: "Fue una prueba", text: "Borra todo, también los movimientos que se crearon en tus cuentas desde aquí: esos saldos vuelven a como estaban." },
-  ] as const;
   return (
     <form onSubmit={submit} className="flex flex-col gap-4">
       <input type="hidden" name="group" value={group} />
       {social && <input type="hidden" name="how" value={how} />}
       {canErase ? (
-        <fieldset className="flex flex-col gap-2">
-          <legend className="mb-2 text-sm font-medium text-ink-2">¿Qué pasa con lo que tiene?</legend>
-          {options.map((o) => (
-            <label key={o.value} data-how={o.value} className={`flex cursor-pointer items-start gap-3 rounded-2xl border p-3 ${how === o.value ? "border-brand bg-brand/8" : "border-line-strong"}`}>
-              <input type="radio" className="mt-1" checked={how === o.value} onChange={() => setHow(o.value)} />
-              <span>
-                <span className="block text-sm font-semibold text-ink">{o.title}</span>
-                <span className="block text-sm text-ink-2">{o.text}</span>
-              </span>
-            </label>
-          ))}
-          {!settled && how === "keep" && <p className="text-sm text-ink-2">Lo que quedó pendiente dejará de aparecer en «Te deben» y «Debes».</p>}
-        </fieldset>
+        <EndChoice how={how} onChange={setHow} settled={settled} />
       ) : (
         <p className="text-sm text-ink-2">
           {hasEntries ? "Sale de la pantalla de todos. Lo pagado y lo gastado se conserva: los saldos y los totales no cambian." : "Está vacío: se borra para todos."}

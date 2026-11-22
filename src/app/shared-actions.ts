@@ -8,7 +8,7 @@ import { profileName } from "@/lib/brand";
 import { contactPhone } from "@/lib/contacts";
 import { parsePesos } from "@/lib/finance";
 import { requestOrigin } from "@/lib/request-origin";
-import { PENDING_ME, PENDING_OTHER, peopleWith, splitTargets, type SplitTarget } from "@/lib/people";
+import { PENDING_ME, PENDING_OTHER, peopleWith, placesOf, splitTargets, type SplitTarget } from "@/lib/people";
 import { INVITE_COOKIE, memberOf } from "@/lib/shared";
 import { loadShared } from "@/lib/shared-data";
 import { computeShares, parseSplit } from "@/lib/split";
@@ -29,7 +29,7 @@ const DATE = /^\d{4}-\d{2}-\d{2}$/;
 function problem(error: { code?: string; message: string }): string {
   if (error.code === "P0001") return error.message;
   if (error.code === "23505") return "Ya hay alguien con ese nombre en el grupo, o eso ya quedó registrado.";
-  if (error.code === "PGRST202") return "Falta ejecutar en Supabase una migración de Compartidos (0016, 0020 o 0023).";
+  if (error.code === "PGRST202") return "Falta ejecutar en Supabase una migración de Compartidos (0016, 0020, 0023 o 0024).";
   if (error.code === "23514") return "Revisa los datos: hay un nombre, monto o texto que no es válido.";
   return "No se pudo guardar. Intenta de nuevo.";
 }
@@ -215,7 +215,7 @@ async function currentPerson() {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
-  const { shared } = await loadShared(supabase);
+  const { shared } = await loadShared(supabase, user.id);
   // The name of the profile; else the one they already go by in a group.
   const name = profileName(user) || shared.members.find((m) => m.user_id === user.id)?.name || "";
   return { supabase, user, shared, name };
@@ -228,7 +228,7 @@ async function currentPerson() {
 async function openDirect(member: string, typed: Person | null): Promise<SharedResult> {
   const { shared, user, name } = await currentPerson();
   const same = (a: string, b: string) => a.trim().toLocaleLowerCase("es") === b.trim().toLocaleLowerCase("es");
-  const person = peopleWith(shared, user.id).find((p) =>
+  const person = peopleWith(shared, user.id, { deletedToo: true }).find((p) =>
     member ? p.members.includes(member) : typed?.phone ? p.phone === typed.phone : !p.phone && typed && same(p.name, typed.name),
   );
   if (member && !person && !typed) return { error: "Esa persona ya no está en tus grupos." };
@@ -301,6 +301,30 @@ export async function divideMovement(form: FormData): Promise<SharedResult> {
   expense.set("split", JSON.stringify({ mode: split.mode, parts: split.parts.map((p) => ({ ...p, id: real(p.id) })) }));
   const saved = await saveSharedExpense(expense);
   return saved.error ? saved : { id: group };
+}
+
+export async function removePerson(form: FormData): Promise<SharedResult> {
+  return call("shared_remove_person", { p_member: text(form, "member") });
+}
+
+export async function restorePerson(form: FormData): Promise<SharedResult> {
+  return call("shared_restore_person", { p_member: text(form, "member") });
+}
+
+export async function deleteContact(form: FormData): Promise<SharedResult> {
+  const { shared, user } = await currentPerson();
+  const member = text(form, "member");
+  const person = peopleWith(shared, user.id, { deletedToo: true }).find((p) => p.members.includes(member));
+  if (!person) return { error: "Ese contacto ya no está." };
+  if (person.places.some((p) => !p.group.direct && p.net !== 0)) return { error: "Todavía hay plata pendiente con esa persona: sáldala primero." };
+  const result = await call("shared_delete_contact", {
+    p_members: placesOf(shared, user.id, member),
+    p_directs: person.places.filter((p) => p.group.direct).map((p) => p.group.id),
+    p_erase: text(form, "how") === "erase",
+  });
+  if (result.error) return result;
+  // From here, so the deleted contact's page is never drawn again.
+  redirect("/compartidos");
 }
 
 export async function answerPhoneInvite(form: FormData): Promise<SharedResult> {

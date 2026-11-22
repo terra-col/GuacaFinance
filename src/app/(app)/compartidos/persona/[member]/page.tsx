@@ -1,17 +1,29 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { Modal } from "@/components/modal";
+import { DeleteContactForm } from "@/components/remove-forms";
 import { DirectButton } from "@/components/shared-forms";
 import { loadData } from "@/lib/data";
 import { formatCOP } from "@/lib/finance";
 import { formatPhone } from "@/lib/phone";
 import { peopleWith } from "@/lib/people";
+import { groupNets } from "@/lib/shared";
 
 /** One person: what is pending with them in all, and where it comes from. */
 export default async function PersonPage({ params }: { params: Promise<{ member: string }> }) {
   const { member } = await params;
   const { shared, user } = await loadData();
-  const person = peopleWith(shared, user.id).find((p) => p.members.includes(member));
+  const person = peopleWith(shared, user.id, { deletedToo: true }).find((p) => p.members.includes(member));
   if (!person) notFound();
+  const directs = person.places.filter((p) => p.group.direct).map((p) => p.group.id);
+  const account = directs.length
+    ? {
+        hasEntries: shared.entries.some((e) => directs.includes(e.group_id)),
+        others: shared.members.some((m) => directs.includes(m.group_id) && m.user_id && m.user_id !== user.id),
+        settled: directs.every((id) => [...groupNets(id, shared).values()].every((net) => net === 0)),
+      }
+    : null;
+  const inGroups = person.places.filter((p) => !p.group.direct);
 
   return (
     <>
@@ -19,9 +31,22 @@ export default async function PersonPage({ params }: { params: Promise<{ member:
         <Link href="/compartidos" className="text-sm font-medium text-brand">
           ‹ Compartidos
         </Link>
-        <div>
-          <h1 className="display break-words text-3xl">{person.name}</h1>
-          {person.phone && <p className="num text-sm text-ink-3">{formatPhone(person.phone)}</p>}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="display break-words text-3xl">{person.name}</h1>
+            {person.phone && <p className="num text-sm text-ink-3">{formatPhone(person.phone)}</p>}
+          </div>
+          {shared.removable && (
+            <Modal label="Eliminar contacto" title={`Eliminar a ${person.name}`} buttonClass="btn-quiet h-10 px-3 text-sm hover:text-debt">
+              <DeleteContactForm
+                member={person.member}
+                name={person.name}
+                pendingIn={inGroups.filter((p) => p.net !== 0).map((p) => ({ name: p.group.name, net: p.net }))}
+                groups={inGroups.map((p) => p.group.name)}
+                account={account}
+              />
+            </Modal>
+          )}
         </div>
       </div>
 

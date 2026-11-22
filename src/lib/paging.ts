@@ -1,7 +1,7 @@
 /** Supabase returns at most this many rows per request, without saying it cut the list. */
 export const PAGE = 1000;
 
-type Failure = { message: string };
+type Failure = { message: string; code?: string };
 
 /** Reads every row, page by page, until a short page comes back. The query must have a stable order. */
 export async function allPages<T>(

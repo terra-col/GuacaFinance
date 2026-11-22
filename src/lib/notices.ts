@@ -3,7 +3,7 @@ import { formatCOP } from "./finance.ts";
 
 export interface Notice {
   id: string;
-  kind: "expense" | "payment" | "edited" | "removed" | "joined" | "you_joined" | "group_deleted";
+  kind: "expense" | "payment" | "edited" | "removed" | "joined" | "you_joined" | "group_deleted" | "member_removed" | "you_removed";
   group_id: string | null;
   group_name: string | null;
   actor_name: string | null;
@@ -31,6 +31,10 @@ export function noticeText(notice: Notice, where: string): string {
       return `${notice.detail ?? "Alguien"} se unió a ${where}.`;
     case "you_joined":
       return `Ya estás en ${where}.`;
+    case "member_removed":
+      return `${who} sacó a ${notice.detail ?? "alguien"} de ${where}.`;
+    case "you_removed":
+      return `Ya no estás en ${where}. Lo que compartiste ahí se conserva en tus totales.`;
     case "group_deleted":
       return `${who} eliminó ${where}.`;
   }

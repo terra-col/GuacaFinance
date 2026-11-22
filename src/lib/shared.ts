@@ -22,6 +22,8 @@ export interface SharedMember {
   name: string;
   /** From the person's own contacts: nobody else sees it. */
   phone?: string | null;
+  /** Taken out of the group: stays only for what already happened (migration 0024). */
+  removed_at?: string | null;
 }
 
 export interface SharedRequest {
@@ -72,6 +74,10 @@ export interface SharedData {
   editable?: boolean;
   /** Accounts between two, deleting, invitations by phone and notices (migration 0023). */
   social?: boolean;
+  /** Whether people can be taken out and contacts deleted (migration 0024). */
+  removable?: boolean;
+  /** The places of the contacts the person deleted. */
+  hidden?: string[];
 }
 
 export const NO_SHARED: SharedData = { groups: [], members: [], entries: [], shares: [], links: [] };
