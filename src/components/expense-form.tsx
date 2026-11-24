@@ -7,7 +7,8 @@ import { formatCOP } from "@/lib/finance";
 import { splitOf } from "@/lib/split";
 import { DateField } from "./date-field";
 import { useCloseModal } from "./modal";
-import { MoneyInput } from "./money-input";
+import { AmountField } from "./amount-field";
+import { isCurrency } from "@/lib/currency";
 import { CategoryField, SelectField, type PickOption } from "./pickers";
 import { NO_ACCOUNT, Problem, Send, useSave, type EditableEntry } from "./shared-forms";
 import { SplitPanel, draftShares, draftSplit, newDraft, splitSummary } from "./split-panel";
@@ -103,10 +104,15 @@ export function ExpenseForm({
             <input className="input" name="description" defaultValue={entry?.description ?? tx?.description ?? ""} placeholder="Cena, arriendo, mercado…" maxLength={120} autoComplete="off" required />
           </label>
           {!tx && !fixed && (
-            <label className="field">
-              Cuánto fue
-              <MoneyInput name="amount" defaultValue={entry?.amount} onValue={setAmount} required />
-            </label>
+            <AmountField
+              label="Cuánto fue"
+              defaultValue={entry?.amount}
+              currency={isCurrency(entry?.currency) ? entry.currency : "COP"}
+              original={entry?.original ?? null}
+              rate={entry?.rate ?? null}
+              onValue={setAmount}
+              required
+            />
           )}
         </div>
 

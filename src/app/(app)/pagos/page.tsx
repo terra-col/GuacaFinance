@@ -71,7 +71,8 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
     groups: shared.groups.filter((g) => !g.house && !g.direct).map(({ id, name }) => ({ id, name })),
   };
   const ownBills = currentBills(bills);
-  const addPayment = house.ready ? <AddPayment houses={houses} setup={setup} ownBills={ownBills} /> : <BillForm inModal />;
+  const debts = accounts.filter((a) => a.kind === "credit_card" || a.kind === "loan").map(({ id, name, monthly_payment }) => ({ id, name, monthly_payment }));
+  const addPayment = house.ready ? <AddPayment houses={houses} setup={setup} ownBills={ownBills} debts={debts} /> : <BillForm inModal debts={debts} />;
   const incomeItems = incomeChecklist(incomes, txs, month, today, skips);
   // Where a payment can come from: cards and savings for a bill, savings and cash for the rest.
   const spendable = favoriteFirst(accounts.filter((a) => a.kind !== "loan")).map(({ id, name }) => ({ id, name }));
@@ -289,17 +290,17 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
             )}
             <ul className="mt-3 divide-y divide-line">
               {sorted.filter((i) => !i.paid && !later.has(rowKey(i))).map((item) => (
-                <ChecklistRow key={rowKey(item)} item={item} month={month} today={today} editable={editable} accounts={item.type === "bill" || item.type === "house" ? spendable : savings} />
+                <ChecklistRow key={rowKey(item)} item={item} month={month} today={today} editable={editable} accounts={(item.type === "bill" && !item.paysDebt) || item.type === "house" ? spendable : savings} />
               ))}
             </ul>
             <PaidGroup id="pagos-despues" label="Más adelante este mes" count={later.size}>
               {sorted.filter((i) => later.has(rowKey(i))).map((item) => (
-                <ChecklistRow key={rowKey(item)} item={item} month={month} today={today} editable={editable} accounts={item.type === "bill" || item.type === "house" ? spendable : savings} />
+                <ChecklistRow key={rowKey(item)} item={item} month={month} today={today} editable={editable} accounts={(item.type === "bill" && !item.paysDebt) || item.type === "house" ? spendable : savings} />
               ))}
             </PaidGroup>
             <PaidGroup id="pagos" label="Ya pagados" count={sorted.filter((i) => i.paid).length}>
               {sorted.filter((i) => i.paid).map((item) => (
-                <ChecklistRow key={rowKey(item)} item={item} month={month} today={today} editable={editable} accounts={item.type === "bill" || item.type === "house" ? spendable : savings} />
+                <ChecklistRow key={rowKey(item)} item={item} month={month} today={today} editable={editable} accounts={(item.type === "bill" && !item.paysDebt) || item.type === "house" ? spendable : savings} />
               ))}
             </PaidGroup>
           </section>
@@ -314,7 +315,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
               Lo que entra y lo que pagas de forma fija, con su próxima fecha aunque sea en otro mes (la prima, un extra). Toca Editar para cambiarlo. Las
               tarjetas y préstamos se administran en Créditos.
             </p>
-            <ScheduledList rows={scheduled} accounts={savings} currentMonth={current} />
+            <ScheduledList rows={scheduled} accounts={savings} currentMonth={current} debts={debts} />
           </section>
         )}
       </>

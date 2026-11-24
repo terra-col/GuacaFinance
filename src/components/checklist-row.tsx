@@ -49,6 +49,8 @@ function OwnRow({ item, month, today, editable, accounts }: Props) {
   const [pending, startTransition] = useTransition();
   const [panel, setPanel] = useState<"none" | "form" | "edit" | "skip" | "unskip" | "delete" | "recurring">("none");
   const income = item.type === "income";
+  // A card's or loan's instalment can come from a source that is not recorded, like a debt.
+  const otherSource = item.type === "debt" || Boolean(item.paysDebt);
   // A goal's monthly saving: recorded as a deposit to the goal, no account involved.
   const saving = item.type === "goal";
   const skipped = Boolean(item.skipped) && !paid;
@@ -60,6 +62,7 @@ function OwnRow({ item, month, today, editable, accounts }: Props) {
       <input type="hidden" name="paid_ids" value={item.paidIds?.join(",") ?? ""} />
     </>
   ) : null;
+  const pays = item.paysDebt ? <input type="hidden" name="pays" value="1" /> : null;
   const [celebrate, setCelebrate] = useState(false);
   const [undoable, setUndoable] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -319,17 +322,18 @@ function OwnRow({ item, month, today, editable, accounts }: Props) {
               <input type="hidden" name="id" value={item.id} />
               <input type="hidden" name="month" value={month} />
               {occurrence}
+              {pays}
               <label className="field">
                 {income ? "Cuánto llegó" : saving ? "Cuánto abonas" : "Cuánto pagaste"}
                 <MoneyInput name="amount" defaultValue={item.expected} required autoFocus />
               </label>
               <label className="field" hidden={saving}>
-                {item.type === "bill" ? "Con qué" : income ? "Llegó a" : "Sale de"}
+                {item.type === "bill" && !item.paysDebt ? "Con qué" : income ? "Llegó a" : "Sale de"}
                 <SelectField
                   name="account_id"
-                  options={[...(item.type === "debt" ? [{ value: "", label: "Otra fuente (no registrada)" }] : []), ...accounts.map((a) => ({ value: a.id, label: a.name }))]}
-                  defaultValue={item.quick?.accountId ?? (item.type === "debt" ? "" : (accounts[0]?.id ?? ""))}
-                  required={item.type !== "debt" && !saving}
+                  options={[...(otherSource ? [{ value: "", label: "Otra fuente (no registrada)" }] : []), ...accounts.map((a) => ({ value: a.id, label: a.name }))]}
+                  defaultValue={item.quick?.accountId ?? (otherSource ? "" : (accounts[0]?.id ?? ""))}
+                  required={!otherSource && !saving}
                 />
               </label>
               <label className="field">
@@ -368,6 +372,7 @@ function OwnRow({ item, month, today, editable, accounts }: Props) {
               <input type="hidden" name="id" value={item.id} />
               <input type="hidden" name="month" value={month} />
               {occurrence}
+              {pays}
               <label className="field">
                 {income ? `¿Por qué no llega ${when}? (opcional)` : `¿Por qué no aplica ${when}? (opcional)`}
                 <input className="input" name="note" maxLength={200} placeholder={income ? "Vacaciones sin pago" : "Rediferida con el banco"} autoFocus />
@@ -463,17 +468,18 @@ function OwnRow({ item, month, today, editable, accounts }: Props) {
               <input type="hidden" name="id" value={item.id} />
               <input type="hidden" name="month" value={month} />
               {occurrence}
+              {pays}
               <label className="field">
                 {income ? "Cuánto llegó" : saving ? "Cuánto abonaste" : "Cuánto pagaste"}
                 <MoneyInput name="amount" defaultValue={item.paidAmount || item.expected} required />
               </label>
               <label className="field" hidden={saving}>
-                {item.type === "bill" ? "Con qué" : income ? "Llegó a" : "Salió de"}
+                {item.type === "bill" && !item.paysDebt ? "Con qué" : income ? "Llegó a" : "Salió de"}
                 <SelectField
                   name="account_id"
-                  options={[...(item.type === "debt" ? [{ value: "", label: "Otra fuente (no registrada)" }] : []), ...accounts.map((a) => ({ value: a.id, label: a.name }))]}
-                  defaultValue={item.paidFrom ?? item.quick?.accountId ?? (item.type === "debt" ? "" : (accounts[0]?.id ?? ""))}
-                  required={item.type !== "debt" && !saving}
+                  options={[...(otherSource ? [{ value: "", label: "Otra fuente (no registrada)" }] : []), ...accounts.map((a) => ({ value: a.id, label: a.name }))]}
+                  defaultValue={item.paidFrom ?? item.quick?.accountId ?? (otherSource ? "" : (accounts[0]?.id ?? ""))}
+                  required={!otherSource && !saving}
                 />
               </label>
               <label className="field">

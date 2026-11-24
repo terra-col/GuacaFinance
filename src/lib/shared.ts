@@ -46,6 +46,10 @@ export interface SharedEntry {
   created_by: string | null;
   /** How it was divided, only to open it again that way (see split.ts). */
   split?: unknown;
+  /** Paid in another currency (migration 0026). */
+  currency?: string;
+  original_amount?: number | string | null;
+  rate?: number | string | null;
 }
 
 export interface SharedShare {

@@ -5,7 +5,7 @@ import { deleteBill, deleteIncome } from "@/app/actions";
 import { incomeSchedule, type Income } from "@/lib/budget";
 import { billSchedule, formatCOP, formatDate, monthName, type Bill } from "@/lib/finance";
 import { cadenceText } from "@/lib/recurrence";
-import { BillForm, IncomeForm } from "./bill-forms";
+import { BillForm, IncomeForm, type Debt } from "./bill-forms";
 import { SubmitButton } from "./submit-button";
 
 const MONTH_SHORT = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
@@ -28,7 +28,7 @@ function cadence(row: ScheduledRow): string {
   return text[0].toUpperCase() + text.slice(1);
 }
 
-function Row({ row, accounts, currentMonth }: { row: ScheduledRow; accounts: { id: string; name: string }[]; currentMonth: string }) {
+function Row({ row, accounts, currentMonth, debts }: { row: ScheduledRow; accounts: { id: string; name: string }[]; currentMonth: string; debts: Debt[] }) {
   const [editing, setEditing] = useState(false);
   const income = row.kind === "income";
   const item = income ? row.income : row.bill;
@@ -70,7 +70,7 @@ function Row({ row, accounts, currentMonth }: { row: ScheduledRow; accounts: { i
           {income ? (
             <IncomeForm accounts={accounts} currentMonth={currentMonth} income={row.income} onDone={() => setEditing(false)} />
           ) : (
-            <BillForm bill={row.bill} onDone={() => setEditing(false)} />
+            <BillForm bill={row.bill} debts={debts} onDone={() => setEditing(false)} />
           )}
         </div>
       )}
@@ -82,11 +82,11 @@ function Row({ row, accounts, currentMonth }: { row: ScheduledRow; accounts: { i
  * Everything scheduled: incomes (monthly, some months like the prima, one-time extras) and fixed
  * bills, soonest first, each with when it comes next, even in a coming month, and edit or delete.
  */
-export function ScheduledList({ rows, accounts, currentMonth }: { rows: ScheduledRow[]; accounts: { id: string; name: string }[]; currentMonth: string }) {
+export function ScheduledList({ rows, accounts, currentMonth, debts = [] }: { rows: ScheduledRow[]; accounts: { id: string; name: string }[]; currentMonth: string; debts?: Debt[] }) {
   return (
     <ul className="mt-2 divide-y divide-line">
       {rows.map((row) => (
-        <Row key={`${row.kind}-${row.kind === "income" ? row.income.id : row.bill.id}`} row={row} accounts={accounts} currentMonth={currentMonth} />
+        <Row key={`${row.kind}-${row.kind === "income" ? row.income.id : row.bill.id}`} row={row} accounts={accounts} currentMonth={currentMonth} debts={debts} />
       ))}
     </ul>
   );

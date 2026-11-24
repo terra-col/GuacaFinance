@@ -84,6 +84,10 @@ export interface EditableEntry {
   shares: Record<string, number>;
   /** How it was divided, as saved (migration 0021). */
   split?: unknown;
+  /** Paid in another currency (migration 0026). */
+  currency?: string;
+  original?: number | null;
+  rate?: number | null;
   /** The account of the movement the group created for this person. */
   account: string | null;
   /** It is a movement this person already had and divided. */

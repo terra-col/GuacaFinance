@@ -6,7 +6,7 @@ import { endHouseBill, mergeHouseBill, saveHouseBill, setUpHouse, stopHouse } fr
 import type { Known } from "@/lib/contacts";
 import { todayInBogota, type Bill } from "@/lib/finance";
 import type { HouseBill } from "@/lib/house";
-import { BillForm } from "./bill-forms";
+import { BillForm, type Debt } from "./bill-forms";
 import { EveryFields, type EveryValue } from "./every-fields";
 import { useCloseModal } from "./modal";
 import { MoneyInput } from "./money-input";
@@ -155,7 +155,7 @@ export function HouseBillForm({ house, bill, ownBills = [] }: { house: HouseOpti
 }
 
 /** «+ Agregar» in Pagos: only mine, or of the house. */
-export function AddPayment({ houses, setup, ownBills }: { houses: HouseOption[]; setup: HouseSetup; ownBills: Bill[] }) {
+export function AddPayment({ houses, setup, ownBills, debts }: { houses: HouseOption[]; setup: HouseSetup; ownBills: Bill[]; debts: Debt[] }) {
   const [shared, setShared] = useState(false);
   const [chosen, setChosen] = useState(houses[0]?.id ?? NEW_HOUSE);
   const house = houses.find((h) => h.id === chosen);
@@ -170,7 +170,7 @@ export function AddPayment({ houses, setup, ownBills }: { houses: HouseOption[];
         </button>
       </div>
       {!shared ? (
-        <BillForm inModal />
+        <BillForm inModal debts={debts} />
       ) : (
         <>
           {houses.length > 0 && (

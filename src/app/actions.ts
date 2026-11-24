@@ -12,6 +12,7 @@ import { normalizePhone } from "@/lib/phone";
 import { PHONE_TAKEN, emailForPhone, phoneLoginReady, phoneTaken } from "@/lib/phone-login";
 import { halfStart, type Every } from "@/lib/recurrence";
 import { readSchedule } from "@/lib/schedule-form";
+import { currencyColumns, readAmount } from "@/lib/money-form";
 import { requestOrigin } from "@/lib/request-origin";
 import { INVITE_COOKIE, invitePath } from "@/lib/shared";
 import { REMEMBER_COOKIE, createClient, isSupabaseConfigured } from "@/lib/supabase/server";
@@ -274,8 +275,9 @@ export async function saveTx(_prev: FormState, form: FormData): Promise<FormStat
   const kind = text(form, "kind") as TxKind;
   const account_id = text(form, "account_id");
   if (!account_id) return { error: "Elige la cuenta." };
-  const amount = parsePesos(text(form, "amount"));
-  if (!amount) return { error: "Escribe un monto mayor que cero." };
+  const money = readAmount(form, "Escribe un monto mayor que cero.");
+  if ("error" in money) return money;
+  const { amount } = money;
   const occurred_on = text(form, "occurred_on");
   if (!DATE.test(occurred_on)) return { error: "La fecha no es válida." };
 
@@ -294,7 +296,7 @@ export async function saveTx(_prev: FormState, form: FormData): Promise<FormStat
     }
   }
 
-  const row = {
+  const row: Record<string, unknown> = {
     kind,
     account_id,
     source_account_id,
@@ -302,6 +304,7 @@ export async function saveTx(_prev: FormState, form: FormData): Promise<FormStat
     occurred_on,
     category: kind === "expense" ? text(form, "category") || null : null,
     description: text(form, "description") || null,
+    ...currencyColumns(form, money),
   };
   // With an id the form edits that movement; its links to a bill or an income stay as they were.
   const id = text(form, "id");
@@ -340,8 +343,16 @@ export async function saveBill(_prev: FormState, form: FormData): Promise<FormSt
 
   // Only when it is not plain monthly, so saving keeps working before migration 0017.
   const repeats = schedule.every !== "monthly" || (current?.every && current.every !== "monthly") ? { every: schedule.every, starts_on: schedule.start } : {};
-  const row: Record<string, unknown> = { name, due_day: schedule.day, amount, category: text(form, "category") || null, ...repeats };
+  // The instalment of a card or loan of one's own (migration 0026).
+  const pays = text(form, "pays_account");
+  if (pays) {
+    const { data: debt } = await supabase.from("accounts").select("kind").eq("id", pays).maybeSingle();
+    if (!debt || !isDebt(debt)) return { error: "Elige una de tus tarjetas o créditos." };
+  }
+  const debtLink = form.has("pays_account") && (pays || current?.pays_account) ? { pays_account: pays || null } : {};
+  const row: Record<string, unknown> = { name, due_day: schedule.day, amount, category: text(form, "category") || null, ...repeats, ...debtLink };
   const { error } = id ? await supabase.from("bills").update(row).eq("id", id) : await supabase.from("bills").insert(row);
+  if (error && /pays_account/.test(error.message)) return { error: "Falta ejecutar la migración 0026 en Supabase." };
   if (error) return { error: recurrenceMissing(error.message) ?? `No se pudo guardar: ${error.message}` };
   revalidatePath("/", "layout");
   return { message: id ? `${name} quedó actualizado.` : `${name} quedó registrado.` };
@@ -486,9 +497,29 @@ export async function markPaid(_prev: FormState, form: FormData): Promise<FormSt
     const { error } = await supabase.from("transactions").insert({ kind: "income", account_id, amount, occurred_on, income_id: income.id, description: income.name, ...forMonth });
     if (error) return { error: forMonthMissing(error.message) ?? missingTable(error.message, "0007") ?? `No se pudo guardar: ${error.message}` };
   } else if (form.get("type") === "bill") {
-    if (!account_id) return { error: "Elige con qué pagaste." };
-    const { data: bill } = await supabase.from("bills").select("id, name, category").eq("id", id).maybeSingle();
+    const { data: bill } = await supabase.from("bills").select("*").eq("id", id).maybeSingle();
     if (!bill) return { error: "Ese pago fijo ya no existe." };
+    if (bill.pays_account) {
+      // The instalment of a card or loan: a payment that lowers it, out of savings or cash.
+      if (account_id) {
+        const { data: source } = await supabase.from("accounts").select("kind").eq("id", account_id).maybeSingle();
+        if (!source || isDebt(source)) return { error: "La cuota debe salir de una cuenta de ahorros o de tu efectivo." };
+      }
+      const { error } = await supabase.from("transactions").insert({
+        kind: "payment",
+        account_id: bill.pays_account,
+        source_account_id: account_id,
+        amount,
+        occurred_on,
+        bill_id: bill.id,
+        description: bill.name,
+        ...forMonth,
+      });
+      if (error) return { error: forMonthMissing(error.message) ?? `No se pudo guardar: ${error.message}` };
+      revalidatePath("/", "layout");
+      return {};
+    }
+    if (!account_id) return { error: "Elige con qué pagaste." };
     const { error } = await supabase.from("transactions").insert({
       kind: "expense",
       account_id,
@@ -575,7 +606,7 @@ export async function updatePaid(_prev: FormState, form: FormData): Promise<Form
   if (!amount) return { error: "Escribe el monto." };
   if (!DATE.test(text(form, "occurred_on"))) return { error: "La fecha no es válida." };
   const type = form.get("type");
-  if ((type === "bill" || type === "income") && !text(form, "account_id")) return { error: type === "bill" ? "Elige con qué pagaste." : "Elige a qué cuenta llegó." };
+  if ((type === "bill" || type === "income") && !text(form, "account_id") && !form.get("pays")) return { error: type === "bill" ? "Elige con qué pagaste." : "Elige a qué cuenta llegó." };
   try {
     const undone = await unmarkPaid(form);
     if (undone.error) return undone;

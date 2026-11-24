@@ -7,7 +7,8 @@ import { saveTx, type FormState } from "@/app/actions";
 import { divideMovement } from "@/app/shared-actions";
 import { contactPhone } from "@/lib/contacts";
 import { DateField } from "./date-field";
-import { MoneyInput } from "./money-input";
+import { AmountField } from "./amount-field";
+import { isCurrency } from "@/lib/currency";
 import { CategoryField, SelectField, type PickOption } from "./pickers";
 import { useSharedReady } from "./shared-ready";
 import { SplitPanel, draftShares, draftSplit } from "./split-panel";
@@ -71,7 +72,7 @@ export function TxForm({
       if (chosen && chosen.draft.paidBy !== chosen.target.me) {
         // Not one's money: an expense of theirs, never a movement of one's own.
         const order = new FormData();
-        for (const key of ["amount", "occurred_on", "category", "description", "phone"]) order.set(key, String(form.get(key) ?? ""));
+        for (const key of ["amount", "occurred_on", "category", "description", "phone", "currency", "original", "rate", "currencies"]) order.set(key, String(form.get(key) ?? ""));
         order.set("name", String(form.get("person") ?? ""));
         order.set("group", chosen.target.group ?? "");
         order.set("person", chosen.target.person ?? "");
@@ -182,16 +183,16 @@ export function TxForm({
       ) : (
         <>
           <div className="grid gap-4 sm:grid-cols-2">
-            <label className="field">
-              Monto
-              <MoneyInput
-                name="amount"
-                placeholder="$ 85.000"
-                defaultValue={tx?.amount}
-                onValue={setAmount}
-                required
-              />
-            </label>
+            <AmountField
+              label="Monto"
+              placeholder="$ 85.000"
+              defaultValue={tx?.amount}
+              currency={isCurrency(tx?.currency) ? tx.currency : "COP"}
+              original={tx?.original_amount ? Number(tx.original_amount) : null}
+              rate={tx?.rate ? Number(tx.rate) : null}
+              onValue={setAmount}
+              required
+            />
             <label className="field">
               Fecha
               <DateField name="occurred_on" defaultValue={tx?.occurred_on ?? today} max={today} required />

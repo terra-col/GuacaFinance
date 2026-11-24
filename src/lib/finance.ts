@@ -76,6 +76,10 @@ export interface Tx {
   created_at?: string;
   /** An adjustment that is a checkpoint: the account's balance at that moment, as the bank showed it. */
   checkpoint?: number | null;
+  /** Written in another currency (migration 0026): the original and the rate it became pesos at. */
+  currency?: string;
+  original_amount?: number | string | null;
+  rate?: number | string | null;
 }
 
 /** The month a payment ticks in Pagos: the one it was marked for, else the month of its date. */
@@ -410,6 +414,8 @@ export interface Bill {
   starts_on?: string | null;
   /** From that month it is a receipt of a house (migration 0025): earlier months keep it. */
   ended_month?: string | null;
+  /** The card or loan it is the instalment of (migration 0026): ticking it is a payment to it. */
+  pays_account?: string | null;
 }
 
 /** The fixed payments still one's own. */
@@ -471,6 +477,8 @@ export function relativeDay(days: number): string {
 export interface ChecklistItem {
   /** «income» rows come from incomeChecklist: «paid» then means received. «house»: see house.ts. */
   type: "bill" | "debt" | "income" | "goal" | "house";
+  /** A fixed bill that is the instalment of this card or loan. */
+  paysDebt?: string;
   /** A receipt of a house: all it needs to be shown and paid. */
   house?: HouseReceipt;
   id: string;
@@ -539,7 +547,8 @@ export function monthlyChecklist(accounts: Account[], bills: Bill[], txs: Tx[], 
     if (monthly && payments.length === 0 && schedule.start && month < schedule.start.slice(0, 7)) continue;
     const due = dueIn(bill.due_day);
     const lastUsed = txs.find((t) => t.bill_id === bill.id)?.account_id; // txs come newest first
-    const accountId = favorite ?? (accounts.some((a) => a.id === lastUsed) ? lastUsed! : spendable.length === 1 ? spendable[0].id : null);
+    // An instalment comes out of savings or cash, never another card.
+    const accountId = bill.pays_account ? favorite : favorite ?? (accounts.some((a) => a.id === lastUsed) ? lastUsed! : spendable.length === 1 ? spendable[0].id : null);
     if (!monthly) {
       for (const { date, payments: ticked } of assign(datesIn(schedule, month), payments)) {
         const paid = ticked.length > 0;
@@ -548,6 +557,7 @@ export function monthlyChecklist(accounts: Account[], bills: Bill[], txs: Tx[], 
           type: "bill",
           id: bill.id,
           name: bill.name,
+          paysDebt: bill.pays_account ?? undefined,
           every: schedule.every,
           forDate: date ?? undefined,
           due: date ?? ticked[0].occurred_on,
@@ -568,6 +578,7 @@ export function monthlyChecklist(accounts: Account[], bills: Bill[], txs: Tx[], 
       type: "bill",
       id: bill.id,
       name: bill.name,
+      paysDebt: bill.pays_account ?? undefined,
       day: bill.due_day,
       due,
       expected: bill.amount,
@@ -583,6 +594,8 @@ export function monthlyChecklist(accounts: Account[], bills: Bill[], txs: Tx[], 
 
   for (const account of accounts) {
     if (!isDebt(account) || account.opening_date > last) continue;
+    // Its instalment is already a fixed bill of the list.
+    if (bills.some((b) => b.pays_account === account.id && !(b.ended_month && month >= b.ended_month))) continue;
     const payments = txs.filter((t) => t.kind === "payment" && t.account_id === account.id && t.category !== ADJUSTMENT && inMonth(t));
     const owedAtStart = balanceAt(account, txs, addDays(first, -1));
     const owedNow = balanceAt(account, txs, last);

@@ -16,12 +16,19 @@ import { SelectField, CategoryField } from "./pickers";
 import { MonthField } from "./month-field";
 import { todayInBogota } from "@/lib/finance";
 import { EveryFields, type EveryValue } from "./every-fields";
+import { useCurrenciesReady } from "./currency-context";
 
 /**
  * A fixed bill, new or (with `bill`) edited in place. `onDone` runs once it is saved; `inModal`:
  * inside a Modal, which has its own title and closes on save.
  */
-export function BillForm({ bill, onDone, inModal = false }: { bill?: Bill; onDone?: () => void; inModal?: boolean } = {}) {
+/** A card or loan a fixed bill can be the instalment of. */
+export type Debt = { id: string; name: string; monthly_payment: number | null };
+
+export function BillForm({ bill, onDone, inModal = false, debts = [] }: { bill?: Bill; onDone?: () => void; inModal?: boolean; debts?: Debt[] } = {}) {
+  const currencies = useCurrenciesReady();
+  const [pays, setPays] = useState(bill?.pays_account ?? "");
+  const debt = debts.find((d) => d.id === pays);
   const editing = Boolean(bill);
   const bare = editing || inModal;
   const closeModal = useCloseModal();
@@ -45,14 +52,27 @@ export function BillForm({ bill, onDone, inModal = false }: { bill?: Bill; onDon
         </label>
         <label className="field">
           {schedule.every === "monthly" ? "Valor" : "Valor cada vez"}
-          <MoneyInput name="amount" defaultValue={bill?.amount} placeholder="$ 90.000" />
+          <MoneyInput key={pays} name="amount" defaultValue={bill?.amount ?? debt?.monthly_payment} placeholder="$ 90.000" />
           <span className="text-xs font-normal text-ink-3">Vacío si cambia (servicios).</span>
         </label>
+        {currencies && debts.length > 0 && (
+          <label className="field sm:col-span-2">
+            ¿Es la cuota de una tarjeta o un crédito?
+            <SelectField name="pays_account" value={pays} onChange={setPays} options={[{ value: "", label: "No, es un gasto" }, ...debts.map((d) => ({ value: d.id, label: d.name }))]} />
+            {debt && (
+              <span className="text-xs font-normal text-ink-3">
+                Al marcarlo pagado baja lo que debes en {debt.name} y sale de la cuenta que elijas. No cuenta como gasto: el gasto fue cuando compraste.
+              </span>
+            )}
+          </label>
+        )}
         <EveryFields value={schedule} onChange={setSchedule} today={todayInBogota()} names={{ every: "every", day: "due_day", start: "starts_on" }} editing={editing} what="pago" />
-        <label className="field">
-          Categoría
-          <CategoryField name="category" defaultValue={bill ? (bill.category ?? "") : "Hogar"} />
-        </label>
+        {!debt && (
+          <label className="field">
+            Categoría
+            <CategoryField name="category" defaultValue={bill ? (bill.category ?? "") : "Hogar"} />
+          </label>
+        )}
       </div>
       {state.error && (
         <p role="alert" className="alert">

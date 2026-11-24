@@ -11,6 +11,7 @@ import { favoriteAccountId, favoriteFirst, formatCOP, formatDate, holdsMoney, is
 import { groupTitle } from "@/lib/people";
 import { groupNets, memberOf, settleUp } from "@/lib/shared";
 import { parseSplit, splitTitle } from "@/lib/split";
+import { formatForeign, isCurrency } from "@/lib/currency";
 
 const SMALL = "text-xs font-semibold text-brand";
 
@@ -177,6 +178,9 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
                       paidBy: entry.paid_by,
                       shares: Object.fromEntries(parts.map((s) => [s.member_id, s.amount])),
                       split: entry.split,
+                      currency: entry.currency,
+                      original: entry.original_amount ? Number(entry.original_amount) : null,
+                      rate: entry.rate ? Number(entry.rate) : null,
                       account: link && link.created_tx !== false ? (txs.find((t) => t.id === link.tx_id)?.account_id ?? null) : null,
                       ownMovement: link?.created_tx === false,
                       othersRecorded: recordedByOthers.has(entry.id),
@@ -235,7 +239,12 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
                       )}
                     </div>
                   </div>
-                  <p className="display num shrink-0 text-lg">{formatCOP(entry.amount)}</p>
+                  <p className="display num shrink-0 text-right text-lg">
+                    {formatCOP(entry.amount)}
+                    {isCurrency(entry.currency) && entry.currency !== "COP" && entry.original_amount && (
+                      <span className="block font-sans text-xs font-medium text-ink-3">{formatForeign(Number(entry.original_amount), entry.currency)}</span>
+                    )}
+                  </p>
                 </li>
               );
             })}

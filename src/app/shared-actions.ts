@@ -13,6 +13,7 @@ import { INVITE_COOKIE, memberOf } from "@/lib/shared";
 import { problem, readPeople, type PersonInput as Person } from "@/lib/shared-input";
 import { loadShared } from "@/lib/shared-data";
 import { computeShares, parseSplit } from "@/lib/split";
+import { readAmount } from "@/lib/money-form";
 import { createClient } from "@/lib/supabase/server";
 
 // Every write goes through a function of migration 0016, which checks who asks and what for.
@@ -112,8 +113,9 @@ export async function joinGroup(form: FormData): Promise<SharedResult> {
 }
 
 export async function saveSharedExpense(form: FormData): Promise<SharedResult> {
-  const amount = parsePesos(text(form, "amount"));
-  if (!amount) return { error: "Escribe cuánto fue." };
+  const money = readAmount(form, "Escribe cuánto fue.");
+  if ("error" in money) return money;
+  const { amount } = money;
   const description = text(form, "description").slice(0, 120);
   if (!description) return { error: "Escribe qué fue." };
   const occurred_on = text(form, "occurred_on");
@@ -146,6 +148,10 @@ export async function saveSharedExpense(form: FormData): Promise<SharedResult> {
     p_tx: text(form, "tx") || null,
   });
   if (!error) {
+    // In which currency it was paid: only to show it (migration 0026).
+    if (form.has("currencies")) {
+      await supabase.rpc("shared_entry_currency", { p_entry: data, p_currency: money.currency, p_original: money.original_amount, p_rate: money.rate });
+    }
     revalidatePath("/", "layout");
     return { id: String(data) };
   }
@@ -279,6 +285,8 @@ export async function divideMovement(form: FormData): Promise<SharedResult> {
   if (!id && payer === mine.id) return { error: "Elige quién pagó." };
   expense.set("paid_by", payer);
   expense.set("split", JSON.stringify({ mode: split.mode, parts: split.parts.map((p) => ({ ...p, id: real(p.id) })) }));
+  // Paid by someone else in another currency: it keeps it.
+  if (!id) for (const key of ["currency", "original", "rate", "currencies"]) if (form.has(key)) expense.set(key, text(form, key));
   const saved = await saveSharedExpense(expense);
   return saved.error ? saved : { id: group };
 }

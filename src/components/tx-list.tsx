@@ -6,6 +6,7 @@ import { deleteTx } from "@/app/actions";
 import { formatCOP, formatDate, isAdjustment, isDebt, monthName, relativeDay, daysBetween, type Account, type Tx, type TxKind } from "@/lib/finance";
 import type { SharedMark } from "@/lib/shared";
 import { Icon, txIconName } from "./icons";
+import { formatForeign, isCurrency } from "@/lib/currency";
 import { Sheet } from "./modal";
 import { TxForm } from "./tx-form";
 import { SubmitButton } from "./submit-button";
@@ -229,6 +230,9 @@ export function TxList({
                       <p className={`display num shrink-0 rounded-xl px-2 py-0.5 text-lg ${isAdjustment(tx) ? "text-ink-3" : tx.kind === "income" ? "bg-savings/15" : ""}`}>
                         {sign(tx)}
                         {formatCOP(tx.checkpoint ?? tx.amount)}
+                        {isCurrency(tx.currency) && tx.currency !== "COP" && tx.original_amount && (
+                          <span className="block text-right font-sans text-xs font-medium text-ink-3">{formatForeign(Number(tx.original_amount), tx.currency)}</span>
+                        )}
                       </p>
                       {/* Mouse and keyboard: the same actions, shown on hover or focus. Touch uses the swipe. */}
                       <span className="flex shrink-0 gap-0.5 [@media(pointer:coarse)]:hidden">

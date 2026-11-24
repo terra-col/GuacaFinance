@@ -950,3 +950,35 @@ test("house: the subscribed calendar has what one is responsible for, not what m
   const names = (await as(null, "select name from calendar_feed('feed-nora')")).map((r) => r.name).sort();
   assert.deepEqual(names, ["Adoptado", "Recibo de Nora"]);
 });
+
+// ---- 0026: other currencies, and fixed bills that are a debt's instalment
+
+test("currencies: the pesos are always the original by the rate, and nobody else's", async () => {
+  const acct = await account(ANA);
+  const insert = (amount, original, rate) =>
+    as(ANA, "insert into transactions (account_id, kind, amount, occurred_on, currency, original_amount, rate) values ($1, 'expense', $2, '2026-11-24', 'USD', $3, $4) returning id", [acct, amount, original, rate]);
+  const [{ id }] = await insert(43824, 12.5, 3505.92);
+  await assert.rejects(insert(50000, 12.5, 3505.92), /currency_amount_check/);
+  await assert.rejects(as(ANA, "insert into transactions (account_id, kind, amount, occurred_on, currency) values ($1, 'expense', 1000, '2026-11-24', 'GBP')", [acct]), /check/);
+  await as(ANA, "update transactions set amount = 50000 where id = $1", [id]);
+  const [row] = await as(ANA, "select currency, original_amount, rate from transactions where id = $1", [id]);
+  assert.deepEqual([row.currency, row.original_amount, row.rate], ["COP", null, null], "changed in pesos, it stays in pesos");
+
+  const g = await group();
+  const entry = await add(ANA, g);
+  await assert.rejects(as(BETO, "select shared_entry_currency($1, 'USD', 30, 3333.3333)", [entry]), /Solo quien lo registró/);
+  await assert.rejects(as(EVA, "select shared_entry_currency($1, 'USD', 30, 3333.3333)", [entry]), /No haces parte/);
+  await as(ANA, "select shared_entry_currency($1, 'USD', 90, 3333.3333)", [entry]);
+  assert.equal(await value(BETO, "select currency from shared_entries where id = $1", [entry]), "USD");
+  await assert.rejects(as(ANA, "select shared_entry_currency($1, 'EUR', 1, 1)", [entry]), /currency_amount_check/);
+});
+
+test("instalments: a fixed bill only pays a card or loan of one's own", async () => {
+  const card = await account(ANA, "credit_card");
+  const savings = await account(ANA);
+  const betos = await account(BETO, "loan");
+  const bill = (user, pays) => as(user, "insert into bills (name, due_day, pays_account) values ('Cuota', 5, $1)", [pays]);
+  await bill(ANA, card);
+  await assert.rejects(bill(ANA, savings), /tarjetas o créditos/);
+  await assert.rejects(bill(ANA, betos), /tarjetas o créditos/);
+});
