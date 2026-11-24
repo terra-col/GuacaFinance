@@ -31,10 +31,10 @@ const EXACT_14 = "exact";
 
 /** The usual answers to «¿cada cuánto?»; anything else is «Otro». */
 const PRESETS: { key: string; label: string; every: Every }[] = [
-  { key: "month", label: "Cada mes", every: "monthly" },
-  { key: "fortnight", label: "Cada quincena", every: "biweekly" },
-  { key: "week", label: "Cada semana", every: "w1" },
-  { key: "year", label: "Cada año", every: "y1" },
+  { key: "month", label: "Mensual", every: "monthly" },
+  { key: "fortnight", label: "Quincenal", every: "biweekly" },
+  { key: "week", label: "Semanal", every: "w1" },
+  { key: "year", label: "Anual", every: "y1" },
 ];
 const presetOf = (every: Every) => (every === "monthly" ? "month" : every === "biweekly" || every === "w2" ? "fortnight" : every === "w1" ? "week" : every === "y1" ? "year" : "other");
 
@@ -179,7 +179,7 @@ export function EveryFields({
             {!ready && <span className="text-sm font-medium text-ink-2">{what === "pago" ? "Día de pago" : what === "ingreso" ? "Día en que llega" : "Día del mes"}</span>}
             <input type="hidden" name={names.day} value={day} />
             {/* A month as a calendar of days: the day is picked, never confused with how often. */}
-            <div className="grid grid-cols-7 gap-1" role="group" aria-label="Día del mes">
+            <div className="grid grid-cols-7 gap-0.5 rounded-2xl border border-line bg-surface/60 p-2" role="group" aria-label="Día del mes">
               {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => (
                 <button
                   key={d}
@@ -187,7 +187,10 @@ export function EveryFields({
                   data-day={d}
                   aria-pressed={day === d}
                   aria-label={d === 31 ? "31 o el último día" : `Día ${d}`}
-                  className={`num flex h-9 items-center justify-center rounded-xl border text-sm transition-colors ${day === d ? "border-transparent bg-brand font-bold text-white" : "border-line text-ink-2 hover:border-brand"}`}
+                  // The same days as the date picker's calendar; today's day of the month is ringed.
+                  className={`num flex h-9 items-center justify-center rounded-lg text-sm transition-colors ${
+                    day === d ? "bg-brand font-semibold text-white" : Number(today.slice(8)) === d ? "font-semibold text-brand ring-1 ring-brand ring-inset hover:bg-brand/10" : "hover:bg-brand/10"
+                  }`}
                   onClick={() => onChange({ ...value, day: d })}
                 >
                   {d}

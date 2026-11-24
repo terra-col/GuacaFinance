@@ -15,6 +15,7 @@ export function MoneyInput({
   autoFocus,
   label,
   onValue,
+  className = "input num",
 }: {
   name: string;
   defaultValue?: number | string | null;
@@ -24,11 +25,12 @@ export function MoneyInput({
   label?: string;
   /** Called with the amount in pesos as the person types. */
   onValue?: (pesos: number) => void;
+  className?: string;
 }) {
   const [value, setValue] = useState(() => formatPesosInput(defaultValue));
   return (
     <input
-      className="input num"
+      className={className}
       name={name}
       value={value}
       onChange={(e) => {

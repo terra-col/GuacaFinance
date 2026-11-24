@@ -20,6 +20,7 @@ export function AmountField({
   onValue,
   required,
   placeholder,
+  hero = false,
 }: {
   label: string;
   /** In pesos. */
@@ -30,6 +31,8 @@ export function AmountField({
   onValue?: (pesos: number) => void;
   required?: boolean;
   placeholder?: string;
+  /** The main figure of the form: large and centred at the top. */
+  hero?: boolean;
 }) {
   const ready = useCurrenciesReady();
   const [currency, setCurrency] = useState<Currency>(initialCurrency);
@@ -64,7 +67,18 @@ export function AmountField({
     </div>
   );
 
+  const big = "display num w-full rounded-2xl border border-transparent bg-transparent px-2 py-1 text-center text-4xl text-ink outline-none placeholder:text-ink-3/50 focus:border-line-strong sm:text-5xl";
   if (!foreign) {
+    if (hero) {
+      return (
+        <div className="flex flex-col items-center gap-2 pb-1" data-hero-amount>
+          {ready && <input type="hidden" name="currencies" value="1" />}
+          <span className="eyebrow">{label}</span>
+          <MoneyInput key="cop" name="amount" label={label} defaultValue={defaultValue} onValue={onValue} required={required} placeholder="$ 0" className={big} />
+          {picker}
+        </div>
+      );
+    }
     return (
       <div className="field">
         {ready && <input type="hidden" name="currencies" value="1" />}
@@ -79,17 +93,23 @@ export function AmountField({
   const symbol = CURRENCIES.find((c) => c.code === currency)!.symbol;
   const fromToday = today !== null && rateText === null;
   return (
-    <div className="field" data-foreign={currency}>
-      <span className="flex flex-wrap items-center justify-between gap-2">
-        {label}
-        {picker}
-      </span>
+    <div className={hero ? "flex flex-col items-center gap-2 pb-1 text-center" : "field"} data-foreign={currency} data-hero-amount={hero || undefined}>
+      {hero ? (
+        <span className="eyebrow">
+          {label} · en {CURRENCIES.find((c) => c.code === currency)!.name.toLowerCase()}
+        </span>
+      ) : (
+        <span className="flex flex-wrap items-center justify-between gap-2">
+          {label}
+          {picker}
+        </span>
+      )}
       <input type="hidden" name="currency" value={currency} />
       <input type="hidden" name="currencies" value="1" />
       <input type="hidden" name="amount" value={pesos || ""} />
-      <div className="grid grid-cols-[1fr_auto] items-center gap-2">
+      <div className={hero ? "flex w-full items-baseline justify-center gap-2" : "grid grid-cols-[1fr_auto] items-center gap-2"}>
         <input
-          className="input num"
+          className={hero ? big : "input num"}
           name="original"
           inputMode="decimal"
           autoComplete="off"
@@ -99,9 +119,10 @@ export function AmountField({
           onChange={(e) => setTyped(e.target.value)}
           required={required}
         />
-        <span className="text-sm font-semibold text-ink-2">{symbol}</span>
+        {!hero && <span className="text-sm font-semibold text-ink-2">{symbol}</span>}
       </div>
-      <span className="grid grid-cols-[auto_1fr] items-center gap-2 text-xs font-normal text-ink-3">
+      {hero && picker}
+      <span className={`grid grid-cols-[auto_1fr] items-center gap-2 text-xs font-normal text-ink-3 ${hero ? "w-full max-w-xs" : ""}`}>
         <span>1 {symbol} = $</span>
         <input
           className="input num h-9 py-1 text-sm"

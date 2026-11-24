@@ -152,6 +152,16 @@ export function TxForm({
       )}
       <div hidden={splitting} className="flex flex-col gap-4">
       {editing && <input type="hidden" name="id" value={tx!.id} />}
+      <AmountField
+        hero
+        label={kind === "income" ? "¿Cuánto llegó?" : kind === "payment" ? "¿Cuánto pagaste?" : "¿Cuánto fue?"}
+        defaultValue={tx?.amount}
+        currency={isCurrency(tx?.currency) ? tx.currency : "COP"}
+        original={tx?.original_amount ? Number(tx.original_amount) : null}
+        rate={tx?.rate ? Number(tx.rate) : null}
+        onValue={setAmount}
+        required
+      />
       {editing ? (
         <input type="hidden" name="kind" value={kind} />
       ) : (
@@ -183,16 +193,6 @@ export function TxForm({
       ) : (
         <>
           <div className="grid gap-4 sm:grid-cols-2">
-            <AmountField
-              label="Monto"
-              placeholder="$ 85.000"
-              defaultValue={tx?.amount}
-              currency={isCurrency(tx?.currency) ? tx.currency : "COP"}
-              original={tx?.original_amount ? Number(tx.original_amount) : null}
-              rate={tx?.rate ? Number(tx.rate) : null}
-              onValue={setAmount}
-              required
-            />
             <label className="field">
               Fecha
               <DateField name="occurred_on" defaultValue={tx?.occurred_on ?? today} max={today} required />
