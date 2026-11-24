@@ -256,7 +256,7 @@ export function TxForm({
                     setDividing(null);
                   }}
                 >
-                  {split ? "✓ " : ""}Dividir con alguien
+                  {split ? "✓ " : ""}Con alguien más
                 </button>
                 {split && <SplitWith value={dividing} onChange={setDividing} amount={amount} onOpenSplit={() => setSplitting(true)} />}
               </>

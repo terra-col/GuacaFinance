@@ -375,9 +375,16 @@ export async function updateRecurring(_prev: FormState, form: FormData): Promise
   const amountRaw = text(form, "amount");
   const amount = amountRaw ? parsePesos(amountRaw) : null;
   if (amountRaw && !amount) return { error: "El valor no es válido." };
+  // The card or loan it is the instalment of (migration 0026).
+  const pays = text(form, "pays_account");
+  if (pays) {
+    const { data: debt } = await supabase.from("accounts").select("kind").eq("id", pays).maybeSingle();
+    if (!debt || !isDebt(debt)) return { error: "Elige una de tus tarjetas o créditos." };
+  }
+  const debtLink = type === "bill" && form.has("pays_account") ? { pays_account: pays || null } : {};
   const { error } =
     type === "bill"
-      ? await supabase.from("bills").update({ name, amount, ...(keepsDay ? {} : { due_day: day }) }).eq("id", text(form, "id"))
+      ? await supabase.from("bills").update({ name, amount, ...(keepsDay ? {} : { due_day: day }), ...debtLink }).eq("id", text(form, "id"))
       : await supabase.from("incomes").update({ name, amount, ...(keepsDay ? {} : { day }) }).eq("id", text(form, "id"));
   if (error) return { error: `No se pudo guardar: ${error.message}` };
   revalidatePath("/", "layout");

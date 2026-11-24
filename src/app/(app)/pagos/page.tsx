@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BillForm, IncomeForm } from "@/components/bill-forms";
+import { BillForm, DebtsProvider, IncomeForm } from "@/components/bill-forms";
 import { HouseCard } from "@/components/house-card";
 import { AddPayment, type HouseOption, type HouseSetup } from "@/components/house-forms";
 import { profileName } from "@/lib/brand";
@@ -326,11 +326,13 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
   const shown = (v: PaymentsView) => v === view || both;
 
   return (
+    <DebtsProvider debts={debts}>
     <PaymentsViews
       view={view}
       hrefs={{ lista: hrefFor(monthFor("lista") === month ? month : current, "lista"), calendario: hrefFor(month, "calendario") }}
       list={shown("lista") ? parts("lista") : undefined}
       calendar={shown("calendario") ? parts("calendario") : undefined}
     />
+    </DebtsProvider>
   );
 }

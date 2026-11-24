@@ -67,7 +67,7 @@ export function AmountField({
     </div>
   );
 
-  const big = "display num w-full rounded-2xl border border-transparent bg-transparent px-2 py-1 text-center text-4xl text-ink outline-none placeholder:text-ink-3/50 focus:border-line-strong sm:text-5xl";
+  const big = "figure-input num px-1 pb-1 text-6xl";
   if (!foreign) {
     if (hero) {
       return (

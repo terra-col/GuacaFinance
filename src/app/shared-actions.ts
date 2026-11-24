@@ -226,7 +226,7 @@ export async function createDirect(form: FormData): Promise<SharedResult> {
   return "error" in read ? read : openDirect(read.people[0].known ?? "", read.people[0]);
 }
 
-/** Who one can divide with, asked when «Dividir con alguien» is tapped. */
+/** Who one can divide with, asked when «Con alguien más» is tapped. */
 export async function loadSplitTargets(): Promise<{ targets: SplitTarget[]; name: string; social: boolean }> {
   const { shared, user, name } = await currentPerson();
   const targets = splitTargets(shared, user.id, name || "Tú");

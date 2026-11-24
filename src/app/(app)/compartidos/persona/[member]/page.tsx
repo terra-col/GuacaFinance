@@ -77,7 +77,7 @@ export default async function PersonPage({ params }: { params: Promise<{ member:
             Gastos y pagos
           </h2>
           {(person.direct || shared.social) && (
-            <Modal label="+ Gasto" title={`Gasto con ${person.name}`} buttonClass="btn h-10 shrink-0 rounded-2xl px-4 text-sm">
+            <Modal label="+ Anotar" title={`Anotar con ${person.name}`} buttonClass="btn h-10 shrink-0 rounded-2xl px-4 text-sm">
               <ExpenseForm {...two} person={person.member} accounts={payable} favorite={favoriteAccountId(accounts) ?? ""} today={today} action={savePersonExpense} />
             </Modal>
           )}

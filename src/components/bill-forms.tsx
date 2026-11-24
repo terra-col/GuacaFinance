@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { createContext, useActionState, useContext, useState } from "react";
 import {
   saveBill,
   saveBudget,
@@ -24,6 +24,12 @@ import { useCurrenciesReady } from "./currency-context";
  */
 /** A card or loan a fixed bill can be the instalment of. */
 export type Debt = { id: string; name: string; monthly_payment: number | null };
+
+const Debts = createContext<Debt[]>([]);
+
+/** The person's cards and loans, for every place in the page that edits a fixed bill. */
+export const DebtsProvider = ({ debts, children }: { debts: Debt[]; children: React.ReactNode }) => <Debts.Provider value={debts}>{children}</Debts.Provider>;
+export const useDebts = () => useContext(Debts);
 
 export function BillForm({ bill, onDone, inModal = false, debts = [] }: { bill?: Bill; onDone?: () => void; inModal?: boolean; debts?: Debt[] } = {}) {
   const currencies = useCurrenciesReady();

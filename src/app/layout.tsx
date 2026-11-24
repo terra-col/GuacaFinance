@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { cookies } from "next/headers";
 import "@fontsource-variable/outfit";
+import "@fontsource-variable/oswald";
 import "@fontsource-variable/plus-jakarta-sans";
 import { PrivacyMask } from "@/components/privacy";
 import { TouchFeedback } from "@/components/splash";

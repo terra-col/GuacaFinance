@@ -92,7 +92,7 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
             </p>
           </div>
           {!dividing && (
-            <Modal label="+ Gasto" title="Gasto compartido" buttonClass="btn h-11 rounded-2xl px-4 text-sm">
+            <Modal label="+ Anotar" title="Anotar" buttonClass="btn h-11 rounded-2xl px-4 text-sm">
               <ExpenseForm {...form} accounts={payable} />
             </Modal>
           )}
@@ -153,7 +153,7 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
           Gastos y pagos
         </h2>
         {entries.length === 0 ? (
-          <p className="mt-1 text-sm text-ink-3">Todavía no hay nada. Agrega el primero con «+ Gasto».</p>
+          <p className="mt-1 text-sm text-ink-3">Todavía no hay nada. Agrega el primero con «+ Anotar».</p>
         ) : (
           <ul className="mt-1 divide-y divide-line">
             {entries.map((entry) => {

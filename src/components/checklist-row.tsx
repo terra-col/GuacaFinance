@@ -5,6 +5,8 @@ import { deleteBill, deleteIncome, markPaid, skipItem, unmarkPaid, unskipItem, u
 import { daysBetween, formatCOP, formatDate, relativeDay, type ChecklistItem } from "@/lib/finance";
 import { everyShort } from "@/lib/recurrence";
 import { DateField } from "./date-field";
+import { useDebts } from "./bill-forms";
+import { useCurrenciesReady } from "./currency-context";
 import { HouseReceiptRow } from "./house-receipt";
 import { MoneyInput } from "./money-input";
 import { SelectField } from "./pickers";
@@ -51,6 +53,8 @@ function OwnRow({ item, month, today, editable, accounts }: Props) {
   const income = item.type === "income";
   // A card's or loan's instalment can come from a source that is not recorded, like a debt.
   const otherSource = item.type === "debt" || Boolean(item.paysDebt);
+  const debts = useDebts();
+  const canPay = useCurrenciesReady() && item.type === "bill" && debts.length > 0;
   // A goal's monthly saving: recorded as a deposit to the goal, no account involved.
   const saving = item.type === "goal";
   const skipped = Boolean(item.skipped) && !paid;
@@ -426,6 +430,13 @@ function OwnRow({ item, month, today, editable, accounts }: Props) {
                 <label className="field">
                   Día del mes
                   <input className="input num" type="number" name="day" min={1} max={31} defaultValue={item.day ?? (item.due ? Number(item.due.slice(8)) : "")} required />
+                </label>
+              )}
+              {canPay && (
+                <label className="field sm:col-span-3">
+                  ¿Es la cuota de una tarjeta o un crédito?
+                  <SelectField name="pays_account" defaultValue={item.paysDebt ?? ""} options={[{ value: "", label: "No, es un gasto" }, ...debts.map((d) => ({ value: d.id, label: d.name }))]} />
+                  <span className="text-xs font-normal text-ink-3">Si lo es, al marcarlo baja lo que debes ahí y no cuenta como gasto.</span>
                 </label>
               )}
               <p className="text-xs text-ink-3 sm:col-span-3">Cambia {income ? "el ingreso" : "el pago fijo"} desde ahora; lo que ya registraste no se toca.</p>
