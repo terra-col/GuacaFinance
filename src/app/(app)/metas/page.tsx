@@ -5,6 +5,7 @@ import { GoalSummary } from "@/components/goal-summary";
 import { LinkPending } from "@/components/link-pending";
 import { Modal } from "@/components/modal";
 import { loadData } from "@/lib/data";
+import { CreditsSwitch } from "@/components/moves-switch";
 import { balanceAt, formatCOP, formatDate, isDebt } from "@/lib/finance";
 import { goalSchedule, goalView, planOutlook, type GoalView } from "@/lib/goals";
 import { cadenceText, timesPerMonth } from "@/lib/recurrence";
@@ -83,6 +84,7 @@ export default async function GoalsPage() {
 
   return (
     <>
+      <CreditsSwitch active="/metas" />
       <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
         <div>
           <h1 className="display text-3xl">Metas</h1>

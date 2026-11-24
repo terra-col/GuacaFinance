@@ -60,6 +60,12 @@ const STEPS: Step[] = [
     text: "Ahorra para algo con fecha. Con un plan mensual, la cuota aparece en Pagos para que no se te pase.",
   },
   {
+    // Phones: Créditos and Metas share one tab.
+    target: "tab/creditos-metas",
+    title: "Créditos y metas",
+    text: "Tus tarjetas y préstamos, y lo que ahorras para algo con fecha. Arriba eliges si ver Créditos o Metas.",
+  },
+  {
     target: "advisor",
     title: "Asesor con IA",
     text: "Pregúntale sobre tu plata: si te alcanza el mes, qué pagar primero o cómo ahorrar. Responde con tus cuentas, pagos y metas.",

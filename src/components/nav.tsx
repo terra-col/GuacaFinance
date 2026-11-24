@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { AdvisorMark } from "./advisor-mark";
+import { openQuickAdd } from "./quick-add";
 import { useLayoutEffect, useRef, useState } from "react";
 
 interface Item {
@@ -28,6 +29,24 @@ export const TABS: Item[] = [
   { href: "/metas", label: "Metas", icon: I.goals },
 ];
 
+/** A phone tab: `also` is a second section that lights it up (Créditos y metas covers /metas). */
+type BarItem = Item & { short?: string; also?: string };
+
+/** Phones and tablets: four tabs with the «+» in the middle; Créditos and Metas share a tab and a switch inside it. */
+const BAR: (BarItem | null)[] = [
+  TABS[0],
+  { ...TABS[1], short: "Movim." },
+  null,
+  TABS[2],
+  { href: "/deudas", label: "Créditos y metas", icon: I.debts, also: "/metas" },
+];
+const onTab = (item: BarItem | null, path: string) =>
+  !!item && (item.href === "/" ? path === "/" : path.startsWith(item.href) || (!!item.also && path.startsWith(item.also)));
+
+/* The notch around the «+»: the bar's top edge curves down around a 68 px button with 6 px of air,
+   through two rounded shoulders. Same numbers as .tab-notch in globals.css. */
+const NOTCH_EDGE = "M0 0H1.04A16 16 0 0 1 17.03 15.43A40 40 0 0 0 96.97 15.43A16 16 0 0 1 112.96 0H114";
+
 function Icon({ d, active }: { d: string; active: boolean }) {
   return (
     <svg viewBox="0 0 24 24" className="size-[22px]" fill="none" stroke="currentColor" strokeWidth={active ? 2.1 : 1.7} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -52,6 +71,11 @@ export function Nav({ pending }: { pending: number }) {
   const tap = (href: string) => () => {
     if (TABS.findIndex((t) => t.href === href) !== current) setTapped(href);
   };
+  const barCurrent = BAR.findIndex((t) => onTab(t, section));
+  const barActive = tapped ? BAR.findIndex((t) => onTab(t, tapped)) : barCurrent;
+  const tapBar = (href: string) => () => {
+    if (BAR.findIndex((t) => onTab(t, href)) !== barCurrent) setTapped(href);
+  };
 
   // Phones: press and slide along the bar, like iOS's liquid glass tab bar. The bubble lifts and
   // follows the finger, the tab under it lights up, and letting go opens that tab. A plain tap
@@ -66,11 +90,11 @@ export function Nav({ pending }: { pending: number }) {
   const measure = (clientX: number) => {
     const rect = bar.current!.getBoundingClientRect();
     const pad = 6; // the bar's p-1.5
-    const width = (rect.width - pad * 2) / TABS.length;
+    const width = (rect.width - pad * 2) / BAR.length;
     const x = clientX - rect.left - pad;
     return {
-      index: Math.min(TABS.length - 1, Math.max(0, Math.floor(x / width))),
-      left: Math.min((TABS.length - 1) * width, Math.max(0, x - width / 2)),
+      index: Math.min(BAR.length - 1, Math.max(0, Math.floor(x / width))),
+      left: Math.min((BAR.length - 1) * width, Math.max(0, x - width / 2)),
     };
   };
   const scrub = {
@@ -101,11 +125,12 @@ export function Nav({ pending }: { pending: number }) {
       swallowClick.current = true;
       setTimeout(() => (swallowClick.current = false), 400);
       setDrag(null);
-      const { index } = measure(e.clientX);
-      if (index !== current) {
-        setTapped(TABS[index].href);
+      // Letting go behind the «+» goes nowhere: the bubble slides back to the open tab.
+      const target = BAR[measure(e.clientX).index];
+      if (target && !onTab(target, section)) {
+        setTapped(target.href);
         window.dispatchEvent(new Event("guaca:navigate"));
-        router.push(TABS[index].href);
+        router.push(target.href);
       }
     },
     onPointerCancel() {
@@ -119,7 +144,7 @@ export function Nav({ pending }: { pending: number }) {
       e.stopPropagation();
     },
   };
-  const shown = drag ? drag.index : active;
+  const shown = drag ? drag.index : barActive;
 
   // Desktop: the pill measures the active link, then glides to it.
   const desk = useRef<HTMLElement>(null);
@@ -167,7 +192,7 @@ export function Nav({ pending }: { pending: number }) {
       <div className="fixed inset-x-3 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-30 lg:hidden">
         <nav
           ref={bar}
-          className="tab-scrub liquid liquid-bar relative grid grid-cols-5 rounded-[1.75rem] p-1.5"
+          className="tab-scrub tab-notch liquid liquid-bar relative grid grid-cols-5 rounded-[1.75rem] p-1.5"
           aria-label="Secciones"
           style={{ viewTransitionName: "tab-bar" }}
           {...scrub}
@@ -179,20 +204,25 @@ export function Nav({ pending }: { pending: number }) {
                 drag
                   ? // Follows the finger 1:1, slightly bigger, like a lens lifted off the bar.
                     { transform: `translateX(${drag.left}px) scale(1.12)`, opacity: 1, transition: "none" }
-                  : { transform: `translateX(${Math.max(active, 0) * 100}%) scale(${active < 0 ? 0.6 : 1})`, opacity: active < 0 ? 0 : 1 }
+                  : { transform: `translateX(${Math.max(barActive, 0) * 100}%) scale(${barActive < 0 ? 0.6 : 1})`, opacity: barActive < 0 ? 0 : 1 }
               }
             />
           </span>
-          {TABS.map((item, i) => {
+          {/* The bar's edge, drawn again along the notch (the cut takes the border with it). */}
+          <svg aria-hidden="true" width="114" height="60" className="tab-notch-edge pointer-events-none absolute left-[calc(50%-57px)] top-[-1px] overflow-visible">
+            <path d={NOTCH_EDGE} fill="none" strokeWidth="2" />
+          </svg>
+          {BAR.map((item, i) => {
+            if (!item) return <span key="plus" aria-hidden="true" />;
             const on = i === shown;
             return (
               <Link
                 key={item.href}
                 href={item.href}
-                data-tour={`tab${item.href}`}
+                data-tour={item.also ? "tab/creditos-metas" : `tab${item.href}`}
                 draggable={false}
-                onClick={tap(item.href)}
-                aria-current={i === current ? "page" : undefined}
+                onClick={tapBar(item.href)}
+                aria-current={i === barCurrent ? "page" : undefined}
                 className={`relative flex flex-col items-center gap-0.5 rounded-[1.4rem] py-1.5 text-[11px] font-semibold transition-colors duration-300 ${on ? "text-[var(--tab-on)]" : "text-[var(--tab-ink)]"}`}
               >
                 {/* Re-keyed when it becomes active, so the icon bounces once on arrival. */}
@@ -200,11 +230,25 @@ export function Nav({ pending }: { pending: number }) {
                   <Icon d={item.icon} active={on} />
                   {dot(item.href)}
                 </span>
-                <span className="max-w-full truncate px-0.5">{item.label === "Movimientos" ? "Movim." : item.label}</span>
+                <span className="max-w-full px-0.5 text-center leading-tight">{item.short ?? item.label}</span>
               </Link>
             );
           })}
         </nav>
+        {/* Registrar, sitting in the notch: the bubble keeps sliding behind it. */}
+        <button
+          type="button"
+          onClick={openQuickAdd}
+          data-tour="register"
+          aria-label="Registrar movimiento"
+          title="Registrar movimiento"
+          className="fab register tab-plus absolute left-1/2 top-[-20px] flex size-[68px] -translate-x-1/2 items-center justify-center rounded-full"
+          style={{ viewTransitionName: "tab-plus" }}
+        >
+          <svg viewBox="0 0 24 24" className="size-8" fill="none" stroke="currentColor" strokeWidth={2.6} strokeLinecap="round" aria-hidden="true">
+            <path d="M12 5v14M5 12h14" />
+          </svg>
+        </button>
       </div>
 
     </>

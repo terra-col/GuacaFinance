@@ -766,6 +766,32 @@ dialog .split-footer {
   user-select: none;
   -webkit-user-select: none;
 }
+/* The notch the «+» sits in: the bar is solid on both sides, and in the middle a 114 px piece
+   whose top edge curves down around the button (68 px wide, centre 14 px below the bar's top edge,
+   6 px of air) through two 16 px rounded shoulders. The pieces overlap by a pixel so no seam shows.
+   Everything in the bar, the sliding bubble included, is cut by it. */
+.tab-notch {
+  --notch: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='114' height='200'%3E%3Cpath d='M0 0H1.04A16 16 0 0 1 17.03 15.43A40 40 0 0 0 96.97 15.43A16 16 0 0 1 112.96 0H114V200H0Z'/%3E%3C/svg%3E");
+  -webkit-mask:
+    linear-gradient(#000 0 0) left top / calc(50% - 56px) 100% no-repeat,
+    var(--notch) 50% 0 / 114px 200px no-repeat,
+    linear-gradient(#000 0 0) right top / calc(50% - 56px) 100% no-repeat;
+  mask:
+    linear-gradient(#000 0 0) left top / calc(50% - 56px) 100% no-repeat,
+    var(--notch) 50% 0 / 114px 200px no-repeat,
+    linear-gradient(#000 0 0) right top / calc(50% - 56px) 100% no-repeat;
+}
+.tab-notch-edge {
+  stroke: var(--bar-edge);
+}
+/* The «+» in the notch: a tight shadow, so the air around it stays clear. */
+.fab.register.tab-plus,
+.fab.register.tab-plus:hover {
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.55),
+    inset 0 -3px 8px rgb(150 85 0 / 0.16),
+    0 3px 8px -3px rgb(180 110 0 / 0.55);
+}
 /* The bubble while it follows the finger: lifted off the bar, catching more light. */
 .liquid-bubble-lifted {
   box-shadow:
@@ -822,16 +848,19 @@ dialog .split-footer {
 }
 /* The header and the tab bar stay put while the screen changes under them. */
 ::view-transition-group(site-header),
-::view-transition-group(tab-bar) {
+::view-transition-group(tab-bar),
+::view-transition-group(tab-plus) {
   animation: none;
   z-index: 100;
 }
 ::view-transition-old(site-header),
-::view-transition-old(tab-bar) {
+::view-transition-old(tab-bar),
+::view-transition-old(tab-plus) {
   display: none;
 }
 ::view-transition-new(site-header),
-::view-transition-new(tab-bar) {
+::view-transition-new(tab-bar),
+::view-transition-new(tab-plus) {
   animation: none;
 }
 @keyframes vt-fade {

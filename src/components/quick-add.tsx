@@ -13,8 +13,8 @@ export function openQuickAdd() {
 }
 
 /**
- * The «Registrar» sheet, available on every screen: a floating button on
- * phones, a header button on wide screens, and any link to #nuevo.
+ * The «Registrar» sheet, available on every screen: the «+» in the middle of the
+ * tab bar on phones, a header button on wide screens, and any link to #nuevo.
  */
 export function QuickAdd({ accounts, today }: { accounts: Pick<Account, "id" | "name" | "kind">[]; today: string }) {
   const [open, setOpen] = useState(false);
@@ -52,18 +52,6 @@ export function QuickAdd({ accounts, today }: { accounts: Pick<Account, "id" | "
 
   return (
     <>
-      <button
-        type="button"
-        onClick={show}
-        data-tour="register"
-        className="fab register fixed bottom-[calc(5.75rem+env(safe-area-inset-bottom))] right-4 z-30 flex h-12 items-center gap-2 rounded-full pl-4 pr-5 text-sm font-semibold lg:hidden"
-      >
-        <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" aria-hidden="true">
-          <path d="M12 5v14M5 12h14" />
-        </svg>
-        Registrar movimiento
-      </button>
-
       <Sheet open={open} onClose={close} title="Nuevo movimiento">
         {accounts.length === 0 ? (
           <p className="text-sm text-ink-2">Primero agrega una cuenta en Inicio: el movimiento necesita de dónde sale o a dónde llega la plata.</p>

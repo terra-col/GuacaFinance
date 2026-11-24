@@ -12,6 +12,7 @@ import { DebtTags, InstallmentMeter } from "@/components/installment-meter";
 import { purchaseView, purchasesSummary } from "@/lib/installments";
 import { cardColor } from "@/lib/banks";
 import { loadData } from "@/lib/data";
+import { CreditsSwitch } from "@/components/moves-switch";
 import { debtView, payFirst, type DebtView } from "@/lib/debts";
 import { formatCOP, formatDate, isDebt, relativeDay, shelfOrder } from "@/lib/finance";
 
@@ -255,27 +256,31 @@ export default async function DebtsPage({
 
   if (views.length === 0) {
     return (
-      <section className="card max-w-xl">
-        <h1 className="display text-3xl">Sin créditos registrados</h1>
-        <p className="mt-2 text-ink-2">
-          Cuando agregues una tarjeta de crédito o un préstamo, aquí verás cuánto
-          debes, cuánto cupo usas y cuánto te falta.
-        </p>
-        <div className="mt-4">
-          <AddAccount
-          kinds={["credit_card", "loan"]}
-            today={today}
-            autoOpen={addNow}
-            defaultKind="credit_card"
-            label="Agregar una tarjeta o un préstamo"
-          />
-        </div>
-      </section>
+      <>
+        <CreditsSwitch active="/deudas" />
+        <section className="card max-w-xl">
+          <h1 className="display text-3xl">Sin créditos registrados</h1>
+          <p className="mt-2 text-ink-2">
+            Cuando agregues una tarjeta de crédito o un préstamo, aquí verás cuánto
+            debes, cuánto cupo usas y cuánto te falta.
+          </p>
+          <div className="mt-4">
+            <AddAccount
+            kinds={["credit_card", "loan"]}
+              today={today}
+              autoOpen={addNow}
+              defaultKind="credit_card"
+              label="Agregar una tarjeta o un préstamo"
+            />
+          </div>
+        </section>
+      </>
     );
   }
 
   return (
     <>
+      <CreditsSwitch active="/deudas" />
       <AddAccount
           kinds={["credit_card", "loan"]}
         today={today}
