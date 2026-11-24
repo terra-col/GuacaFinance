@@ -276,7 +276,7 @@ export function TxForm({
               La división no cuadra con el monto: tócala para revisarla.
             </p>
           ) : (
-            <SubmitButton className="btn self-start" disabled={divides && !dividing}>{editing ? "Guardar cambios" : divides ? "Registrar y dividir" : "Registrar"}</SubmitButton>
+            <SubmitButton className="btn self-start" disabled={divides && !dividing}>{editing ? "Guardar cambios" : "Registrar"}</SubmitButton>
           )}
         </>
       )}

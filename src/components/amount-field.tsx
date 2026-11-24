@@ -82,11 +82,9 @@ export function AmountField({
     return (
       <div className="field">
         {ready && <input type="hidden" name="currencies" value="1" />}
-        <span className="flex flex-wrap items-center justify-between gap-2">
-          {label}
-          {picker}
-        </span>
+        {label}
         <MoneyInput key="cop" name="amount" label={label} defaultValue={defaultValue} onValue={onValue} required={required} placeholder={placeholder} />
+        {picker}
       </div>
     );
   }
@@ -99,10 +97,7 @@ export function AmountField({
           {label} · en {CURRENCIES.find((c) => c.code === currency)!.name.toLowerCase()}
         </span>
       ) : (
-        <span className="flex flex-wrap items-center justify-between gap-2">
-          {label}
-          {picker}
-        </span>
+        label
       )}
       <input type="hidden" name="currency" value={currency} />
       <input type="hidden" name="currencies" value="1" />
@@ -121,7 +116,7 @@ export function AmountField({
         />
         {!hero && <span className="text-sm font-semibold text-ink-2">{symbol}</span>}
       </div>
-      {hero && picker}
+      {picker}
       <span className={`grid grid-cols-[auto_1fr] items-center gap-2 text-xs font-normal text-ink-3 ${hero ? "w-full max-w-xs" : ""}`}>
         <span>1 {symbol} = $</span>
         <input

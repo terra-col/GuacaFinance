@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useOptimistic, useState, useTransition } from "react";
 import { deleteBill, deleteIncome, markPaid, skipItem, unmarkPaid, unskipItem, updatePaid, updateRecurring } from "@/app/actions";
 import { daysBetween, formatCOP, formatDate, relativeDay, type ChecklistItem } from "@/lib/finance";
@@ -149,6 +150,14 @@ function OwnRow({ item, month, today, editable, accounts }: Props) {
 
   // Fixed bills and scheduled incomes can be removed from here; the movements already recorded stay.
   const removable = item.type === "bill" || income;
+  // Cards, loans and goals are edited where they live: a link to there.
+  const elsewhere =
+    item.type === "debt" ? { href: `/cuentas/${item.id}#editar`, label: "Editar crédito" } : item.type === "goal" ? { href: `/metas/${item.id}`, label: "Editar meta" } : null;
+  const editElsewhere = elsewhere && (
+    <Link href={elsewhere.href} className="text-sm font-medium text-brand">
+      {elsewhere.label}
+    </Link>
+  );
 
   /** New name, amount or day for the fixed bill or income itself. */
   function editRecurring(form: FormData) {
@@ -345,6 +354,7 @@ function OwnRow({ item, month, today, editable, accounts }: Props) {
                 <DateField name="occurred_on" defaultValue={today} min={earliest} max={today} required />
               </label>
               <div className="flex flex-wrap items-center gap-2 sm:col-span-4 sm:justify-end">
+                {editElsewhere && <span className="mr-auto">{editElsewhere}</span>}
                 {removable && (
                   <span className="mr-auto flex flex-wrap gap-x-4 gap-y-1">
                     <button type="button" className="text-sm font-medium text-brand" onClick={() => setPanel("recurring")}>
@@ -502,6 +512,7 @@ function OwnRow({ item, month, today, editable, accounts }: Props) {
                   <button type="button" className="text-sm font-medium text-ink-3 hover:text-ink" onClick={unpay} disabled={pending}>
                     Desmarcar (borra {income ? "el ingreso" : saving ? "el abono" : "el pago"})
                   </button>
+                  {editElsewhere}
                   {removable && (
                     <>
                       <button type="button" className="text-sm font-medium text-brand" onClick={() => setPanel("recurring")}>

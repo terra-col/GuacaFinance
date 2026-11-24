@@ -148,7 +148,7 @@ export function ExpenseForm({
         {entry?.ownMovement && paidBy === me && amount !== entry.amount && <p className="text-sm text-ink-2">El movimiento de tu cuenta también cambia a {formatCOP(amount)}.</p>}
         <Problem error={error} />
         <Send pending={pending} disabled={!ready}>
-          {entry ? "Guardar cambios" : "Dividir"}
+          {entry ? "Guardar cambios" : "Registrar"}
         </Send>
       </div>
     </form>
