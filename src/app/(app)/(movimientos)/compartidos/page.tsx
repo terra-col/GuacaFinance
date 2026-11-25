@@ -2,7 +2,7 @@ import Link from "next/link";
 import { SharedBeam } from "@/components/balance-beam";
 import { FoldSection, GroupMark } from "@/components/fold-section";
 import { Modal } from "@/components/modal";
-import { MovesSwitch } from "@/components/moves-switch";
+import { HEAD_BUTTON, SectionHead } from "@/components/section-head";
 import { PendingCards } from "@/components/pending-cards";
 import { DirectButton, DirectForm, GroupForm } from "@/components/shared-forms";
 import { Avatar } from "@/components/split-panel";
@@ -42,8 +42,7 @@ export default async function SharedPage({ searchParams }: { searchParams: Promi
   if (!sharedReady) {
     return (
       <>
-        <h1 className="display pt-2 text-3xl">Movimientos</h1>
-        <MovesSwitch active="/compartidos" />
+        <h1 className="display pt-2 text-3xl">Compartidos</h1>
         <p className="card text-sm text-ink-2">Los gastos compartidos todavía no están activos.</p>
       </>
     );
@@ -63,13 +62,11 @@ export default async function SharedPage({ searchParams }: { searchParams: Promi
 
   return (
     <>
-      <div className="flex items-center justify-between gap-3 pt-2">
-        <h1 className="display text-3xl">Movimientos</h1>
-        <Modal label="+ Grupo" title="Nuevo grupo" buttonClass="btn h-11 rounded-2xl px-4 text-sm">
+      <SectionHead title="Movimientos compartidos" text="Lo que divides con otras personas y quién le debe a quién.">
+        <Modal label="+ Grupo" title="Nuevo grupo" buttonClass={`btn ${HEAD_BUTTON}`}>
           <GroupForm me={me} tx={tx?.id} known={known} />
         </Modal>
-      </div>
-      <MovesSwitch active="/compartidos" />
+      </SectionHead>
 
       <PendingCards pending={pending} />
 

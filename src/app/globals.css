@@ -43,7 +43,7 @@
   --bar-shade: rgb(60 40 140 / 0.16);
   --bubble-a: rgb(255 255 255 / 0.98);
   --bubble-b: rgb(255 255 255 / 0.6);
-  --bubble-ring: rgb(109 74 255 / 0.2);
+  --bubble-ring: rgb(109 74 255 / 0.09);
   --tab-ink: #34305e;
   --tab-on: #5a37f2;
   /* Categorical colours for charts (spending by category), in a fixed order, validated for
@@ -99,7 +99,7 @@
   --bar-shade: rgb(0 0 0 / 0.38);
   --bubble-a: rgb(190 175 255 / 0.26);
   --bubble-b: rgb(190 175 255 / 0.08);
-  --bubble-ring: rgb(170 150 255 / 0.3);
+  --bubble-ring: rgb(170 150 255 / 0.16);
   --tab-ink: #e4e1fb;
   --tab-on: #c2b4ff;
   --cat-1: #3987e5;
@@ -123,7 +123,7 @@
     --bar-shade: rgb(0 0 0 / 0.38);
     --bubble-a: rgb(190 175 255 / 0.26);
     --bubble-b: rgb(190 175 255 / 0.08);
-    --bubble-ring: rgb(170 150 255 / 0.3);
+    --bubble-ring: rgb(170 150 255 / 0.16);
     --tab-ink: #e4e1fb;
     --tab-on: #c2b4ff;
     --cat-1: #3987e5;
@@ -1045,17 +1045,86 @@ a.card:active {
 .segment[data-on] {
   color: #fff;
 }
+/* The big switch on top of a two-part section (Personales | Compartidos, Créditos | Metas): the
+   whole width on phones, taller, with icons. Its pill is placed by both edges, so on the way over
+   the leading edge goes first and the trailing one follows: it stretches, then settles. */
+.segmented-lg {
+  display: grid;
+  width: 100%;
+  max-width: 30rem;
+  padding: 5px;
+}
+.segmented-lg .segmented-thumb {
+  --step: calc((100% - 10px) / var(--n));
+  top: 5px;
+  bottom: 5px;
+  left: calc(5px + var(--i) * var(--step));
+  right: calc(5px + (var(--n) - 1 - var(--i)) * var(--step));
+  width: auto;
+  transform: none;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.3),
+    0 10px 22px -10px var(--brand);
+  transition:
+    left 460ms cubic-bezier(0.3, 1.25, 0.5, 1) 110ms,
+    right 380ms cubic-bezier(0.3, 1.25, 0.5, 1);
+}
+.segmented-lg[data-dir="l"] .segmented-thumb {
+  transition:
+    left 380ms cubic-bezier(0.3, 1.25, 0.5, 1),
+    right 460ms cubic-bezier(0.3, 1.25, 0.5, 1) 110ms;
+}
+.segmented-lg .segment {
+  min-width: 0;
+  gap: 0.5rem;
+  padding: 0.8rem 1rem;
+  font-size: 1rem;
+}
 /* While the content cross-fades, the control stays as it is (the pill already moved). */
-::view-transition-old(pagos-view) {
+::view-transition-old(pagos-view),
+::view-transition-old(section-switch) {
   display: none;
 }
-::view-transition-new(pagos-view) {
+::view-transition-new(pagos-view),
+::view-transition-new(section-switch) {
   animation: none;
 }
 @media (prefers-reduced-motion: reduce) {
-  .segmented-thumb {
+  .segmented-thumb,
+  .segmented-lg .segmented-thumb,
+  .segmented-lg[data-dir="l"] .segmented-thumb {
     transition: none;
   }
+}
+
+/* A way of looking at the same card (Barras | Gráfica): small and quiet, a notch below the
+   section switches. The chosen one is tinted, not filled. */
+.view-chips {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 0.75rem;
+  border: 1px solid var(--line);
+}
+.view-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.6rem;
+  border-radius: 0.6rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--ink-3);
+  transition:
+    color 180ms,
+    background-color 180ms;
+}
+.view-chip:hover {
+  color: var(--ink);
+}
+.view-chip[aria-selected="true"] {
+  color: var(--brand);
+  background: color-mix(in srgb, var(--brand) 12%, transparent);
 }
 
 /* Guaca's own date picker (computers): frosted glass like the rest of the floating surfaces. */

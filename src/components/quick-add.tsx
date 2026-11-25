@@ -92,8 +92,8 @@ export function QuickAddButton() {
 /** A visible «Nuevo movimiento» on the Movimientos screen, for every screen size. */
 export function NewMovementButton() {
   return (
-    <button type="button" onClick={openQuickAdd} className="btn register h-11 gap-1.5 rounded-2xl px-4 text-sm">
-      <span aria-hidden="true" className="text-lg leading-none">
+    <button type="button" onClick={openQuickAdd} className="btn register h-12 gap-2 rounded-2xl px-5 text-base">
+      <span aria-hidden="true" className="text-xl leading-none">
         +
       </span>
       Nuevo

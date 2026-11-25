@@ -4,18 +4,17 @@ import { InboxItem } from "@/components/inbox-item";
 import { budgetViews } from "@/lib/budget";
 import { NewMovementButton } from "@/components/quick-add";
 import { TxList } from "@/components/tx-list";
-import { MovesSwitch } from "@/components/moves-switch";
+import { SectionHead } from "@/components/section-head";
 import { sharedMarks } from "@/lib/shared";
 import { loadData } from "@/lib/data";
 import { formatCOP, monthFlows, monthLabel, spendingByCategory } from "@/lib/finance";
 
 export default async function TransactionsPage() {
-  const { accounts, txs, flows: counted, shared, sharedReady, user, inbox, budgets, planReady, today } = await loadData();
+  const { accounts, txs, flows: counted, shared, user, inbox, budgets, planReady, today } = await loadData();
 
   if (accounts.length === 0) {
     return (
       <>
-        {sharedReady && <MovesSwitch active="/movimientos" />}
         <section className="card flex flex-col items-start gap-3">
           <h1 className="display text-3xl">Primero registra una cuenta</h1>
           <Link href="/?nueva=1" className="btn">
@@ -38,11 +37,9 @@ export default async function TransactionsPage() {
 
   return (
     <>
-      <div className="flex items-center justify-between gap-3 pt-2">
-        <h1 className="display text-3xl">Movimientos</h1>
+      <SectionHead title="Movimientos personales" text="Todo lo que entra y sale de tus cuentas, día por día.">
         <NewMovementButton />
-      </div>
-      {sharedReady && <MovesSwitch active="/movimientos" />}
+      </SectionHead>
 
       <section className="card">
         <p className="eyebrow">Flujo de {monthLabel(month)}</p>

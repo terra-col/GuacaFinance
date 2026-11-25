@@ -5,7 +5,7 @@ import { GoalSummary } from "@/components/goal-summary";
 import { LinkPending } from "@/components/link-pending";
 import { Modal } from "@/components/modal";
 import { loadData } from "@/lib/data";
-import { CreditsSwitch } from "@/components/moves-switch";
+import { HEAD_BUTTON, SectionHead } from "@/components/section-head";
 import { balanceAt, formatCOP, formatDate, isDebt } from "@/lib/finance";
 import { goalSchedule, goalView, planOutlook, type GoalView } from "@/lib/goals";
 import { cadenceText, timesPerMonth } from "@/lib/recurrence";
@@ -84,16 +84,11 @@ export default async function GoalsPage() {
 
   return (
     <>
-      <CreditsSwitch active="/metas" />
-      <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
-        <div>
-          <h1 className="display text-3xl">Metas</h1>
-          <p className="text-sm text-ink-3">Lo que quieres lograr, con un plan para llegar a tiempo.</p>
-        </div>
-        <Modal title="Nueva meta" label={<><span aria-hidden="true" className="text-xl leading-none">+</span> Nueva meta</>}>
+      <SectionHead title="Metas" text="Lo que quieres lograr, con un plan para llegar a tiempo.">
+        <Modal title="Nueva meta" label={<><span aria-hidden="true" className="text-xl leading-none">+</span> Nueva meta</>} buttonClass={`btn ${HEAD_BUTTON}`}>
           <GoalForm debts={debts} incomes={incomeOptions} today={today} />
         </Modal>
-      </div>
+      </SectionHead>
 
       {!goalsReady && <p className="alert">Para usar metas falta ejecutar la migración 0006 en el SQL Editor de Supabase.</p>}
 

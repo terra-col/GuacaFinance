@@ -45,7 +45,12 @@ const onTab = (item: BarItem | null, path: string) =>
 
 /* The notch around the «+»: the bar's top edge curves down around a 68 px button with 6 px of air,
    through two rounded shoulders. Same numbers as .tab-notch in globals.css. */
-const NOTCH_EDGE = "M0 0H1.04A16 16 0 0 1 17.03 15.43A40 40 0 0 0 96.97 15.43A16 16 0 0 1 112.96 0H114";
+/** The «+» column: wider than the notch (88 px at the bubble's top), so a resting bubble next to it is never cut. */
+const MID = 92;
+/** Where a tab's bubble rests: the side columns share what the «+» leaves. */
+const SIDE = `((100% - ${MID}px) / 4)`;
+const restAt = (i: number) => `calc(${SIDE} * ${i > 2 ? i - 1 : i} + ${i > 2 ? MID : 0}px)`;
+const NOTCH_EDGE ="M0 0H1.04A16 16 0 0 1 17.03 15.43A40 40 0 0 0 96.97 15.43A16 16 0 0 1 112.96 0H114";
 
 function Icon({ d, active }: { d: string; active: boolean }) {
   return (
@@ -89,12 +94,15 @@ export function Nav({ pending }: { pending: number }) {
 
   const measure = (clientX: number) => {
     const rect = bar.current!.getBoundingClientRect();
-    const pad = 6; // the bar's p-1.5
-    const width = (rect.width - pad * 2) / BAR.length;
+    const pad = 7; // the bar's border and p-1.5
+    const inner = rect.width - pad * 2;
+    const side = (inner - MID) / 4;
     const x = clientX - rect.left - pad;
+    // Where each column ends: two tabs, the «+», two tabs.
+    const ends = [side, 2 * side, 2 * side + MID, 3 * side + MID];
     return {
-      index: Math.min(BAR.length - 1, Math.max(0, Math.floor(x / width))),
-      left: Math.min((BAR.length - 1) * width, Math.max(0, x - width / 2)),
+      index: ends.filter((end) => x >= end).length,
+      left: Math.min(inner - side, Math.max(0, x - side / 2)),
     };
   };
   const scrub = {
@@ -192,19 +200,19 @@ export function Nav({ pending }: { pending: number }) {
       <div className="fixed inset-x-3 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-30 lg:hidden">
         <nav
           ref={bar}
-          className="tab-scrub tab-notch liquid liquid-bar relative grid grid-cols-5 rounded-[1.75rem] p-1.5"
+          className="tab-scrub tab-notch liquid liquid-bar relative grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_92px_minmax(0,1fr)_minmax(0,1fr)] rounded-[1.75rem] p-1.5"
           aria-label="Secciones"
           style={{ viewTransitionName: "tab-bar" }}
           {...scrub}
         >
-          <span aria-hidden="true" className="pointer-events-none absolute inset-y-1.5 left-1.5 w-[calc((100%-0.75rem)/5)]">
+          <span aria-hidden="true" className="pointer-events-none absolute inset-1.5">
             <span
-              className={`nav-glide liquid-bubble block h-full rounded-[1.4rem] ${drag ? "liquid-bubble-lifted" : ""}`}
+              className={`nav-glide liquid-bubble absolute inset-y-0 rounded-[1.4rem] ${drag ? "liquid-bubble-lifted" : ""}`}
               style={
                 drag
                   ? // Follows the finger 1:1, slightly bigger, like a lens lifted off the bar.
-                    { transform: `translateX(${drag.left}px) scale(1.12)`, opacity: 1, transition: "none" }
-                  : { transform: `translateX(${Math.max(barActive, 0) * 100}%) scale(${barActive < 0 ? 0.6 : 1})`, opacity: barActive < 0 ? 0 : 1 }
+                    { left: drag.left, width: `calc${SIDE}`, transform: "scale(1.12)", opacity: 1, transition: "none" }
+                  : { left: restAt(Math.max(barActive, 0)), width: `calc${SIDE}`, transform: `scale(${barActive < 0 ? 0.6 : 1})`, opacity: barActive < 0 ? 0 : 1 }
               }
             />
           </span>

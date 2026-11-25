@@ -12,7 +12,7 @@ import { DebtTags, InstallmentMeter } from "@/components/installment-meter";
 import { purchaseView, purchasesSummary } from "@/lib/installments";
 import { cardColor } from "@/lib/banks";
 import { loadData } from "@/lib/data";
-import { CreditsSwitch } from "@/components/moves-switch";
+import { HEAD_BUTTON, SectionHead } from "@/components/section-head";
 import { debtView, payFirst, type DebtView } from "@/lib/debts";
 import { formatCOP, formatDate, isDebt, relativeDay, shelfOrder } from "@/lib/finance";
 
@@ -257,7 +257,6 @@ export default async function DebtsPage({
   if (views.length === 0) {
     return (
       <>
-        <CreditsSwitch active="/deudas" />
         <section className="card max-w-xl">
           <h1 className="display text-3xl">Sin créditos registrados</h1>
           <p className="mt-2 text-ink-2">
@@ -280,15 +279,16 @@ export default async function DebtsPage({
 
   return (
     <>
-      <CreditsSwitch active="/deudas" />
-      <AddAccount
+      <SectionHead text="Tus tarjetas y préstamos: cuánto debes y cuánto te falta.">
+        <AddAccount
           kinds={["credit_card", "loan"]}
-        today={today}
-        autoOpen={addNow}
-        defaultKind="credit_card"
-        label="Agregar"
-        buttonClass="btn-quiet h-10 gap-1.5 self-end px-4 text-sm -mb-3"
-      />
+          today={today}
+          autoOpen={addNow}
+          defaultKind="credit_card"
+          label="Nuevo crédito"
+          buttonClass={`btn ${HEAD_BUTTON}`}
+        />
+      </SectionHead>
       <section className="card" aria-labelledby="debts-total">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
