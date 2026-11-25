@@ -129,15 +129,17 @@ async function Dashboard({ searchParams }: Props) {
           <BalanceBeam savings={now.savings} debt={now.debt} previousNet={previous ? previous.net : null} />
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2 lg:col-span-2 lg:grid-cols-1 lg:gap-5">
-          <Link href="/pagos" className="card flex items-center gap-4 transition-transform hover:-translate-y-0.5">
+        {/* Phones: the two side by side, ring on top; from tablets on, ring beside the words. */}
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:col-span-2 lg:grid-cols-1 lg:gap-5">
+          <Link href="/pagos" className="card flex flex-col items-start gap-3 max-sm:p-4 sm:flex-row sm:items-center sm:gap-4 transition-transform hover:-translate-y-0.5">
             <Ring
               value={checklist.length ? paid / checklist.length : 0}
               label={`${paid}/${checklist.length}`}
               sub="pagados"
               gradient="have"
+              small
             />
-            <div>
+            <div className="min-w-0">
               <p className="eyebrow">Pagos de {monthName(month)}</p>
               <p className="display mt-1 text-xl leading-tight">
                 {checklist.length === 0 ? "Sin pagos fijos" : paid === checklist.length ? "Mes al día" : `Faltan ${checklist.length - paid}`}
@@ -145,15 +147,16 @@ async function Dashboard({ searchParams }: Props) {
               <p className="mt-1 text-sm text-brand">Abrir la lista</p>
             </div>
           </Link>
-          <div className="card flex items-center gap-4">
+          <div className="card flex flex-col items-start gap-3 max-sm:p-4 sm:flex-row sm:items-center sm:gap-4">
             {cardLimit > 0 ? (
-              <Ring value={cardUsed / cardLimit} label={`${Math.round((cardUsed / cardLimit) * 100)}%`} sub="del cupo" gradient="owe" />
+              <Ring value={cardUsed / cardLimit} label={`${Math.round((cardUsed / cardLimit) * 100)}%`} sub="del cupo" gradient="owe" small />
             ) : (
-              <Ring value={0} label="—" sub="sin cupo" gradient="owe" />
+              <Ring value={0} label="—" sub="sin cupo" gradient="owe" small />
             )}
-            <div>
+            <div className="min-w-0">
               <p className="eyebrow">Gastado este mes</p>
-              <p className="display mt-1 text-2xl leading-tight">{formatCOP(spent)}</p>
+              {/* Half a phone wide: the amount shrinks with the screen so it stays on one line. */}
+              <p className="display num mt-1 whitespace-nowrap text-[clamp(1rem,5vw,1.5rem)] leading-tight sm:text-2xl">{formatCOP(spent)}</p>
               <p className="mt-1 text-sm text-ink-3">
                 {cardLimit > 0 ? `Cupo libre: ${formatCOP(Math.max(0, cardLimit - cardUsed))}` : "Agrega el cupo de tus tarjetas"}
               </p>

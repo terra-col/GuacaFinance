@@ -36,11 +36,11 @@ export function DashboardSkeleton() {
           <Bar className="h-16 w-3/4" />
           <Bar className="mt-6 h-6 w-full rounded-full" />
         </Tile>
-        <div className="grid gap-4 sm:grid-cols-2 lg:col-span-2 lg:grid-cols-1 lg:gap-5">
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:col-span-2 lg:grid-cols-1 lg:gap-5">
           {[0, 1].map((i) => (
-            <Tile key={i} className="flex-row items-center">
-              <Bar className="size-28 shrink-0 rounded-full" />
-              <div className="flex flex-1 flex-col gap-2">
+            <Tile key={i} className="items-start max-sm:p-4 sm:flex-row sm:items-center">
+              <Bar className="size-[5.25rem] shrink-0 rounded-full sm:size-28" />
+              <div className="flex w-full flex-1 flex-col gap-2">
                 <Bar className="h-3 w-3/4" />
                 <Bar className="h-6 w-full" />
               </div>
