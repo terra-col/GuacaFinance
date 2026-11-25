@@ -20,6 +20,8 @@ const SECTIONS = {
     ],
     // Computers have no other way between the two halves.
     className: "",
+    // The section's name, above the pill on every screen.
+    title: "Movimientos",
   },
   credits: {
     label: "Qué ver: créditos o metas",
@@ -27,10 +29,11 @@ const SECTIONS = {
       { href: "/deudas", label: "Créditos", icon: "M3 6l6 6 4-4 8 8M21 11v5h-5" },
       { href: "/metas", label: "Metas", icon: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Zm0-4a5 5 0 1 0 0-10 5 5 0 0 0 0 10Zm0-4a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z" },
     ],
-    // Computers have a tab for each.
+    // Computers have a tab for each; there the screen shows its own title instead (SectionHead).
     className: "lg:hidden",
+    title: "",
   },
-} satisfies Record<string, { label: string; views: View[]; className: string }>;
+} satisfies Record<string, { label: string; views: View[]; className: string; title: string }>;
 
 /**
  * The big switch at the top of a two-part section (Personales | Compartidos, Créditos | Metas).
@@ -40,7 +43,7 @@ const SECTIONS = {
 export function SectionSwitch({ section }: { section: keyof typeof SECTIONS }) {
   const pathname = usePathname();
   const shared = useSharedReady();
-  const { label, views, className } = SECTIONS[section];
+  const { label, views, className, title } = SECTIONS[section];
   const here = views.findIndex((v) => v.href === pathname);
   // The tapped half, until the address catches up.
   const [picked, setPicked] = useState<{ at: string; index: number } | null>(null);
@@ -49,8 +52,8 @@ export function SectionSwitch({ section }: { section: keyof typeof SECTIONS }) {
 
   // Only on the two screens themselves, not on a group or a goal.
   if (here < 0 || (section === "moves" && !shared)) return null;
-  return (
-    <div className={`flex justify-center pt-1 ${className}`}>
+  const pill = (
+    <div className={`flex ${title ? "justify-center lg:justify-start" : "justify-center pt-1"} ${className}`}>
       <nav
         className="segmented segmented-lg"
         aria-label={label}
@@ -79,6 +82,13 @@ export function SectionSwitch({ section }: { section: keyof typeof SECTIONS }) {
           </Link>
         ))}
       </nav>
+    </div>
+  );
+  if (!title) return pill;
+  return (
+    <div className="flex flex-col gap-3 pt-2">
+      <h1 className="display text-3xl">{title}</h1>
+      {pill}
     </div>
   );
 }

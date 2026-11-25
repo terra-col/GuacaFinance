@@ -279,7 +279,7 @@ export default async function DebtsPage({
 
   return (
     <>
-      <SectionHead text="Tus tarjetas y préstamos: cuánto debes y cuánto te falta.">
+      <SectionHead title="Créditos" text="Tus tarjetas y préstamos: cuánto debes y cuánto te falta.">
         <AddAccount
           kinds={["credit_card", "loan"]}
           today={today}
@@ -292,9 +292,9 @@ export default async function DebtsPage({
       <section className="card" aria-labelledby="debts-total">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <h1 id="debts-total" className="eyebrow">
+            <h2 id="debts-total" className="eyebrow">
               Saldo en créditos
-            </h1>
+            </h2>
             <p className="display text-5xl leading-none sm:text-6xl">
               {formatCOP(total)}
             </p>

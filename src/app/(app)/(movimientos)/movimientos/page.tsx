@@ -37,7 +37,7 @@ export default async function TransactionsPage() {
 
   return (
     <>
-      <SectionHead title="Movimientos personales" text="Todo lo que entra y sale de tus cuentas, día por día.">
+      <SectionHead text="Todo lo que entra y sale de tus cuentas, día por día.">
         <NewMovementButton />
       </SectionHead>
 

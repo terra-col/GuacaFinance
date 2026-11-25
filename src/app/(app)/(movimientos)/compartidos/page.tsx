@@ -62,7 +62,7 @@ export default async function SharedPage({ searchParams }: { searchParams: Promi
 
   return (
     <>
-      <SectionHead title="Movimientos compartidos" text="Lo que divides con otras personas y quién le debe a quién.">
+      <SectionHead text="Lo que divides con otras personas y quién le debe a quién.">
         <Modal label="+ Grupo" title="Nuevo grupo" buttonClass={`btn ${HEAD_BUTTON}`}>
           <GroupForm me={me} tx={tx?.id} known={known} />
         </Modal>

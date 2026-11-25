@@ -1,12 +1,13 @@
 /**
- * Under a section's big switch: what the screen is for and its main button. The switch above
- * already says where you are, so the title is only for screen readers (when there is one).
+ * Under a section's big switch: what the screen is for and its main button. `title` is shown
+ * on computers only (Créditos, Metas): there the switch is hidden, and on phones the switch
+ * already says where you are, so it stays for screen readers.
  */
 export function SectionHead({ title, text, children }: { title?: string; text: string; children?: React.ReactNode }) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="flex flex-wrap items-center justify-between gap-3 lg:pt-2">
       <div className="min-w-36 flex-1 basis-0">
-        {title && <h1 className="sr-only">{title}</h1>}
+        {title && <h1 className="display sr-only text-3xl lg:not-sr-only">{title}</h1>}
         <p className="text-sm text-ink-2">{text}</p>
       </div>
       {children}
