@@ -27,6 +27,14 @@ export const viewport: Viewport = {
   viewportFit: "cover",
 };
 
+/**
+ * iPhone, iPad and Safari (WebKit, also inside Chrome on iOS) change screens without the
+ * crossfade. Each one captures the whole screen as images, and over the glass cards that pushed
+ * iOS to close the page for memory: black, white, and the app starting over. Without
+ * startViewTransition React applies the same change at once; the switches' own slides are CSS.
+ */
+const NO_WEBKIT_TRANSITIONS = `try{var u=navigator.userAgent;if(/AppleWebKit/.test(u)&&!/Chrome\\/|Chromium\\/|Android/.test(u))delete Document.prototype.startViewTransition}catch(e){}`;
+
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   // The chosen theme comes in a cookie, so the first paint already has the right colours.
   const jar = await cookies();
@@ -36,6 +44,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const privacy = jar.get(PRIVACY_COOKIE)?.value === "1";
   return (
     <html lang="es-CO" className="h-full antialiased" data-theme={theme === "system" ? undefined : theme} data-scale={scale === "std" ? undefined : scale} data-privacy={privacy ? "on" : undefined} suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: NO_WEBKIT_TRANSITIONS }} />
+      </head>
       <body className="min-h-full font-sans">
         <TouchFeedback />
         <PrivacyMask />
