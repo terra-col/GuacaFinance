@@ -129,9 +129,9 @@ async function Dashboard({ searchParams }: Props) {
           <BalanceBeam savings={now.savings} debt={now.debt} previousNet={previous ? previous.net : null} />
         </div>
 
-        {/* Phones: the two side by side, ring on top; from tablets on, ring beside the words. */}
+        {/* Phones: the two side by side, ring on top and everything centred; from tablets on, ring beside the words. */}
         <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:col-span-2 lg:grid-cols-1 lg:gap-5">
-          <Link href="/pagos" className="card flex flex-col items-start gap-3 max-sm:p-4 sm:flex-row sm:items-center sm:gap-4 transition-transform hover:-translate-y-0.5">
+          <Link href="/pagos" className="card flex flex-col items-center gap-3 text-center max-sm:p-4 sm:flex-row sm:gap-4 sm:text-left transition-transform hover:-translate-y-0.5">
             <Ring
               value={checklist.length ? paid / checklist.length : 0}
               label={`${paid}/${checklist.length}`}
@@ -147,7 +147,7 @@ async function Dashboard({ searchParams }: Props) {
               <p className="mt-1 text-sm text-brand">Abrir la lista</p>
             </div>
           </Link>
-          <div className="card flex flex-col items-start gap-3 max-sm:p-4 sm:flex-row sm:items-center sm:gap-4">
+          <div className="card flex flex-col items-center gap-3 text-center max-sm:p-4 sm:flex-row sm:gap-4 sm:text-left">
             {cardLimit > 0 ? (
               <Ring value={cardUsed / cardLimit} label={`${Math.round((cardUsed / cardLimit) * 100)}%`} sub="del cupo" gradient="owe" small />
             ) : (
