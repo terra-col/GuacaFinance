@@ -49,7 +49,7 @@ export function NoticeBell({ initial }: { initial: number }) {
   const here = pathname === "/avisos";
   const label = count > 0 ? `Avisos: ${count} ${count === 1 ? "pendiente" : "pendientes"}` : "Avisos";
   return (
-    <Link href="/avisos" data-bell aria-current={here ? "page" : undefined} aria-label={label} title={label} className={`relative flex size-10 items-center justify-center rounded-xl ${here ? "fab" : "liquid"}`}>
+    <Link href="/avisos" data-bell data-tour="bell" aria-current={here ? "page" : undefined} aria-label={label} title={label} className={`relative flex size-10 items-center justify-center rounded-xl ${here ? "fab" : "liquid"}`}>
       <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
         <path d="M6 16.5V10a6 6 0 0 1 12 0v6.5l1.5 2h-15zM10 21h4" />
       </svg>

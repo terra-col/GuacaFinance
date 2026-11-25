@@ -10,7 +10,8 @@ const notMigrated = (error: { code?: string }) => error.code === "42P01" || erro
  * `ready` is false. Any other failure throws: treated as «no groups» it would silently show
  * everything paid for others as one's own spending.
  */
-export async function loadShared(supabase: SupabaseClient, userId: string): Promise<{ shared: SharedData; ready: boolean }> {
+/** `userId` may still be on its way (loadData asks who is signed in at the same time): it is only needed at the end. */
+export async function loadShared(supabase: SupabaseClient, userId: string | PromiseLike<string>): Promise<{ shared: SharedData; ready: boolean }> {
   const [groups, asked, noticed, deleted] = await Promise.all([
     supabase.from("shared_groups").select("*").order("created_at", { ascending: false }),
     supabase.from("shared_requests").select("member_id, group_id, user_id"),
@@ -49,7 +50,8 @@ export async function loadShared(supabase: SupabaseClient, userId: string): Prom
   ]);
   const error = members.error ?? entries.error ?? shares.error ?? links.error ?? contacts.error;
   if (error) throw new Error(`No se pudieron leer los gastos compartidos: ${error.message}`);
-  const left = new Set(members.rows.filter((m) => m.user_id === userId && m.removed_at).map((m) => m.group_id));
+  const me = await userId;
+  const left = new Set(members.rows.filter((m) => m.user_id === me && m.removed_at).map((m) => m.group_id));
   return {
     ready: true,
     shared: {

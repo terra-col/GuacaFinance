@@ -45,10 +45,19 @@ export function SectionSwitch({ section }: { section: keyof typeof SECTIONS }) {
   const shared = useSharedReady();
   const { label, views, className, title } = SECTIONS[section];
   const here = views.findIndex((v) => v.href === pathname);
-  // The tapped half, until the address catches up.
-  const [picked, setPicked] = useState<{ at: string; index: number } | null>(null);
+  // The tapped half, until the address catches up. Forgotten as soon as the address changes, by
+  // whatever means (the tab bar, going back): kept, it came back to life the next time that
+  // address was shown, and the switch said Compartidos over Personales.
+  const [picked, setPicked] = useState<number | null>(null);
   const [dir, setDir] = useState<"l" | "r">("r");
-  const index = picked && picked.at === pathname ? picked.index : here;
+  const [seen, setSeen] = useState(pathname);
+  if (seen !== pathname) {
+    const before = picked ?? views.findIndex((v) => v.href === seen);
+    setSeen(pathname);
+    setPicked(null);
+    if (here >= 0 && before >= 0 && before !== here) setDir(here > before ? "r" : "l");
+  }
+  const index = seen === pathname && picked !== null ? picked : here;
 
   // Only on the two screens themselves, not on a group or a goal.
   if (here < 0 || (section === "moves" && !shared)) return null;
@@ -69,7 +78,7 @@ export function SectionSwitch({ section }: { section: keyof typeof SECTIONS }) {
             onClick={() => {
               if (i === index) return;
               setDir(i > index ? "r" : "l");
-              setPicked({ at: pathname, index: i });
+              setPicked(i);
             }}
             aria-current={i === here ? "page" : undefined}
             data-on={i === index ? "" : undefined}

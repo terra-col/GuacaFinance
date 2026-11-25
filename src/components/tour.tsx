@@ -7,7 +7,7 @@ import { markTourSeen } from "@/app/actions";
 
 /**
  * The welcome tour: the screen dims and a spotlight goes over the real interface (the balance,
- * the accounts, the tabs, the advisor, the eye, Ajustes), with a card that says what each one is
+ * the accounts, the tabs, the bell, the advisor, the eye, Ajustes), with a card that says what each one is
  * for. It starts by itself the first time someone enters, on Inicio, and the «?» next to the
  * greeting (or Ajustes) plays it again. Nothing is done for the person: it only points.
  */
@@ -37,17 +37,17 @@ const STEPS: Step[] = [
   {
     target: "register",
     title: "Registrar un movimiento",
-    text: "Un gasto, un ingreso o un pago a una tarjeta, en segundos. Cada movimiento mueve tus saldos.",
+    text: "Un gasto, un ingreso, una transferencia o un pago a una tarjeta, en segundos. En el celular es el «+» del centro de la barra. Cada movimiento mueve tus saldos.",
   },
   {
     target: "tab/movimientos",
     title: "Movimientos",
-    text: "Todo lo que entra y sale, día por día: busca, filtra, edita o borra. Lo que llega desde Apple Wallet espera aquí a que lo revises.",
+    text: "Arriba eliges Personales o Compartidos. En Personales está todo lo que entra y sale, día por día: busca, filtra y toca «Editar» o «Borrar» en cualquiera. En Compartidos, lo que divides con otras personas y quién le debe a quién.",
   },
   {
     target: "tab/pagos",
     title: "Pagos del mes",
-    text: "Arriendo, servicios, cuotas e ingresos en una lista. Márcalos al pagarlos, míralos en calendario y adelanta los del mes siguiente.",
+    text: "Arriendo, servicios, cuotas e ingresos, cada uno cada cuánto toca. Márcalos al pagarlos, míralos en calendario y adelanta los del mes siguiente. Los recibos de una casa compartida también llegan aquí.",
   },
   {
     target: "tab/deudas",
@@ -66,6 +66,11 @@ const STEPS: Step[] = [
     text: "Tus tarjetas y préstamos, y lo que ahorras para algo con fecha. Arriba eliges si ver Créditos o Metas.",
   },
   {
+    target: "bell",
+    title: "Avisos",
+    text: "Cuando alguien te invita a un grupo, anota un gasto contigo o te paga, te llega aquí. El número dice cuántos esperan tu respuesta.",
+  },
+  {
     target: "advisor",
     title: "Asesor con IA",
     text: "Pregúntale sobre tu plata: si te alcanza el mes, qué pagar primero o cómo ahorrar. Responde con tus cuentas, pagos y metas.",
@@ -78,7 +83,7 @@ const STEPS: Step[] = [
   {
     target: "settings",
     title: "Ajustes",
-    text: "Tu perfil, el tema claro u oscuro, el tamaño del texto, Apple Wallet e invitar a alguien a Guaca.",
+    text: "Tu perfil y tu celular (para que te lleguen las invitaciones), el tema claro u oscuro, el tamaño del texto, Apple Wallet e invitar a alguien a Guaca.",
   },
   {
     target: "help",

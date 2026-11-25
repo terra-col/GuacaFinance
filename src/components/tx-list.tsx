@@ -169,7 +169,7 @@ export function TxList({
       ) : (
         // Re-keying on the filter replays the entrance animation for the new set.
         <div key={`${filter}|${query}`} className="flex flex-col gap-4">
-          <p className="hidden text-xs text-ink-3 [@media(pointer:coarse)]:block">Desliza un movimiento a la izquierda para editarlo o borrarlo.</p>
+          <p className="hidden text-xs text-ink-3 [@media(pointer:coarse)]:block">También puedes deslizar un movimiento a la izquierda para editarlo o borrarlo.</p>
           {days.map((day) => (
             <div key={day.date} className="card rise overflow-hidden p-0 sm:p-0" style={{ "--i": position } as React.CSSProperties}>
               <div className="flex items-baseline justify-between gap-3 border-b border-line px-4 py-2.5 sm:px-5">
@@ -226,6 +226,26 @@ export function TxList({
                           <span className="max-sm:hidden">{detail(tx) ? " · " : ""}</span>
                           {detail(tx)}
                         </p>
+                        {/* Touch: the same actions in words, as in a group's entries, for whoever does not know the swipe. */}
+                        <span className="mt-0.5 hidden gap-4 [@media(pointer:coarse)]:flex">
+                          {!locked && (
+                            <button type="button" onClick={() => edit(tx)} className="py-1 text-xs font-semibold text-brand" aria-label={`Editar ${title(tx)} del ${formatDate(tx.occurred_on)}`}>
+                              Editar
+                            </button>
+                          )}
+                          {armed === tx.id ? (
+                            <form action={deleteTx} className="rise">
+                              <input type="hidden" name="id" value={tx.id} />
+                              <SubmitButton className="py-1 text-xs font-semibold text-debt" aria-label={`Confirmar: borrar ${title(tx)}`}>
+                                Sí, borrar
+                              </SubmitButton>
+                            </form>
+                          ) : (
+                            <button type="button" onClick={() => setArmed(tx.id)} className="py-1 text-xs font-medium text-ink-3" aria-label={`Eliminar ${title(tx)} del ${formatDate(tx.occurred_on)}`}>
+                              Borrar
+                            </button>
+                          )}
+                        </span>
                       </div>
                       <p className={`display num shrink-0 rounded-xl px-2 py-0.5 text-lg ${isAdjustment(tx) ? "text-ink-3" : tx.kind === "income" ? "bg-savings/15" : ""}`}>
                         {sign(tx)}

@@ -47,10 +47,11 @@ export async function proxy(request: NextRequest) {
     },
   });
 
-  // getUser() validates the token with Supabase and refreshes it when needed.
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // getClaims() refreshes the session when it expired and checks the token's signature against the
+  // project's public keys, kept in memory: no trip to Supabase on each screen. (With a project still
+  // on the old shared secret it asks Supabase, like getUser() did.) The pages ask Supabase themselves.
+  const { data } = await supabase.auth.getClaims();
+  const user = data?.claims.sub ? data.claims : null;
 
   if (!user && !isPublic) return toLogin();
   if (user && isLogin) {

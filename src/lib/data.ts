@@ -18,8 +18,6 @@ export interface InboxItem {
 }
 import { createClient } from "./supabase/server";
 
-const PAGE = 1000; // Supabase returns at most 1000 rows per request
-
 /** What every screen's frame needs: accounts for the quick «new movement» sheet and the Wallet inbox count. */
 export async function loadShell() {
   const supabase = await createClient();
@@ -65,33 +63,17 @@ export async function loadShell() {
   };
 }
 
-/** Everything the signed-in user has recorded. Row Level Security scopes both queries to them. */
+/** Everything the signed-in user has recorded. Row Level Security scopes every query to them. */
 export async function loadData() {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
-
-  const { data: accounts, error } = await supabase.from("accounts").select("*").order("created_at");
-  if (error) throw new Error(`No se pudieron leer las cuentas: ${error.message}`);
-
-  // Balances are sums over every movement, so a silently truncated page would
-  // show wrong numbers: keep reading until a short page comes back.
-  const txs: Tx[] = [];
-  for (let from = 0; ; from += PAGE) {
-    const { data, error: txError } = await supabase
-      .from("transactions")
-      .select("*")
-      .order("occurred_on", { ascending: false })
-      .order("created_at", { ascending: false })
-      .range(from, from + PAGE - 1);
-    if (txError) throw new Error(`No se pudieron leer los movimientos: ${txError.message}`);
-    txs.push(...(data as Tx[]));
-    if (data.length < PAGE) break;
-  }
-
-  const [bills, inbox, goals, deposits, budgets, skips, incomes, purchases, sharing, house, dateSkips] = await Promise.all([
+  // All at once: Row Level Security already limits each query to the signed-in person, so asking
+  // who they are does not have to come first (it names them and sends anyone else to /login).
+  // One round trip to Supabase instead of four in a row, on every screen.
+  const who = supabase.auth.getUser();
+  const reads = Promise.all([
+    supabase.from("accounts").select("*").order("created_at"),
+    // Balances are sums over every movement, so a silently truncated page would show wrong numbers.
+    allPages<Tx>((from, to) => supabase.from("transactions").select("*").order("occurred_on", { ascending: false }).order("created_at", { ascending: false }).order("id").range(from, to)),
     supabase.from("bills").select("*").order("due_day"),
     supabase.from("wallet_inbox").select("*").order("received_at", { ascending: false }),
     supabase.from("goals").select("*").order("target_date"),
@@ -101,10 +83,22 @@ export async function loadData() {
     supabase.from("checklist_skips").select("*"),
     supabase.from("incomes").select("*").order("day"),
     supabase.from("card_purchases").select("*").order("first_due_month"),
-    loadShared(supabase, user.id),
+    loadShared(supabase, who.then(({ data }) => data.user?.id ?? "")),
     loadHouse(supabase),
     allPages<Skip>((from, to) => supabase.from("date_skips").select("*").order("for_date").order("id").range(from, to)),
   ]);
+  // Read below; meanwhile an early failure is not an unhandled one (and without a session it does not matter).
+  reads.catch(() => {});
+  const {
+    data: { user },
+  } = await who;
+  if (!user) redirect("/login");
+  const [accountsRead, txsRead, bills, inbox, goals, deposits, budgets, skips, incomes, purchases, sharing, house, dateSkips] = await reads;
+  if (accountsRead.error) throw new Error(`No se pudieron leer las cuentas: ${accountsRead.error.message}`);
+  if (txsRead.error) throw new Error(`No se pudieron leer los movimientos: ${txsRead.error.message}`);
+  const accounts = accountsRead.data;
+  const txs = txsRead.rows;
+
   // Card purchases in instalments arrived with migration 0009.
   const purchasesReady = !purchases.error;
   // Budgets, skips and incomes arrived with migration 0007.
