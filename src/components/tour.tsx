@@ -4,6 +4,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { markTourSeen } from "@/app/actions";
+import { TRAY_EVENT } from "./header-tray";
 
 /**
  * The welcome tour: the screen dims and a spotlight goes over the real interface (the balance,
@@ -17,6 +18,8 @@ interface Step {
   target?: string;
   title: string;
   text: string;
+  /** Inside the header's folded options: the tour unfolds them for this step. */
+  tray?: boolean;
 }
 
 const STEPS: Step[] = [
@@ -66,23 +69,32 @@ const STEPS: Step[] = [
     text: "Tus tarjetas y préstamos, y lo que ahorras para algo con fecha. Arriba eliges si ver Créditos o Metas.",
   },
   {
-    target: "bell",
-    title: "Avisos",
-    text: "Cuando alguien te invita a un grupo, anota un gasto contigo o te paga, te llega aquí. El número dice cuántos esperan tu respuesta.",
+    target: "menu",
+    title: "Tus opciones",
+    text: "Este botón despliega el asesor, los avisos, el modo privado, el tema y Más ajustes. Un punto rojo encima quiere decir que tienes avisos.",
   },
   {
     target: "advisor",
+    tray: true,
     title: "Asesor con IA",
     text: "Pregúntale sobre tu plata: si te alcanza el mes, qué pagar primero o cómo ahorrar. Responde con tus cuentas, pagos y metas.",
   },
   {
+    target: "bell",
+    tray: true,
+    title: "Avisos",
+    text: "Cuando alguien te invita a un grupo, anota un gasto contigo o te paga, te llega aquí. El número dice cuántos esperan tu respuesta.",
+  },
+  {
     target: "privacy",
+    tray: true,
     title: "Modo privado",
     text: "Oculta todos los montos con un toque, por si alguien está viendo tu pantalla.",
   },
   {
     target: "settings",
-    title: "Ajustes",
+    tray: true,
+    title: "Más ajustes",
     text: "Tu perfil y tu celular (para que te lleguen las invitaciones), el tema claro u oscuro, el tamaño del texto, Apple Wallet e invitar a alguien a Guaca.",
   },
   {
@@ -196,6 +208,13 @@ export function Tour({ autoStart, userId, home = "/" }: { autoStart: boolean; us
 
   const step = steps?.[index];
 
+  // The header's options unfold for the steps that point inside them, and fold again after.
+  const tray = Boolean(step?.tray);
+  useEffect(() => {
+    if (!steps) return;
+    window.dispatchEvent(new CustomEvent(TRAY_EVENT, { detail: tray }));
+  }, [tray, steps]);
+
   // Brings the element into view, then follows it every frame (scrolling, resizing, the page moving).
   useLayoutEffect(() => {
     if (!step) return;
@@ -213,6 +232,7 @@ export function Tour({ autoStart, userId, home = "/" }: { autoStart: boolean; us
   }, [step]);
 
   const finish = useCallback(() => {
+    window.dispatchEvent(new CustomEvent(TRAY_EVENT, { detail: false }));
     setSteps(null);
     setRect(null);
     try {

@@ -785,6 +785,123 @@ dialog .split-footer {
 .tab-notch-edge {
   stroke: var(--bar-edge);
 }
+/* The header's options folded behind one button (HeaderTray). Phones: they come out over the
+   logo, which steps aside. Computers: the row opens and pushes «Registrar movimiento» over. */
+.tray-items {
+  position: absolute;
+  top: 50%;
+  right: calc(100% + 0.375rem);
+  translate: 0 -50%;
+}
+.tray-row {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+@media (min-width: 1024px) {
+  .tray-items {
+    position: static;
+    translate: none;
+    display: grid;
+    grid-template-columns: 0fr;
+    transition: grid-template-columns 360ms cubic-bezier(0.3, 1, 0.4, 1);
+  }
+  .tray[data-open] .tray-items {
+    grid-template-columns: 1fr;
+  }
+  .tray-row {
+    min-width: 0;
+    overflow: hidden;
+    margin-block: -6px;
+    padding: 6px 0.5rem 6px 0;
+  }
+}
+@media (max-width: 1023px) {
+  .header-logo {
+    transition: opacity 200ms;
+  }
+  header:has(.tray[data-open]) .header-logo {
+    opacity: 0;
+  }
+}
+/* Each one leaves the button in turn, the nearest first, and settles with a small bounce. */
+.tray .tray-row > * {
+  opacity: 0;
+  scale: 0.6;
+  translate: calc((var(--i, 0) + 1) * 12px) 0;
+  visibility: hidden;
+  transition:
+    opacity 140ms ease-in,
+    scale 180ms ease-in,
+    translate 180ms ease-in,
+    transform 160ms,
+    visibility 0s linear 180ms;
+}
+.tray[data-open] .tray-row > * {
+  opacity: 1;
+  scale: 1;
+  translate: 0 0;
+  visibility: visible;
+  transition:
+    opacity 200ms ease-out calc(var(--i, 0) * 45ms),
+    scale 420ms cubic-bezier(0.3, 1.5, 0.5, 1) calc(var(--i, 0) * 45ms),
+    translate 420ms cubic-bezier(0.3, 1.3, 0.5, 1) calc(var(--i, 0) * 45ms),
+    transform 160ms,
+    visibility 0s;
+}
+.tray-row > :nth-last-child(2) {
+  --i: 1;
+}
+.tray-row > :nth-last-child(3) {
+  --i: 2;
+}
+.tray-row > :nth-last-child(4) {
+  --i: 3;
+}
+.tray-row > :nth-last-child(5) {
+  --i: 4;
+}
+/* The button's sliders turn into a cross while the options are out. */
+.tray-toggle path {
+  transform-box: fill-box;
+  transform-origin: center;
+  transition:
+    opacity 200ms,
+    rotate 320ms cubic-bezier(0.3, 1.3, 0.5, 1);
+}
+.tray-icon-close {
+  opacity: 0;
+  rotate: -90deg;
+}
+.tray[data-open] .tray-icon-open {
+  opacity: 0;
+  rotate: 90deg;
+}
+.tray[data-open] .tray-icon-close {
+  opacity: 1;
+  rotate: 0deg;
+}
+/* Something waits in Avisos while the bell is folded away. */
+.tray:not([data-open]):has([data-bell-count]) .tray-toggle::after {
+  content: "";
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  width: 10px;
+  height: 10px;
+  border-radius: 9999px;
+  background: #c8371b;
+  box-shadow: 0 0 0 2px var(--surface);
+}
+@media (prefers-reduced-motion: reduce) {
+  .tray .tray-row > *,
+  .tray[data-open] .tray-row > *,
+  .tray-items,
+  .tray-toggle path {
+    transition-duration: 0s;
+    transition-delay: 0s;
+  }
+}
 /* The «+» in the notch: a tight shadow, so the air around it stays clear. */
 .fab.register.tab-plus,
 .fab.register.tab-plus:hover {

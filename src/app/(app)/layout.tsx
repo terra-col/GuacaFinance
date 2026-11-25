@@ -10,6 +10,7 @@ import { CurrencyProvider } from "@/components/currency-context";
 import { QuickAdd, QuickAddButton } from "@/components/quick-add";
 import { Suspense } from "react";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { HeaderTray } from "@/components/header-tray";
 import { PrivacyToggle } from "@/components/privacy";
 import { PRIVACY_COOKIE } from "@/lib/privacy";
 import { cookies } from "next/headers";
@@ -34,21 +35,26 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       {/* Above the page so the fixed tab bar, which lives inside, stays on top of the content. */}
       <header className="relative z-40 flex items-center justify-between gap-3 py-4 sm:py-5">
         <div className="flex items-center gap-4">
-          <Logo compact={socialReady} />
+          {/* On phones the unfolded options cover the logo, so it steps aside. */}
+          <span className="header-logo">
+            <Logo compact={socialReady} />
+          </span>
           <Nav pending={pending} />
         </div>
         <div className="flex items-center gap-1.5 sm:gap-2">
           <QuickAddButton />
-          <AdvisorButton />
-          {socialReady && <NoticeBell initial={noticeCount} />}
-          <PrivacyToggle initial={(await cookies()).get(PRIVACY_COOKIE)?.value === "1"} />
-          <ThemeToggle />
-          {/* Ajustes is an icon here on every screen size. */}
-          <Link href="/ajustes" data-tour="settings" className="liquid flex size-10 items-center justify-center rounded-xl" aria-label="Ajustes" title="Ajustes">
-            <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" aria-hidden="true">
-              <path d="M4 7h10m4 0h2M4 17h2m4 0h10M16 5v4M8 15v4" />
-            </svg>
-          </Link>
+          <HeaderTray>
+            <AdvisorButton />
+            {socialReady && <NoticeBell initial={noticeCount} />}
+            <PrivacyToggle initial={(await cookies()).get(PRIVACY_COOKIE)?.value === "1"} />
+            <ThemeToggle />
+            <Link href="/ajustes" data-tour="settings" className="liquid flex size-10 items-center justify-center rounded-xl" aria-label="Más ajustes" title="Más ajustes">
+              <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="3" />
+                <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" />
+              </svg>
+            </Link>
+          </HeaderTray>
         </div>
         <QuickAdd accounts={accounts} today={today} />
       </header>
