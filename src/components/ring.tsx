@@ -33,7 +33,8 @@ export function Ring({ value, label, sub, gradient, small = false }: { value: nu
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center leading-tight">
         <span className={`display ${small ? "text-lg sm:text-xl" : "text-xl"}`}>{label}</span>
-        <span className="text-[11px] text-ink-3">{sub}</span>
+        {/* In rem like the ring, so with any text size (Ajustes) it keeps inside the circle. */}
+        <span className="text-[0.6875rem] text-ink-3">{sub}</span>
       </div>
     </div>
   );
