@@ -10,7 +10,8 @@ import { profileName } from "@/lib/brand";
 import { PENDING_ME, PENDING_OTHER } from "@/lib/people";
 import { memberOf } from "@/lib/shared";
 import { loadData } from "@/lib/data";
-import { favoriteAccountId, favoriteFirst, formatCOP, formatDate } from "@/lib/finance";
+import { favoriteAccountId, favoriteFirst, formatCOP } from "@/lib/finance";
+import { EntryRow, entryScope } from "@/components/entry-list";
 import { formatPhone } from "@/lib/phone";
 import { movesWith, peopleWith } from "@/lib/people";
 import { groupNets } from "@/lib/shared";
@@ -18,7 +19,8 @@ import { groupNets } from "@/lib/shared";
 /** One person: what is pending with them in all, and where it comes from. */
 export default async function PersonPage({ params }: { params: Promise<{ member: string }> }) {
   const { member } = await params;
-  const { shared, accounts, user, today } = await loadData();
+  const data = await loadData();
+  const { shared, accounts, user, today } = data;
   const person = peopleWith(shared, user.id, { deletedToo: true }).find((p) => p.members.includes(member));
   if (!person) notFound();
   const directs = person.places.filter((p) => p.group.direct).map((p) => p.group.id);
@@ -31,6 +33,8 @@ export default async function PersonPage({ params }: { params: Promise<{ member:
     : null;
   const inGroups = person.places.filter((p) => !p.group.direct);
   const moves = movesWith(shared, user.id, person);
+  const groupsOfMoves = [...new Set(moves.map((m) => m.group.id))];
+  const scopes = new Map(await Promise.all(groupsOfMoves.map(async (id) => [id, await entryScope(id, data)] as const)));
   // The expense is written here; their account between two is only how it is kept.
   const mine = person.direct ? memberOf(person.direct, shared, user.id) : undefined;
   const two =
@@ -86,32 +90,11 @@ export default async function PersonPage({ params }: { params: Promise<{ member:
           <p className="mt-1 text-sm text-ink-3">Todavía no hay gastos ni pagos entre ustedes.</p>
         ) : (
           <ul className="mt-1 divide-y divide-line" data-moves>
-            {moves.map((m) => (
-              <li key={m.id} className="flex items-center justify-between gap-3 py-3">
-                <span className="min-w-0">
-                  <span className="block truncate font-semibold">{m.kind === "settlement" ? "Pago para saldar" : m.description}</span>
-                  <span className="block truncate text-xs text-ink-3">
-                    {formatDate(m.on)}
-                    {!m.group.direct && (
-                      <>
-                        {" · del grupo "}
-                        <Link href={`/compartidos/${m.group.id}`} className="font-semibold text-brand">
-                          {m.group.name}
-                        </Link>
-                      </>
-                    )}
-                  </span>
-                </span>
-                {/* Green when they owe it to one; red when one owes it to them. The words say it too. */}
-                <span className="shrink-0 text-right" style={{ color: `color-mix(in oklab, var(--${m.net > 0 ? "savings" : "debt"}) ${m.net > 0 ? 55 : 60}%, var(--ink))` }}>
-                  <span className="block text-xs font-medium">{m.kind === "settlement" ? (m.net > 0 ? "le pagaste" : "te pagó") : m.net > 0 ? "te debe" : "le debes"}</span>
-                  <span className="num block font-semibold">
-                    {m.net > 0 ? "+" : "−"}
-                    {formatCOP(Math.abs(m.net))}
-                  </span>
-                </span>
-              </li>
-            ))}
+            {/* The same rows as in a group: Editar, Borrar and «Registrar en mi cuenta» right here. */}
+            {moves.map((m) => {
+              const scope = scopes.get(m.group.id);
+              return scope && <EntryRow key={m.id} entry={m.entry} scope={scope} data={data} net={m.net} group={m.group.direct ? undefined : m.group} />;
+            })}
           </ul>
         )}
         {inGroups.length > 0 && moves.length > 0 && <p className="mt-2 text-xs text-ink-3">En los grupos las deudas se cruzan entre todos, así que el total puede no ser la suma.</p>}

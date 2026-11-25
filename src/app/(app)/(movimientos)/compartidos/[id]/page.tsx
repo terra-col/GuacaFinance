@@ -1,36 +1,30 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Icon, txIconName } from "@/components/icons";
 import { Modal } from "@/components/modal";
 import { GroupExit } from "@/components/group-exit";
 import { GroupPeople } from "@/components/group-people";
 import { ExpenseForm } from "@/components/expense-form";
-import { DeleteEntryForm, RecordForm, RenameGroupForm, SettlementForm, type EditableEntry } from "@/components/shared-forms";
+import { EntryRow, entryScope } from "@/components/entry-list";
+import { RenameGroupForm, SettlementForm } from "@/components/shared-forms";
 import { loadData } from "@/lib/data";
-import { favoriteAccountId, favoriteFirst, formatCOP, formatDate, holdsMoney, isAdjustment } from "@/lib/finance";
+import { formatCOP, isAdjustment } from "@/lib/finance";
 import { groupTitle } from "@/lib/people";
 import { groupNets, memberOf, settleUp } from "@/lib/shared";
-import { parseSplit, splitTitle } from "@/lib/split";
-import { formatForeign, isCurrency } from "@/lib/currency";
 
 const SMALL = "text-xs font-semibold text-brand";
 
 export default async function GroupPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ dividir?: string }> }) {
   const { id } = await params;
-  const { supabase, shared, house, accounts, txs, user, today } = await loadData();
+  const data = await loadData();
+  const { shared, house, txs, user } = data;
   const group = shared.groups.find((g) => g.id === id);
   const me = memberOf(id, shared, user.id);
-  if (!group || !me) notFound();
+  const scope = group && me ? await entryScope(id, data) : null;
+  if (!group || !me || !scope) notFound();
 
   const members = shared.members.filter((m) => m.group_id === id);
-  // Who was taken out stays only in what already happened.
-  const active = members.filter((m) => !m.removed_at);
-  const gone = members.filter((m) => m.removed_at);
-  const goneIds = new Set(gone.map((m) => m.id));
-  const people = active.map(({ id, name }) => ({ id, name }));
-  const name = new Map(members.map((m) => [m.id, m.name]));
+  const name = scope.name;
   const entries = shared.entries.filter((e) => e.group_id === id);
-  const shares = shared.shares.filter((s) => s.group_id === id);
   const nets = groupNets(id, shared);
   const transfers = settleUp(nets);
   const mine = nets.get(me.id) ?? 0;
@@ -38,23 +32,13 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
   const title = groupTitle(group, shared, user.id);
   const other = direct ? members.find((m) => m.id !== me.id) : undefined;
   const housePayments = house.payments.filter((p) => p.group_id === id);
-
-  const option = (a: { id: string; name: string; favorite?: boolean }) => ({ value: a.id, label: a.name, star: Boolean(a.favorite) });
-  const payable = favoriteFirst(accounts.filter((a) => a.kind !== "loan")).map(option);
-  const money = favoriteFirst(accounts.filter(holdsMoney)).map(option);
-  const favorite = favoriteAccountId(accounts) ?? "";
-  // Only the links to movements that still exist.
-  const linkOf = new Map(shared.links.map((l) => [l.entry_id, l.tx_id]));
+  const { payable, money, form } = scope;
 
   const { dividir } = await searchParams;
   const alreadyLinked = shared.links.some((l) => l.tx_id === dividir);
   const dividing = dividir && !alreadyLinked ? txs.find((t) => t.id === dividir && t.kind === "expense" && !isAdjustment(t)) : undefined;
-  const form = { group: id, members: people, me: me.id, favorite, today };
 
   const known = shared.editable;
-  // Other people's links are theirs alone, so whether anyone else recorded it is asked to the database.
-  const { data: recorded } = shared.editable && entries.length ? await supabase.rpc("shared_recorded_by_others", { p_group: id }) : { data: null };
-  const recordedByOthers = new Set<string>((recorded as string[] | null) ?? []);
 
   return (
     <>
@@ -156,98 +140,9 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
           <p className="mt-1 text-sm text-ink-3">Todavía no hay nada. Agrega el primero con «+ Anotar».</p>
         ) : (
           <ul className="mt-1 divide-y divide-line">
-            {entries.map((entry) => {
-              const parts = shares.filter((s) => s.entry_id === entry.id);
-              const settled = entry.kind === "settlement";
-              const payer = entry.paid_by === me.id;
-              const receiver = settled && parts[0]?.member_id === me.id;
-              const ownPart = parts.find((s) => s.member_id === me.id)?.amount ?? 0;
-              const tx = linkOf.get(entry.id);
-              // With someone who left, it stays as it was.
-              const frozen = goneIds.has(entry.paid_by) || parts.some((s) => goneIds.has(s.member_id));
-              const canDelete = !frozen && (entry.created_by === user.id || (entry.created_by === null && payer));
-              const link = shared.links.find((l) => l.entry_id === entry.id);
-              const editable: EditableEntry | null =
-                known && !frozen && (entry.created_by === user.id || payer)
-                  ? {
-                      id: entry.id,
-                      amount: entry.amount,
-                      description: entry.description,
-                      category: entry.category,
-                      occurred_on: entry.occurred_on,
-                      paidBy: entry.paid_by,
-                      shares: Object.fromEntries(parts.map((s) => [s.member_id, s.amount])),
-                      split: entry.split,
-                      currency: entry.currency,
-                      original: entry.original_amount ? Number(entry.original_amount) : null,
-                      rate: entry.rate ? Number(entry.rate) : null,
-                      account: link && link.created_tx !== false ? (txs.find((t) => t.id === link.tx_id)?.account_id ?? null) : null,
-                      ownMovement: link?.created_tx === false,
-                      othersRecorded: recordedByOthers.has(entry.id),
-                    }
-                  : null;
-              return (
-                <li key={entry.id} className="flex items-start gap-3 py-3">
-                  <span className={`badge shrink-0 ${settled ? "bg-brand/15" : "bg-debt/15"}`} aria-hidden="true">
-                    <Icon name={settled ? "payment" : txIconName({ kind: "expense", category: entry.category })} />
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="font-semibold break-words">
-                      {settled ? `${payer ? "Pagaste" : `${name.get(entry.paid_by)} pagó`} a ${receiver ? "ti" : name.get(parts[0]?.member_id)}` : entry.description}
-                    </p>
-                    <p className="text-xs text-ink-3">
-                      {formatDate(entry.occurred_on)}
-                      {!settled && ` · ${payer ? "pagaste tú" : `pagó ${name.get(entry.paid_by)}`}`}
-                    </p>
-                    {!settled && <p className="num text-xs text-ink-2">{ownPart ? `Tu parte ${formatCOP(ownPart)}` : "No te toca"}</p>}
-                    {!settled && (
-                      <details className="mt-1 text-xs">
-                        <summary className="cursor-pointer py-1 font-medium text-ink-3 hover:text-ink">Ver división</summary>
-                        <div className="rounded-xl bg-brand/6 px-2.5 py-2">
-                          {parseSplit(entry.split) && <p className="mb-1 text-ink-3">{splitTitle(parseSplit(entry.split)!.mode)}</p>}
-                          <dl className="grid grid-cols-[1fr_auto] gap-x-3 gap-y-1 text-ink-2">
-                            {parts.map((part) => (
-                              <div key={part.member_id} className="contents">
-                                <dt className="break-words">{part.member_id === me.id ? "Tú" : name.get(part.member_id)}</dt>
-                                <dd className="num font-medium text-ink">{formatCOP(part.amount)}</dd>
-                              </div>
-                            ))}
-                          </dl>
-                        </div>
-                      </details>
-                    )}
-                    {frozen && <p className="text-xs text-ink-3">Con alguien que ya no está: queda como fue.</p>}
-                    <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
-                      {(payer || receiver) && !tx && (
-                        <Modal label="Registrar en mi cuenta" title="Registrar en mi cuenta" buttonClass={SMALL}>
-                          <RecordForm entry={entry.id} accounts={settled ? money : payable} favorite={favorite} />
-                        </Modal>
-                      )}
-                      {editable && (
-                        <Modal label="Editar" title={settled ? "Editar pago" : "Editar gasto"} buttonClass={SMALL}>
-                          {settled ? (
-                            <SettlementForm {...form} accounts={money} entry={editable} transfer={{ from: entry.paid_by, to: parts[0]?.member_id, amount: entry.amount }} />
-                          ) : (
-                            <ExpenseForm {...form} accounts={payable} entry={editable} />
-                          )}
-                        </Modal>
-                      )}
-                      {canDelete && (
-                        <Modal label="Borrar" title="Borrar del grupo" buttonClass="text-xs font-medium text-ink-3 hover:text-debt">
-                          <DeleteEntryForm entry={entry.id} keepsMovement={Boolean(tx && shared.links.some((l) => l.tx_id === tx && l.created_tx === false))} />
-                        </Modal>
-                      )}
-                    </div>
-                  </div>
-                  <p className="display num shrink-0 text-right text-lg">
-                    {formatCOP(entry.amount)}
-                    {isCurrency(entry.currency) && entry.currency !== "COP" && entry.original_amount && (
-                      <span className="block font-sans text-xs font-medium text-ink-3">{formatForeign(Number(entry.original_amount), entry.currency)}</span>
-                    )}
-                  </p>
-                </li>
-              );
-            })}
+            {entries.map((entry) => (
+              <EntryRow key={entry.id} entry={entry} scope={scope} data={data} />
+            ))}
           </ul>
         )}
       </section>

@@ -1,6 +1,6 @@
 // The person's people: each one once, with what is pending with them across their accounts between
 // two and their groups. Pure, so it is tested.
-import { groupNets, memberOf, settleUp, type SharedData, type SharedGroup, type SharedMember } from "./shared.ts";
+import { groupNets, memberOf, settleUp, type SharedData, type SharedEntry, type SharedGroup, type SharedMember } from "./shared.ts";
 
 export interface PersonPlace {
   group: SharedGroup;
@@ -103,6 +103,8 @@ export interface PersonMove {
   on: string;
   /** What that movement left between the two: above zero, in one's favour. */
   net: number;
+  /** The entry itself, to edit or delete it from the person's page. */
+  entry: SharedEntry;
 }
 
 /** The movements between the person and one, newest first. One that a third paid leaves nothing between the two. */
@@ -115,7 +117,7 @@ export function movesWith(data: SharedData, me: string, person: Person): PersonM
         const ower = e.paid_by === mine ? member : mine;
         const share = data.shares.find((s) => s.entry_id === e.id && s.member_id === ower)?.amount;
         if (!share) return [];
-        return [{ id: `${e.id}-${member}`, group, kind: e.kind, description: e.description, on: e.occurred_on, net: e.paid_by === mine ? share : -share }];
+        return [{ id: `${e.id}-${member}`, group, kind: e.kind, description: e.description, on: e.occurred_on, net: e.paid_by === mine ? share : -share, entry: e }];
       });
     })
     .sort((a, b) => b.on.localeCompare(a.on));

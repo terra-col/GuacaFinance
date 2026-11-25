@@ -321,14 +321,14 @@ export function InviteForm({ member, groupName, removable, phone = "" }: { membe
   );
 }
 
-export function DeleteEntryForm({ entry, keepsMovement }: { entry: string; keepsMovement: boolean }) {
+export function DeleteEntryForm({ entry, keepsMovement, direct = false }: { entry: string; keepsMovement: boolean; direct?: boolean }) {
   const close = useCloseModal();
   const { pending, error, submit } = useSave(deleteSharedEntry, () => close());
   return (
     <form onSubmit={submit} className="flex flex-col gap-4">
       <input type="hidden" name="entry" value={entry} />
       <p className="text-sm text-ink-2">
-        Se borra para todo el grupo.{" "}
+        {direct ? "Se borra para los dos." : "Se borra para todo el grupo."}{" "}
         {keepsMovement ? "El movimiento que ya tenías se conserva como un gasto normal." : "Si se registró en una cuenta tuya, ese movimiento también se borra."}
       </p>
       <Problem error={error} />
