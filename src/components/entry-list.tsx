@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Icon, txIconName } from "@/components/icons";
 import { Modal } from "@/components/modal";
+import { EntrySwipe } from "@/components/entry-swipe";
 import { ExpenseForm } from "@/components/expense-form";
 import { DeleteEntryForm, RecordForm, SettlementForm, type EditableEntry } from "@/components/shared-forms";
 import type { loadData } from "@/lib/data";
@@ -87,7 +88,7 @@ export function EntryRow({ entry, scope, data, net, group }: { entry: SharedEntr
       : null;
 
   return (
-    <li className="flex items-start gap-3 py-3">
+    <EntrySwipe canEdit={Boolean(editable)} canDelete={canDelete}>
       <span className={`badge shrink-0 ${settled ? "bg-brand/15" : "bg-debt/15"}`} aria-hidden="true">
         <Icon name={settled ? "payment" : txIconName({ kind: "expense", category: entry.category })} />
       </span>
@@ -132,7 +133,7 @@ export function EntryRow({ entry, scope, data, net, group }: { entry: SharedEntr
             </Modal>
           )}
           {editable && (
-            <Modal label="Editar" title={settled ? "Editar pago" : "Editar gasto"} buttonClass={SMALL}>
+            <Modal label="Editar" action="edit" title={settled ? "Editar pago" : "Editar gasto"} buttonClass={SMALL}>
               {settled ? (
                 <SettlementForm {...form} accounts={money} entry={editable} transfer={{ from: entry.paid_by, to: parts[0]?.member_id, amount: entry.amount }} />
               ) : (
@@ -141,7 +142,7 @@ export function EntryRow({ entry, scope, data, net, group }: { entry: SharedEntr
             </Modal>
           )}
           {canDelete && (
-            <Modal label="Borrar" title={direct ? (settled ? "Borrar pago" : "Borrar gasto") : "Borrar del grupo"} buttonClass="text-xs font-medium text-ink-3 hover:text-debt">
+            <Modal label="Borrar" action="delete" title={direct ? (settled ? "Borrar pago" : "Borrar gasto") : "Borrar del grupo"} buttonClass="text-xs font-medium text-ink-3 hover:text-debt">
               <DeleteEntryForm entry={entry.id} direct={direct} keepsMovement={Boolean(tx && shared.links.some((l) => l.tx_id === tx && l.created_tx === false))} />
             </Modal>
           )}
@@ -164,6 +165,11 @@ export function EntryRow({ entry, scope, data, net, group }: { entry: SharedEntr
           </span>
         </p>
       )}
-    </li>
+    </EntrySwipe>
   );
+}
+
+/** For whoever does not know the swipe; only on touch screens. */
+export function SwipeHint() {
+  return <p className="mt-2 hidden text-xs text-ink-3 [@media(pointer:coarse)]:block">También puedes deslizar un gasto o pago a la izquierda para editarlo o borrarlo.</p>;
 }

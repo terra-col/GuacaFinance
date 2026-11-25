@@ -51,11 +51,14 @@ export function Modal({
   label,
   title,
   buttonClass = "btn h-12 gap-2 rounded-2xl px-5 text-base",
+  action,
   children,
 }: {
   label: React.ReactNode;
   title: string;
   buttonClass?: string;
+  /** Marks the button (data-action), so a swiped row's action can open this same modal. */
+  action?: string;
   children: React.ReactNode;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
@@ -76,6 +79,7 @@ export function Modal({
       <button
         type="button"
         className={buttonClass}
+        data-action={action}
         onClick={() => {
           setRound((r) => r + 1);
           setIsOpen(true);

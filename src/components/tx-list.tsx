@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { deleteTx } from "@/app/actions";
 import { formatCOP, formatDate, isAdjustment, isDebt, monthName, relativeDay, daysBetween, type Account, type Tx, type TxKind } from "@/lib/finance";
 import type { SharedMark } from "@/lib/shared";
@@ -10,6 +10,7 @@ import { formatForeign, isCurrency } from "@/lib/currency";
 import { Sheet } from "./modal";
 import { TxForm } from "./tx-form";
 import { SubmitButton } from "./submit-button";
+import { SwipeRow } from "./swipe-row";
 
 type Filter = TxKind | "all" | "adjustment";
 
@@ -37,7 +38,7 @@ const LOOK: Record<TxKind, { label: string; stripe: string; tint: string; sign: 
 
 const PAGE = 60;
 
-const ACTIONS_WIDTH = 152; // two 76 px buttons behind a swiped row
+
 
 /**
  * `showAdjustments`: «Todos» includes them (an account's own history, where they explain its
@@ -190,7 +191,9 @@ export function TxList({
                       open={swiped === tx.id}
                       onOpen={() => setSwiped(tx.id)}
                       onClose={() => setSwiped((id) => (id === tx.id ? null : id))}
-                      index={position++}
+                      className="rise"
+                      style={{ "--i": position++ } as React.CSSProperties}
+                      rowClassName="group flex items-center gap-3 py-3 pl-5 pr-2 hover:bg-brand/5 sm:pr-5"
                       actions={
                         <>
                           <button
@@ -311,82 +314,3 @@ export function TxList({
   );
 }
 
-/**
- * A list row that slides left under a finger to reveal its actions, like
- * Mail on iPhone. Vertical scrolling keeps working: the swipe only starts
- * once the finger moves more sideways than up or down.
- */
-function SwipeRow({
-  open,
-  onOpen,
-  onClose,
-  index,
-  actions,
-  children,
-}: {
-  open: boolean;
-  onOpen: () => void;
-  onClose: () => void;
-  index: number;
-  actions: React.ReactNode;
-  children: React.ReactNode;
-}) {
-  const [drag, setDrag] = useState<number | null>(null);
-  const start = useRef<{ x: number; y: number; base: number; axis: "x" | "y" | null } | null>(null);
-  const offset = drag ?? (open ? -ACTIONS_WIDTH : 0);
-
-  function down(e: React.PointerEvent) {
-    if (e.pointerType !== "touch") return;
-    start.current = { x: e.clientX, y: e.clientY, base: open ? -ACTIONS_WIDTH : 0, axis: null };
-  }
-  function move(e: React.PointerEvent) {
-    const s = start.current;
-    if (!s) return;
-    const dx = e.clientX - s.x;
-    const dy = e.clientY - s.y;
-    if (!s.axis) {
-      if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
-      s.axis = Math.abs(dx) > Math.abs(dy) ? "x" : "y";
-      if (s.axis === "x") (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-    }
-    if (s.axis !== "x") return;
-    // Rubber band past the actions, none to the right.
-    const raw = s.base + dx;
-    setDrag(raw < -ACTIONS_WIDTH ? -ACTIONS_WIDTH + (raw + ACTIONS_WIDTH) * 0.25 : Math.min(0, raw));
-  }
-  function up() {
-    const s = start.current;
-    start.current = null;
-    if (!s || s.axis !== "x" || drag === null) return setDrag(null);
-    if (drag < -ACTIONS_WIDTH / 2.5) onOpen();
-    else onClose();
-    setDrag(null);
-  }
-
-  const reveal = Math.min(1, -offset / 60);
-  return (
-    <li className="rise relative overflow-hidden" style={{ "--i": index } as React.CSSProperties}>
-      <div className="absolute inset-y-0 right-0 flex" style={{ width: ACTIONS_WIDTH, opacity: reveal }} aria-hidden={!open} inert={!open}>
-        {actions}
-      </div>
-      <div
-        className={`group relative flex touch-pan-y items-center gap-3 py-3 pl-5 pr-2 hover:bg-brand/5 sm:pr-5 ${offset < 0 ? "bg-surface shadow-lg" : ""} ${drag === null ? "transition-transform duration-300 ease-[cubic-bezier(0.2,0.9,0.3,1.2)]" : ""}`}
-        style={{ transform: `translateX(${offset}px)` }}
-        onPointerDown={down}
-        onPointerMove={move}
-        onPointerUp={up}
-        onPointerCancel={up}
-        onClickCapture={(e) => {
-          // A tap on a swiped row closes it instead of acting.
-          if (open) {
-            e.stopPropagation();
-            e.preventDefault();
-            onClose();
-          }
-        }}
-      >
-        {children}
-      </div>
-    </li>
-  );
-}

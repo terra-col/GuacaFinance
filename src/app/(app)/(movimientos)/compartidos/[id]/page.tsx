@@ -4,7 +4,7 @@ import { Modal } from "@/components/modal";
 import { GroupExit } from "@/components/group-exit";
 import { GroupPeople } from "@/components/group-people";
 import { ExpenseForm } from "@/components/expense-form";
-import { EntryRow, entryScope } from "@/components/entry-list";
+import { EntryRow, entryScope, SwipeHint } from "@/components/entry-list";
 import { RenameGroupForm, SettlementForm } from "@/components/shared-forms";
 import { loadData } from "@/lib/data";
 import { formatCOP, isAdjustment } from "@/lib/finance";
@@ -139,11 +139,14 @@ export default async function GroupPage({ params, searchParams }: { params: Prom
         {entries.length === 0 ? (
           <p className="mt-1 text-sm text-ink-3">Todavía no hay nada. Agrega el primero con «+ Anotar».</p>
         ) : (
-          <ul className="mt-1 divide-y divide-line">
-            {entries.map((entry) => (
-              <EntryRow key={entry.id} entry={entry} scope={scope} data={data} />
-            ))}
-          </ul>
+          <>
+            <ul className="mt-1 divide-y divide-line">
+              {entries.map((entry) => (
+                <EntryRow key={entry.id} entry={entry} scope={scope} data={data} />
+              ))}
+            </ul>
+            <SwipeHint />
+          </>
         )}
       </section>
 
