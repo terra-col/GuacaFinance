@@ -18,6 +18,7 @@ import { ScheduledList, type ScheduledRow } from "@/components/scheduled-list";
 import { goalChecklist } from "@/lib/goals";
 import { PaymentsCalendar } from "@/components/payments-calendar";
 import { PaymentsViews, type PaymentsView } from "@/components/payments-views";
+import { MonthArrow, MonthSlide } from "@/components/month-motion";
 import { calendarEntries, calendarTotals, calendarWeeks } from "@/lib/calendar";
 
 function Chevron({ dir }: { dir: "left" | "right" }) {
@@ -88,9 +89,9 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
     const canGoNext = next <= range[v][1];
     const arrow = (m: string, dir: "left" | "right", on: boolean) =>
       on ? (
-        <Link href={hrefFor(m, v)} className="liquid flex size-10 shrink-0 items-center justify-center rounded-full" aria-label={`Ver ${monthName(m)}`}>
+        <MonthArrow href={hrefFor(m, v)} dir={dir === "left" ? -1 : 1} className="liquid flex size-10 shrink-0 items-center justify-center rounded-full" label={`Ver ${monthName(m)}`}>
           <Chevron dir={dir} />
-        </Link>
+        </MonthArrow>
       ) : (
         <span className="liquid flex size-10 shrink-0 items-center justify-center rounded-full opacity-35" aria-hidden="true">
           <Chevron dir={dir} />
@@ -99,10 +100,12 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
     return (
       <div className="flex items-center justify-center gap-2 sm:gap-4">
         {arrow(prev, "left", canGoBack)}
-        <h1 className="display min-w-0 text-center text-2xl sm:text-3xl">
-          Pagos de {monthName(month)}
-          {month.slice(0, 4) !== current.slice(0, 4) ? ` ${month.slice(0, 4)}` : ""}
-        </h1>
+        <MonthSlide scope={`pagos-titulo-${v}`} month={month} swipe={false} className="min-w-0">
+          <h1 className="display text-center text-2xl sm:text-3xl">
+            Pagos de {monthName(month)}
+            {month.slice(0, 4) !== current.slice(0, 4) ? ` ${month.slice(0, 4)}` : ""}
+          </h1>
+        </MonthSlide>
         {arrow(next, "right", canGoNext)}
       </div>
     );
@@ -324,7 +327,20 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
     );
   }
 
-  const parts = (v: PaymentsView) => ({ top: monthRow(v), under: backLink(v), body: v === "lista" ? listBody() : calendarBody() });
+  // The month's content slides with it; on a phone a sideways swipe goes to the month beside it.
+  const swipeTo = (v: PaymentsView, by: 1 | -1) => {
+    const m = shiftMonth(month, by);
+    return m >= range[v][0] && m <= range[v][1] ? hrefFor(m, v) : null;
+  };
+  const parts = (v: PaymentsView) => ({
+    top: monthRow(v),
+    under: backLink(v),
+    body: (
+      <MonthSlide scope={`pagos-${v}`} month={month} prev={swipeTo(v, -1)} next={swipeTo(v, 1)} className="flex flex-col gap-6 sm:gap-8">
+        {v === "lista" ? listBody() : calendarBody()}
+      </MonthSlide>
+    ),
+  });
   const shown = (v: PaymentsView) => v === view || both;
 
   return (

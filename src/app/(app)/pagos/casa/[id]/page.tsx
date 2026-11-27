@@ -5,6 +5,7 @@ import { GroupPeople } from "@/components/group-people";
 import { EndHouseBillForm, HouseBillForm, HouseSettingsForm, MergeHouseBill, type HouseOption } from "@/components/house-forms";
 import { HouseReceiptRow } from "@/components/house-receipt";
 import { Modal } from "@/components/modal";
+import { MonthArrow, MonthSlide } from "@/components/month-motion";
 import { PaidGroup } from "@/components/paid-group";
 import { loadData } from "@/lib/data";
 import { accountForeign, currentBills, favoriteFirst, formatCOP, monthName, shiftMonth } from "@/lib/finance";
@@ -87,23 +88,27 @@ export default async function HousePage({ params, searchParams }: { params: Prom
 
       <section className="card" aria-labelledby="house-month">
         <div className="flex items-center justify-between gap-2">
-          <Link href={`/pagos/casa/${id}?mes=${shiftMonth(month, -1)}`} className={ARROW} aria-label="Mes anterior">
+          <MonthArrow href={`/pagos/casa/${id}?mes=${shiftMonth(month, -1)}`} dir={-1} className={ARROW} label="Mes anterior">
             ‹
-          </Link>
-          <h2 id="house-month" className="display text-2xl first-letter:uppercase">
-            {monthName(month)}
-            {month.slice(0, 4) !== current.slice(0, 4) ? ` ${month.slice(0, 4)}` : ""}
-          </h2>
+          </MonthArrow>
+          <MonthSlide scope={`casa-titulo-${id}`} month={month} swipe={false}>
+            <h2 id="house-month" className="display text-2xl first-letter:uppercase">
+              {monthName(month)}
+              {month.slice(0, 4) !== current.slice(0, 4) ? ` ${month.slice(0, 4)}` : ""}
+            </h2>
+          </MonthSlide>
           {month < last ? (
-            <Link href={`/pagos/casa/${id}?mes=${shiftMonth(month, 1)}`} className={ARROW} aria-label="Mes siguiente">
+            <MonthArrow href={`/pagos/casa/${id}?mes=${shiftMonth(month, 1)}`} dir={1} className={ARROW} label="Mes siguiente">
               ›
-            </Link>
+            </MonthArrow>
           ) : (
             <span className={`${ARROW} opacity-35`} aria-hidden="true">
               ›
             </span>
           )}
         </div>
+        {/* The month's receipts slide with it; on a phone a sideways swipe goes to the month beside it. */}
+        <MonthSlide scope={`casa-${id}`} month={month} prev={`/pagos/casa/${id}?mes=${shiftMonth(month, -1)}`} next={month < last ? `/pagos/casa/${id}?mes=${shiftMonth(month, 1)}` : null}>
         {receipts.length === 0 ? (
           <p className="mt-3 text-sm text-ink-2">{active.length ? "No hay recibos en ese mes." : "Todavía no hay recibos. Agrega el primero con «+ Recibo»."}</p>
         ) : (
@@ -127,6 +132,7 @@ export default async function HousePage({ params, searchParams }: { params: Prom
             </PaidGroup>
           </>
         )}
+        </MonthSlide>
       </section>
 
       {active.length > 0 && (
