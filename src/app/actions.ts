@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { passwordProblem } from "@/lib/auth-links";
-import { ADJUSTMENT, allowedTxKinds, balanceAt, isDebt, lastCheckpoint, paidMonth, parsePesos, todayInBogota, type Account, type AccountKind, type Tx, type TxKind } from "@/lib/finance";
+import { ADJUSTMENT, allowedTxKinds, balanceAt, isDebt, lastCheckpoint, monthName, PLAN_AHEAD, paidMonth, parsePesos, shiftMonth, todayInBogota, type Account, type AccountKind, type Tx, type TxKind } from "@/lib/finance";
 import { firstMonthFor } from "@/lib/installments";
 import { allPages } from "@/lib/paging";
 import { normalizePhone } from "@/lib/phone";
@@ -968,6 +968,38 @@ export async function skipItem(_prev: FormState, form: FormData): Promise<FormSt
   if (error) return { error: missingTable(error.message, "0007") ?? `No se pudo omitir: ${error.message}` };
   revalidatePath("/", "layout");
   return { message: "Omitido este mes." };
+}
+
+/**
+ * «Este mes va a ser tanto»: the card's statement, a receipt or a variable income, for one month
+ * only. The usual value of the bill, card or income is not touched.
+ */
+export async function setPlanned(_prev: FormState, form: FormData): Promise<FormState> {
+  const supabase = await signedIn();
+  const item_type = text(form, "type");
+  const item_id = text(form, "id");
+  const month = text(form, "month");
+  if (!["bill", "debt", "income"].includes(item_type) || !UUID.test(item_id) || !MONTH.test(month)) return { error: "No se pudo guardar el valor." };
+  const current = todayInBogota().slice(0, 7);
+  if (month < current || month > shiftMonth(current, PLAN_AHEAD)) return { error: "Elige este mes o uno de los próximos 12." };
+  const amount = parsePesos(text(form, "amount"));
+  if (!amount) return { error: "Escribe un valor mayor que cero." };
+  const { error } = await supabase
+    .from("planned_amounts")
+    .upsert({ item_type, item_id, month, amount, updated_at: new Date().toISOString() }, { onConflict: "user_id,item_type,item_id,month" });
+  if (error) return { error: missingTable(error.message, "0027") ?? `No se pudo guardar el valor: ${error.message}` };
+  revalidatePath("/", "layout");
+  return { message: `Guardado para ${monthName(month)}.` };
+}
+
+export async function clearPlanned(form: FormData): Promise<FormState> {
+  const supabase = await signedIn();
+  const id = text(form, "id");
+  if (!UUID.test(id)) return { error: "No se pudo quitar el valor." };
+  const { error } = await supabase.from("planned_amounts").delete().eq("id", id);
+  if (error) return { error: `No se pudo quitar el valor: ${error.message}` };
+  revalidatePath("/", "layout");
+  return {};
 }
 
 export async function unskipItem(form: FormData) {

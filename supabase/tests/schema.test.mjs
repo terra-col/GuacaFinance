@@ -331,3 +331,32 @@ test("income periodicity: monthly by default, never mixed with some months or on
   await assert.rejects(as(ANA, "update incomes set months = '{6}' where id = $1", [salary.id]), /check constraint/);
   await as(ANA, "insert into date_skips (item_type, item_id, for_date) values ('income', $1, '2026-11-30')", [salary.id]);
 });
+
+test("planned_amounts: a month's value, only on one's own bills, cards and incomes", async () => {
+  const sql = "insert into planned_amounts (item_type, item_id, month, amount) values ($1, $2, $3, $4) returning id";
+  const [statement] = await as(ANA, sql, ["debt", visa.id, "2026-12", 1350000]);
+  await as(ANA, sql, ["bill", internet.id, "2026-12", 95000]);
+  const [bonus] = await as(ANA, "insert into incomes (name, day) values ('Comisiones', 30) returning id");
+  await as(ANA, sql, ["income", bonus.id, "2026-12", 800000]);
+  // One per month: the app replaces it with an upsert.
+  await assert.rejects(as(ANA, sql, ["debt", visa.id, "2026-12", 1]), /duplicate key/);
+  await as(ANA, "insert into planned_amounts (item_type, item_id, month, amount) values ('debt', $1, '2026-12', 1400000) on conflict (user_id, item_type, item_id, month) do update set amount = excluded.amount", [visa.id]);
+  assert.equal(Number((await as(ANA, "select amount from planned_amounts where id = $1", [statement.id]))[0].amount), 1400000);
+  await assert.rejects(as(ANA, sql, ["debt", visa.id, "2026-13", 1]), /check constraint/);
+  await assert.rejects(as(ANA, sql, ["bill", internet.id, "2027-01", 0]), /check constraint/);
+  // Someone else's bill or card, a savings account as a «debt», a bill passed as an income: refused.
+  await assert.rejects(as(ANA, sql, ["bill", betoBill.id, "2026-12", 1000]), /row-level security/);
+  await assert.rejects(as(BETO, sql, ["debt", visa.id, "2026-12", 1000]), /row-level security/);
+  const [savings] = await as(ANA, "insert into accounts (kind, name) values ('savings', 'Ahorros') returning id");
+  await assert.rejects(as(ANA, sql, ["debt", savings.id, "2026-12", 1000]), /row-level security/);
+  await assert.rejects(as(ANA, sql, ["income", internet.id, "2026-12", 1000]), /row-level security/);
+  await assert.rejects(as(ANA, "insert into planned_amounts (user_id, item_type, item_id, month, amount) values ($1, 'bill', $2, '2026-12', 1)", [BETO, betoBill.id]), /row-level security/);
+  // Nobody else reads or changes them.
+  assert.equal((await as(BETO, "select * from planned_amounts")).length, 0);
+  assert.equal((await as(BETO, "update planned_amounts set amount = 1 returning id")).length, 0);
+  assert.equal((await as(BETO, "delete from planned_amounts returning id")).length, 0);
+  await assert.rejects(as(null, "select * from planned_amounts"), /permission denied/);
+  // Deleting the income takes its values with it.
+  await as(ANA, "delete from incomes where id = $1", [bonus.id]);
+  assert.deepEqual((await as(ANA, "select item_type from planned_amounts order by item_type")).map((r) => r.item_type), ["bill", "debt"]);
+});

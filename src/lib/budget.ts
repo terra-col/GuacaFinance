@@ -1,6 +1,6 @@
 // Budgets per category, scheduled incomes and the month's free money. Pure, tested under `node --test`.
 
-import { daysInMonth, dueDates, findSkip, monthEnd, paidMonth, shiftMonth, type ChecklistItem, type Skip, type Tx } from "./finance.ts";
+import { daysInMonth, dueDates, findPlanned, findSkip, monthEnd, paidMonth, shiftMonth, type ChecklistItem, type Planned, type Skip, type Tx } from "./finance.ts";
 import { assign, datesIn, nextDates, type Every, type Schedule } from "./recurrence.ts";
 
 export interface Budget {
@@ -100,6 +100,12 @@ export interface IncomeItem {
   /** Expected date passed and nothing recorded. */
   late: boolean;
   skipped: Skip | null;
+  /** The value set for this month (monthly incomes only): `expected` already is it. */
+  planned?: Planned | null;
+  /** The usual value, without this month's. */
+  usual?: number | null;
+  /** Monthly incomes: the months it arrives in, to offer only those for a month's value. */
+  arrives?: ChecklistItem["arrives"];
   accountId: string | null;
   /** A one-time extra rather than a recurring income. */
   once: boolean;
@@ -110,7 +116,7 @@ export interface IncomeItem {
 }
 
 /** The month's scheduled incomes, ticked when a movement with that income_id lands in the month. */
-export function incomeChecklist(incomes: Income[], txs: Tx[], month: string, today: string, skips: Skip[] = []): IncomeItem[] {
+export function incomeChecklist(incomes: Income[], txs: Tx[], month: string, today: string, skips: Skip[] = [], planned: Planned[] = []): IncomeItem[] {
   const byDate: IncomeItem[] = incomes
     .filter((i) => incomeSchedule(i).every !== "monthly")
     .flatMap((i) =>
@@ -149,12 +155,16 @@ export function incomeChecklist(incomes: Income[], txs: Tx[], month: string, tod
       const got = txs.filter((t) => t.income_id === i.id && paidMonth(t) === month);
       const due = dueDates(i.day, `${month}-01`, 1)[0];
       const skipped = got.length === 0 ? findSkip(skips, "income", i.id, month) : null;
+      const plan = findPlanned(planned, "income", i.id, month);
       return {
         type: "income" as const,
         id: i.id,
         name: i.name,
         due,
-        expected: i.amount,
+        expected: plan?.amount ?? i.amount,
+        planned: plan,
+        usual: i.amount,
+        arrives: { months: i.months, once: i.once_month ?? null },
         day: i.day,
         received: got.length > 0,
         receivedAmount: got.reduce((sum, t) => sum + t.amount, 0),
@@ -232,6 +242,9 @@ export function incomeRow(i: IncomeItem): ChecklistItem {
     paidFrom: i.receivedIn ?? null,
     overdue: i.late,
     skipped: i.skipped,
+    planned: i.planned,
+    usual: i.usual,
+    arrives: i.arrives,
     quick: i.expected && i.accountId ? { amount: i.expected, accountId: i.accountId } : null,
   };
 }

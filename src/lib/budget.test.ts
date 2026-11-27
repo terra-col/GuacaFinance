@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { budgetViews, incomeChecklist, monthPlan, type Income } from "./budget.ts";
-import { monthlyChecklist, type Account, type Skip, type Tx } from "./finance.ts";
+import { budgetViews, incomeChecklist, incomeRow, monthPlan, type Income } from "./budget.ts";
+import { monthlyChecklist, planMonths, type Account, type Bill, type Planned, type Skip, type Tx } from "./finance.ts";
 
 const tx = (over: Partial<Tx>): Tx => ({
   id: crypto.randomUUID(),
@@ -152,4 +152,54 @@ test("paid for next month: counts in the month it was marked for, not in the mon
   const salaryEarly = tx({ kind: "income", amount: 7_500_000, income_id: "sal", occurred_on: "2026-11-30", for_month: "2026-12" });
   assert.equal(incomeChecklist([salary], [salaryEarly], "2026-11", "2026-11-30")[0].received, false);
   assert.equal(incomeChecklist([salary], [salaryEarly], "2026-12", "2026-11-30")[0].received, true);
+});
+
+test("a month's value: the statement counts that month only, and is what one tap pays", () => {
+  const card: Account = {
+    id: "card", kind: "credit_card", name: "Visa", institution: null, opening_balance: 3_000_000,
+    opening_date: "2026-01-01", credit_limit: 6_000_000, annual_rate: 0.3, monthly_payment: 200_000,
+    statement_day: null, due_day: 5, wallet_card_name: null,
+  };
+  const gas: Bill = { id: "gas", name: "Gas", amount: null, due_day: 12, category: "Recibos", created_at: "2026-01-01T12:00:00Z" };
+  const planned: Planned[] = [
+    { id: "p1", item_type: "debt", item_id: "card", month: "2026-12", amount: 1_350_000 },
+    { id: "p2", item_type: "bill", item_id: "gas", month: "2026-12", amount: 48_000 },
+    { id: "p3", item_type: "income", item_id: "sal", month: "2026-12", amount: 8_100_000 },
+  ];
+  const dec = monthlyChecklist([card], [gas], [], "2026-12", "2026-11-26", [], planned);
+  const decCard = dec.find((i) => i.id === "card")!;
+  const decGas = dec.find((i) => i.id === "gas")!;
+  // Above the usual instalment: the statement says so.
+  assert.deepEqual([decCard.expected, decCard.usual, decCard.planned?.id, decCard.quick?.amount], [1_350_000, 200_000, "p1", 1_350_000]);
+  assert.deepEqual([decGas.expected, decGas.usual, decGas.quick?.amount], [48_000, null, 48_000]);
+
+  // November and January keep the usual values.
+  const nov = monthlyChecklist([card], [gas], [], "2026-11", "2026-11-26", [], planned);
+  assert.deepEqual(nov.map((i) => [i.id, i.expected, i.planned]), [["card", 200_000, null], ["gas", null, null]]);
+
+  const incomes = incomeChecklist([salary], [], "2026-12", "2026-11-26", [], planned);
+  assert.deepEqual([incomes[0].expected, incomes[0].usual], [8_100_000, 7_500_000]);
+  assert.equal(incomeRow(incomes[0]).quick?.amount, 8_100_000);
+
+  // The month's plan now knows the gas and uses the statement and the salary of December.
+  const plan = monthPlan(incomes, dec, []);
+  assert.deepEqual([plan.income, plan.obligations, plan.unknownObligations, plan.free], [8_100_000, 1_398_000, 0, 6_702_000]);
+  const before = monthPlan(incomeChecklist([salary], [], "2026-12", "2026-11-26"), monthlyChecklist([card], [gas], [], "2026-12", "2026-11-26"), []);
+  assert.deepEqual([before.obligations, before.unknownObligations], [200_000, 1]);
+
+  // Once paid, what was paid counts, not the value set.
+  const paid = monthlyChecklist([card], [], [tx({ kind: "payment", account_id: "card", amount: 1_300_000, occurred_on: "2026-12-04" })], "2026-12", "2026-12-04", [], planned);
+  assert.equal(monthPlan([], paid, []).obligations, 1_300_000);
+});
+
+test("a month's value: which months can be chosen", () => {
+  const months = planMonths({ type: "bill" }, "2026-11-26");
+  assert.equal(months.length, 13);
+  assert.deepEqual([months[0], months[1], months[12]], ["2026-11", "2026-12", "2027-11"]);
+  // An income only in the months it arrives; a one-time extra only in its month.
+  assert.deepEqual(planMonths({ type: "income", arrives: { months: [6, 12], once: null } }, "2026-11-26"), ["2026-12", "2027-06"]);
+  assert.deepEqual(planMonths({ type: "income", arrives: { months: null, once: "2027-01" } }, "2026-11-26"), ["2027-01"]);
+  // Not for what has several dates a month, nor for goals.
+  assert.deepEqual(planMonths({ type: "bill", every: "biweekly", forDate: "2026-11-27" }, "2026-11-26"), []);
+  assert.deepEqual(planMonths({ type: "goal" }, "2026-11-26"), []);
 });

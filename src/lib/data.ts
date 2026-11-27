@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { houseChecklist } from "./house";
 import { loadHouse } from "./house-data";
-import { knownCategories, shiftMonth, todayInBogota, type Account, type Bill, type Skip, type Tx } from "./finance";
+import { knownCategories, shiftMonth, todayInBogota, type Account, type Bill, type Planned, type Skip, type Tx } from "./finance";
 import type { Budget, Income } from "./budget";
 import type { Goal, GoalDeposit } from "./goals";
 import type { CardPurchase } from "./installments";
@@ -86,6 +86,8 @@ export async function loadData() {
     loadShared(supabase, who.then(({ data }) => data.user?.id ?? "")),
     loadHouse(supabase),
     allPages<Skip>((from, to) => supabase.from("date_skips").select("*").order("for_date").order("id").range(from, to)),
+    // A month's value (migration 0027): a few a month at most, so all of them.
+    supabase.from("planned_amounts").select("id, item_type, item_id, month, amount").order("month"),
   ]);
   // Read below; meanwhile an early failure is not an unhandled one (and without a session it does not matter).
   reads.catch(() => {});
@@ -93,7 +95,7 @@ export async function loadData() {
     data: { user },
   } = await who;
   if (!user) redirect("/login");
-  const [accountsRead, txsRead, bills, inbox, goals, deposits, budgets, skips, incomes, purchases, sharing, house, dateSkips] = await reads;
+  const [accountsRead, txsRead, bills, inbox, goals, deposits, budgets, skips, incomes, purchases, sharing, house, dateSkips, planned] = await reads;
   if (accountsRead.error) throw new Error(`No se pudieron leer las cuentas: ${accountsRead.error.message}`);
   if (txsRead.error) throw new Error(`No se pudieron leer los movimientos: ${txsRead.error.message}`);
   const accounts = accountsRead.data;
@@ -128,6 +130,8 @@ export async function loadData() {
     // By month (monthly) and by date (the rest; none before migration 0017).
     skips: [...(planMissing ? [] : (skips.data as Skip[])), ...(dateSkips.error ? [] : dateSkips.rows.map((s) => ({ ...s, month: s.for_date!.slice(0, 7) })))],
     incomes: planMissing ? [] : (incomes.data as Income[]),
+    planned: planned.error ? [] : (planned.data as Planned[]),
+    plannedReady: !planned.error,
     planReady: !planMissing,
     purchases: purchasesReady ? (purchases.data as CardPurchase[]) : [],
     purchasesReady,

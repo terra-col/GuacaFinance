@@ -20,6 +20,7 @@ import {
   type Account,
   type Bill,
   type ChecklistItem,
+  type Planned,
   type Skip,
   type Tx,
   monthlyChecklist,
@@ -38,6 +39,7 @@ interface Snapshot {
   incomes?: Income[];
   budgets?: Budget[];
   skips?: Skip[];
+  planned?: Planned[];
   purchases?: CardPurchase[];
   /** What counts as income and spending (see flowTxs); the movements when there is nothing shared. */
   flows?: Tx[];
@@ -53,7 +55,7 @@ const month = (today: string, n: number | null) => (n === null ? "nunca con los 
 
 const MONTH_SHORT = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
 
-export function advisorContext({ accounts, txs, bills, goals, deposits, incomes = [], budgets = [], skips = [], purchases = [], flows = txs, position, houseNow = [], houseNext = [], today }: Snapshot): string {
+export function advisorContext({ accounts, txs, bills, goals, deposits, incomes = [], budgets = [], skips = [], planned = [], purchases = [], flows = txs, position, houseNow = [], houseNext = [], today }: Snapshot): string {
   const lines: string[] = [];
   const t = totals(accounts, txs);
   lines.push(`Fecha de hoy: ${today} (Colombia). Montos en pesos colombianos.`);
@@ -149,7 +151,7 @@ export function advisorContext({ accounts, txs, bills, goals, deposits, incomes 
     for (const k of monthSkips) lines.push(`- ${names[k.item_id] ?? "ítem"}${k.note ? `: ${k.note}` : ""}`);
   }
   if (incomes.length) {
-    const plan = monthPlan(incomeChecklist(incomes, txs, current, today, skips), [...monthlyChecklist(accounts, bills, txs, current, today, skips), ...houseNow, ...goalChecklist(goals, deposits, current, today, skips)], budgets);
+    const plan = monthPlan(incomeChecklist(incomes, txs, current, today, skips, planned), [...monthlyChecklist(accounts, bills, txs, current, today, skips, planned), ...houseNow, ...goalChecklist(goals, deposits, current, today, skips)], budgets);
     lines.push(
       `\nReparto del mes (calculado por la app): ingresos ${formatCOP(plan.income)} − obligaciones ${formatCOP(plan.obligations)}${plan.unknownObligations ? ` (+${plan.unknownObligations} de valor variable)` : ""} − presupuestos ${formatCOP(plan.budgets)} = ${plan.free >= 0 ? "libre" : "faltante"} ${formatCOP(Math.abs(plan.free))}.`,
     );
@@ -183,7 +185,7 @@ export function advisorContext({ accounts, txs, bills, goals, deposits, incomes 
     }
   }
 
-  const alerts = advise(accounts, txs, today, bills, flows, skips, [...houseNow, ...houseNext]);
+  const alerts = advise(accounts, txs, today, bills, flows, skips, [...houseNow, ...houseNext], planned);
   if (alerts.length) {
     lines.push("\n## Alertas de la app");
     for (const a of alerts) lines.push(`- ${a.title}. ${a.detail}`);

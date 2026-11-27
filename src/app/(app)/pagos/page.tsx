@@ -31,7 +31,7 @@ function Chevron({ dir }: { dir: "left" | "right" }) {
 const MONTH = /^\d{4}-(0[1-9]|1[0-2])$/;
 
 export default async function PaymentsPage({ searchParams }: { searchParams: Promise<{ mes?: string; vista?: string }> }) {
-  const { accounts, txs, bills, incomes, budgets, skips, planReady, goals, deposits, shared, house, user, today } = await loadData();
+  const { accounts, txs, bills, incomes, budgets, skips, planned, plannedReady, planReady, goals, deposits, shared, house, user, today } = await loadData();
   const current = today.slice(0, 7);
   const { mes: asked, vista } = await searchParams;
   const view: PaymentsView = vista === "calendario" ? "calendario" : "lista";
@@ -55,7 +55,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
 
   // Bills, card and loan payments, the monthly saving of goals with a plan, and what of the houses is one's own.
   const items = [
-    ...monthlyChecklist(accounts, bills, txs, month, today, skips),
+    ...monthlyChecklist(accounts, bills, txs, month, today, skips, planned),
     ...houseChecklist(house, shared, user.id, month, today),
     ...goalChecklist(goals, deposits, month, today, skips),
   ].sort(byDue);
@@ -73,7 +73,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
   const ownBills = currentBills(bills);
   const debts = accounts.filter((a) => a.kind === "credit_card" || a.kind === "loan").map(({ id, name, monthly_payment }) => ({ id, name, monthly_payment }));
   const addPayment = house.ready ? <AddPayment houses={houses} setup={setup} ownBills={ownBills} debts={debts} /> : <BillForm inModal debts={debts} />;
-  const incomeItems = incomeChecklist(incomes, txs, month, today, skips);
+  const incomeItems = incomeChecklist(incomes, txs, month, today, skips, planned);
   // Where a payment can come from: cards and savings for a bill, savings and cash for the rest.
   const spendable = favoriteFirst(accounts.filter((a) => a.kind !== "loan")).map(({ id, name }) => ({ id, name }));
   const savings = favoriteFirst(accounts.filter((a) => a.kind === "savings" || a.kind === "cash")).map(({ id, name }) => ({ id, name }));
@@ -226,17 +226,17 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
                 </p>
                 <ul className="mt-2 divide-y divide-line">
                   {incomeRows.filter((r) => !r.paid && !laterIncome.has(rowKey(r))).map((row) => (
-                    <ChecklistRow key={rowKey(row)} item={row} month={month} today={today} editable={editable} accounts={savings} />
+                    <ChecklistRow key={rowKey(row)} item={row} month={month} today={today} editable={editable} canPlan={plannedReady} accounts={savings} />
                   ))}
                 </ul>
                 <PaidGroup id="ingresos-despues" label="Más adelante este mes" count={laterIncome.size}>
                   {incomeRows.filter((r) => laterIncome.has(rowKey(r))).map((row) => (
-                    <ChecklistRow key={rowKey(row)} item={row} month={month} today={today} editable={editable} accounts={savings} />
+                    <ChecklistRow key={rowKey(row)} item={row} month={month} today={today} editable={editable} canPlan={plannedReady} accounts={savings} />
                   ))}
                 </PaidGroup>
                 <PaidGroup id="ingresos" label="Ya recibidos" count={incomeRows.filter((r) => r.paid).length}>
                   {incomeRows.filter((r) => r.paid).map((row) => (
-                    <ChecklistRow key={rowKey(row)} item={row} month={month} today={today} editable={editable} accounts={savings} />
+                    <ChecklistRow key={rowKey(row)} item={row} month={month} today={today} editable={editable} canPlan={plannedReady} accounts={savings} />
                   ))}
                 </PaidGroup>
               </>
@@ -290,17 +290,17 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
             )}
             <ul className="mt-3 divide-y divide-line">
               {sorted.filter((i) => !i.paid && !later.has(rowKey(i))).map((item) => (
-                <ChecklistRow key={rowKey(item)} item={item} month={month} today={today} editable={editable} accounts={(item.type === "bill" && !item.paysDebt) || item.type === "house" ? spendable : savings} />
+                <ChecklistRow key={rowKey(item)} item={item} month={month} today={today} editable={editable} canPlan={plannedReady} accounts={(item.type === "bill" && !item.paysDebt) || item.type === "house" ? spendable : savings} />
               ))}
             </ul>
             <PaidGroup id="pagos-despues" label="Más adelante este mes" count={later.size}>
               {sorted.filter((i) => later.has(rowKey(i))).map((item) => (
-                <ChecklistRow key={rowKey(item)} item={item} month={month} today={today} editable={editable} accounts={(item.type === "bill" && !item.paysDebt) || item.type === "house" ? spendable : savings} />
+                <ChecklistRow key={rowKey(item)} item={item} month={month} today={today} editable={editable} canPlan={plannedReady} accounts={(item.type === "bill" && !item.paysDebt) || item.type === "house" ? spendable : savings} />
               ))}
             </PaidGroup>
             <PaidGroup id="pagos" label="Ya pagados" count={sorted.filter((i) => i.paid).length}>
               {sorted.filter((i) => i.paid).map((item) => (
-                <ChecklistRow key={rowKey(item)} item={item} month={month} today={today} editable={editable} accounts={(item.type === "bill" && !item.paysDebt) || item.type === "house" ? spendable : savings} />
+                <ChecklistRow key={rowKey(item)} item={item} month={month} today={today} editable={editable} canPlan={plannedReady} accounts={(item.type === "bill" && !item.paysDebt) || item.type === "house" ? spendable : savings} />
               ))}
             </PaidGroup>
           </section>

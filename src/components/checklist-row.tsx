@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { useEffect, useOptimistic, useState, useTransition } from "react";
-import { deleteBill, deleteIncome, markPaid, skipItem, unmarkPaid, unskipItem, updatePaid, updateRecurring } from "@/app/actions";
-import { daysBetween, formatCOP, formatDate, relativeDay, type ChecklistItem } from "@/lib/finance";
+import { clearPlanned, deleteBill, deleteIncome, markPaid, setPlanned, skipItem, unmarkPaid, unskipItem, updatePaid, updateRecurring } from "@/app/actions";
+import { daysBetween, formatCOP, formatDate, monthName, planMonths, relativeDay, type ChecklistItem } from "@/lib/finance";
 import { everyShort } from "@/lib/recurrence";
 import { DateField } from "./date-field";
 import { useDebts } from "./bill-forms";
@@ -20,6 +20,8 @@ interface Props {
   editable: boolean;
   /** Accounts the payment can come from: cards and savings for a bill, savings for a debt. */
   accounts: { id: string; name: string }[];
+  /** A month's value can be set (migration 0027 ran). */
+  canPlan?: boolean;
 }
 
 const CONFETTI = ["var(--savings)", "var(--brand)", "var(--debt-2)", "var(--savings-2)", "var(--brand-2)", "var(--warn)"];
@@ -47,10 +49,10 @@ export function ChecklistRow(props: Props) {
  * a few seconds to undo. Unticking an older payment asks first, because it
  * deletes the recorded movement.
  */
-function OwnRow({ item, month, today, editable, accounts }: Props) {
+function OwnRow({ item, month, today, editable, accounts, canPlan = false }: Props) {
   const [paid, setOptimisticPaid] = useOptimistic(item.paid);
   const [pending, startTransition] = useTransition();
-  const [panel, setPanel] = useState<"none" | "form" | "edit" | "skip" | "unskip" | "delete" | "recurring">("none");
+  const [panel, setPanel] = useState<"none" | "form" | "edit" | "skip" | "unskip" | "delete" | "recurring" | "plan">("none");
   const income = item.type === "income";
   // A card's or loan's instalment can come from a source that is not recorded, like a debt.
   const otherSource = item.type === "debt" || Boolean(item.paysDebt);
@@ -71,6 +73,13 @@ function OwnRow({ item, month, today, editable, accounts }: Props) {
   const [celebrate, setCelebrate] = useState(false);
   const [undoable, setUndoable] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // «Este mes va a ser tanto»: the months it can be set for, and the one chosen.
+  const months = canPlan ? planMonths(item, today) : [];
+  const plannable = months.length > 0;
+  // Still to pay: this row's month. Already paid: the next one it falls in.
+  const firstMonth = (item.paid ? months.find((m) => m > month) : months.includes(month) ? month : months.find((m) => m > month)) ?? months[0];
+  const [planMonth, setPlanMonth] = useState(firstMonth);
+  const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
     if (!celebrate) return;
@@ -168,6 +177,45 @@ function OwnRow({ item, month, today, editable, accounts }: Props) {
       setPanel("none");
     });
   }
+
+  function openPlan() {
+    setError(null);
+    setNotice(null);
+    setPlanMonth(firstMonth);
+    setPanel("plan");
+  }
+
+  function plan(form: FormData) {
+    setError(null);
+    startTransition(async () => {
+      const result = await setPlanned({}, form);
+      if (result.error) return setError(result.error);
+      setPanel("none");
+      // Another month's: nothing changes in this row, so say where it went.
+      if (form.get("month") !== month) setNotice(result.message ?? null);
+    });
+  }
+
+  function unplan() {
+    setError(null);
+    startTransition(async () => {
+      const form = new FormData();
+      form.set("id", item.planned!.id);
+      const result = await clearPlanned(form);
+      if (result.error) return setError(result.error);
+      setPanel("none");
+    });
+  }
+
+  const monthTitle = (m: string) => {
+    const name = monthName(m);
+    return `${name[0].toUpperCase()}${name.slice(1)}${m.slice(0, 4) !== today.slice(0, 4) ? ` ${m.slice(0, 4)}` : ""}`;
+  };
+  const planButton = plannable && (
+    <button type="button" className="text-sm font-medium text-brand" onClick={openPlan}>
+      Valor de un mes
+    </button>
+  );
 
   function remove() {
     setError(null);
@@ -294,6 +342,7 @@ function OwnRow({ item, month, today, editable, accounts }: Props) {
             {item.overdue && !paid && <span className="pill pill-urgent mr-1.5">{income ? "Atrasado" : "Vencido"}</span>}
             {status}
             {item.every && <span className="text-ink-3"> · {everyShort(item.every)}</span>}
+            {item.planned && !paid && !skipped && <span className="text-ink-3"> · valor de {monthName(month)}</span>}
           </p>
         </button>
 
@@ -307,10 +356,18 @@ function OwnRow({ item, month, today, editable, accounts }: Props) {
               Deshacer
             </button>
           )}
-          {editable && !paid && !skipped && (
-            <button type="button" className="text-xs font-medium text-ink-3 hover:text-ink" onClick={() => setPanel(panel === "form" ? "none" : "form")} aria-expanded={panel === "form"}>
-              Opciones
+          {editable && !paid && !skipped && plannable && !item.expected ? (
+            <button type="button" className="text-xs font-semibold text-brand" onClick={() => (panel === "plan" ? setPanel("none") : openPlan())} aria-expanded={panel === "plan"}>
+              Poner valor
             </button>
+          ) : (
+            editable &&
+            !paid &&
+            !skipped && (
+              <button type="button" className="text-xs font-medium text-ink-3 hover:text-ink" onClick={() => setPanel(panel === "form" ? "none" : "form")} aria-expanded={panel === "form"}>
+                Opciones
+              </button>
+            )
           )}
           {editable && paid && !undoable && (
             <button type="button" className="text-xs font-medium text-ink-3 hover:text-ink" onClick={() => setPanel(panel === "edit" ? "none" : "edit")} aria-expanded={panel === "edit"}>
@@ -354,15 +411,20 @@ function OwnRow({ item, month, today, editable, accounts }: Props) {
                 <DateField name="occurred_on" defaultValue={today} min={earliest} max={today} required />
               </label>
               <div className="flex flex-wrap items-center gap-2 sm:col-span-4 sm:justify-end">
-                {editElsewhere && <span className="mr-auto">{editElsewhere}</span>}
-                {removable && (
+                {(editElsewhere || removable || planButton) && (
                   <span className="mr-auto flex flex-wrap gap-x-4 gap-y-1">
-                    <button type="button" className="text-sm font-medium text-brand" onClick={() => setPanel("recurring")}>
-                      Editar {income ? "ingreso" : "pago fijo"}
-                    </button>
-                    <button type="button" className="text-sm font-medium text-ink-3 hover:text-ink" onClick={() => setPanel("delete")}>
-                      Eliminar
-                    </button>
+                    {planButton}
+                    {editElsewhere}
+                    {removable && (
+                      <>
+                        <button type="button" className="text-sm font-medium text-brand" onClick={() => setPanel("recurring")}>
+                          Editar {income ? "ingreso" : "pago fijo"}
+                        </button>
+                        <button type="button" className="text-sm font-medium text-ink-3 hover:text-ink" onClick={() => setPanel("delete")}>
+                          Eliminar
+                        </button>
+                      </>
+                    )}
                   </span>
                 )}
                 <button type="button" className="btn-quiet flex-1 sm:flex-none" onClick={() => setPanel("skip")}>
@@ -415,6 +477,43 @@ function OwnRow({ item, month, today, editable, accounts }: Props) {
                 </button>
               </div>
             </div>
+          )}
+          {editable && panel === "plan" && plannable && (
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                plan(new FormData(e.currentTarget));
+              }}
+              className="mt-3 grid gap-3 rounded-2xl bg-brand/8 p-3 sm:ml-14 sm:grid-cols-2 sm:items-end"
+            >
+              <input type="hidden" name="type" value={item.type} />
+              <input type="hidden" name="id" value={item.id} />
+              <label className="field">
+                Mes
+                <SelectField name="month" value={planMonth} onChange={setPlanMonth} options={months.map((m) => ({ value: m, label: monthTitle(m) }))} required />
+              </label>
+              <label className="field">
+                {income ? "Cuánto va a llegar" : "Cuánto vas a pagar"}
+                <MoneyInput key={planMonth} name="amount" defaultValue={planMonth === month && !paid ? item.planned?.amount : null} required autoFocus />
+              </label>
+              <p className="text-xs text-ink-3 sm:col-span-2">
+                Solo para ese mes{item.type === "debt" || item.paysDebt ? ", por ejemplo lo que dice el extracto" : ""}: cuenta en el plan del mes y se propone al marcarlo.{" "}
+                {item.usual ? `El valor de siempre (${formatCOP(item.usual)}) no cambia.` : "Los demás meses siguen como variable."}
+              </p>
+              <div className="flex flex-wrap items-center justify-end gap-2 sm:col-span-2">
+                {item.planned && !paid && planMonth === month && (
+                  <button type="button" className="mr-auto text-sm font-medium text-ink-3 hover:text-ink" onClick={unplan} disabled={pending}>
+                    Quitar el valor de {monthName(month)}
+                  </button>
+                )}
+                <button type="button" className="btn-quiet" onClick={() => setPanel(paid ? "edit" : item.expected ? "form" : "none")}>
+                  Cancelar
+                </button>
+                <button className="btn" disabled={pending}>
+                  Guardar
+                </button>
+              </div>
+            </form>
           )}
           {editable && panel === "recurring" && removable && (
             <form
@@ -512,6 +611,7 @@ function OwnRow({ item, month, today, editable, accounts }: Props) {
                   <button type="button" className="text-sm font-medium text-ink-3 hover:text-ink" onClick={unpay} disabled={pending}>
                     Desmarcar (borra {income ? "el ingreso" : saving ? "el abono" : "el pago"})
                   </button>
+                  {planButton}
                   {editElsewhere}
                   {removable && (
                     <>
@@ -538,6 +638,11 @@ function OwnRow({ item, month, today, editable, accounts }: Props) {
         </div>
       </div>
       {error && <p role="alert" className="alert mt-2 sm:ml-14">{error}</p>}
+      {notice && !error && (
+        <p role="status" className="mt-2 text-sm text-ink-2 sm:ml-14">
+          {notice}
+        </p>
+      )}
     </li>
   );
 }

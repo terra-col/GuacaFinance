@@ -96,6 +96,39 @@ export interface Skip {
   note: string | null;
 }
 
+/**
+ * «Este mes va a ser tanto» (migration 0027): the card's statement, a utility's receipt or a
+ * variable income, set for one month. The usual value stays as it is.
+ */
+export interface Planned {
+  id: string;
+  item_type: "bill" | "debt" | "income";
+  item_id: string;
+  month: string;
+  amount: number;
+}
+
+export const findPlanned = (planned: Planned[], type: Planned["item_type"], id: string, month: string): Planned | null =>
+  planned.find((p) => p.item_type === type && p.item_id === id && p.month === month) ?? null;
+
+/** How far ahead a month's value can be set (the server checks the same): as far as the calendar shows. */
+export const PLAN_AHEAD = 12;
+
+/**
+ * The months a row's value can be set for: this month and the next twelve, only those an income
+ * arrives in. Nothing for what is not monthly (a weekly bill has several dates a month) or for a
+ * goal or a house's receipt.
+ */
+export function planMonths(item: Pick<ChecklistItem, "type" | "forDate" | "every" | "arrives">, today: string): string[] {
+  if (item.forDate || item.every || !["bill", "debt", "income"].includes(item.type)) return [];
+  const current = today.slice(0, 7);
+  const months = Array.from({ length: PLAN_AHEAD + 1 }, (_, i) => shiftMonth(current, i));
+  const arrives = item.arrives;
+  if (!arrives) return months;
+  if (arrives.once) return months.filter((m) => m === arrives.once);
+  return arrives.months ? months.filter((m) => arrives.months!.includes(Number(m.slice(5, 7)))) : months;
+}
+
 export const KIND_LABEL: Record<AccountKind, string> = {
   savings: "Cuenta bancaria",
   cash: "Efectivo",
@@ -492,6 +525,12 @@ export interface ChecklistItem {
   overdue: boolean;
   /** Marked as not applying this month (a rescheduled card, a paused bill). */
   skipped: Skip | null;
+  /** The value set for this month (a card's statement): `expected` already is it. Monthly rows only. */
+  planned?: Planned | null;
+  /** The usual value, without this month's: what comes back when the month's value is removed. */
+  usual?: number | null;
+  /** Incomes: the months (1–12) it arrives in, or the one month of a one-time extra. */
+  arrives?: { months: number[] | null; once: string | null };
   /** Enough to record the payment in one tap; null when the amount or the account must be asked. */
   quick: { amount: number; accountId: string | null } | null;
   /** Once paid: the date and the account of the latest payment, to edit it in place. */
@@ -525,7 +564,7 @@ export const pendingFirst = <T extends Pick<ChecklistItem, "paid" | "skipped" | 
 /** Soonest first; items with no payment day last; then by name. */
 export const byDue = (a: ChecklistItem, b: ChecklistItem) => (a.due ?? "9999").localeCompare(b.due ?? "9999") || a.name.localeCompare(b.name);
 
-export function monthlyChecklist(accounts: Account[], bills: Bill[], txs: Tx[], month: string, today: string, skips: Skip[] = []): ChecklistItem[] {
+export function monthlyChecklist(accounts: Account[], bills: Bill[], txs: Tx[], month: string, today: string, skips: Skip[] = [], planned: Planned[] = []): ChecklistItem[] {
   const skipOf = (type: Skip["item_type"], id: string) => findSkip(skips, type, id, month);
   const first = `${month}-01`;
   const last = monthEnd(month);
@@ -574,6 +613,8 @@ export function monthlyChecklist(accounts: Account[], bills: Bill[], txs: Tx[], 
       }
       continue;
     }
+    const plan = findPlanned(planned, "bill", bill.id, month);
+    const expected = plan?.amount ?? bill.amount;
     items.push({
       type: "bill",
       id: bill.id,
@@ -581,14 +622,16 @@ export function monthlyChecklist(accounts: Account[], bills: Bill[], txs: Tx[], 
       paysDebt: bill.pays_account ?? undefined,
       day: bill.due_day,
       due,
-      expected: bill.amount,
+      expected,
+      planned: plan,
+      usual: bill.amount,
       paid: payments.length > 0,
       paidAmount: payments.reduce((sum, t) => sum + t.amount, 0),
       paidOn: payments[0]?.occurred_on ?? null,
       paidFrom: payments[0]?.account_id ?? null,
       overdue: payments.length === 0 && due < today && !skipOf("bill", bill.id),
       skipped: payments.length === 0 ? skipOf("bill", bill.id) : null,
-      quick: bill.amount && accountId ? { amount: bill.amount, accountId } : null,
+      quick: expected && accountId ? { amount: expected, accountId } : null,
     });
   }
 
@@ -604,19 +647,24 @@ export function monthlyChecklist(accounts: Account[], bills: Bill[], txs: Tx[], 
     const lastSource = txs.find((t) => t.kind === "payment" && t.account_id === account.id && t.category !== ADJUSTMENT)?.source_account_id ?? null;
     // Loans have their instalment; cards, the minimum or fixed payment when one is registered.
     const instalment = account.monthly_payment ? Math.min(account.monthly_payment, Math.max(owedNow, 0)) : null;
+    // The statement says how much: that, even above the usual instalment.
+    const plan = findPlanned(planned, "debt", account.id, month);
+    const expected = plan?.amount ?? instalment;
     items.push({
       type: "debt",
       id: account.id,
       name: account.name,
       due,
-      expected: instalment,
+      expected,
+      planned: plan,
+      usual: instalment,
       paid: payments.length > 0,
       paidAmount: payments.reduce((sum, t) => sum + t.amount, 0),
       paidOn: payments[0]?.occurred_on ?? null,
       paidFrom: payments[0]?.source_account_id ?? null,
       overdue: payments.length === 0 && due !== null && due < today && !skipOf("debt", account.id),
       skipped: payments.length === 0 ? skipOf("debt", account.id) : null,
-      quick: instalment ? { amount: instalment, accountId: favorite ?? (accounts.some((a) => a.id === lastSource) ? lastSource : null) } : null,
+      quick: expected ? { amount: expected, accountId: favorite ?? (accounts.some((a) => a.id === lastSource) ? lastSource : null) } : null,
     });
   }
 

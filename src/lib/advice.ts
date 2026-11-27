@@ -7,6 +7,7 @@ import {
   billStatus,
   currentBills,
   daysBetween,
+  findPlanned,
   formatCOP,
   isDebt,
   lastMonths,
@@ -18,6 +19,7 @@ import {
   type Account,
   type Bill,
   type ChecklistItem,
+  type Planned,
   type Skip,
   type Tx,
 } from "./finance.ts";
@@ -54,7 +56,7 @@ function monthAfter(today: string, months: number): string {
  * `flows`: what counts as spending, when it is not simply the movements (shared expenses).
  * `house`: the house receipts of the person's own list, this month's and the next.
  */
-export function advise(accounts: Account[], txs: Tx[], today: string, bills: Bill[] = [], flows: Tx[] = txs, skips: Skip[] = [], house: ChecklistItem[] = []): Advice[] {
+export function advise(accounts: Account[], txs: Tx[], today: string, bills: Bill[] = [], flows: Tx[] = txs, skips: Skip[] = [], house: ChecklistItem[] = [], planned: Planned[] = []): Advice[] {
   const out: Advice[] = [];
 
   // 0. A fixed bill is overdue or due within three days and has not been paid this month.
@@ -62,11 +64,13 @@ export function advise(accounts: Account[], txs: Tx[], today: string, bills: Bil
     const status = billStatus(bill, txs, today, skips);
     // A daily one would be urgent every single day: only when one is late.
     if (status.paidThisMonth || status.days > 3 || (isFrequent(bill.every) && status.days >= 0)) continue;
+    // The value set for that month (a statement) when there is one.
+    const amount = (bill.every ?? "monthly") === "monthly" ? (findPlanned(planned, "bill", bill.id, status.date.slice(0, 7))?.amount ?? bill.amount) : bill.amount;
     out.push({
       id: `bill-${bill.id}`,
       level: "urgent",
       title: status.days < 0 ? `${bill.name} ${relativeDay(status.days)}` : `${bill.name} vence ${relativeDay(status.days)}`,
-      detail: `${bill.amount ? `Valor: ${formatCOP(bill.amount)}. ` : ""}Márcalo en Pagos cuando lo pagues.`,
+      detail: `${amount ? `Valor: ${formatCOP(amount)}. ` : ""}Márcalo en Pagos cuando lo pagues.`,
     });
   }
   const advised = new Set<string>();
@@ -93,12 +97,13 @@ export function advise(accounts: Account[], txs: Tx[], today: string, bills: Bil
     const since = addDays(today, -25);
     const paid = txs.some((t) => t.kind === "payment" && t.account_id === account.id && t.category !== ADJUSTMENT && t.occurred_on >= since);
     if (paid) continue;
+    const statement = findPlanned(planned, "debt", account.id, due.slice(0, 7))?.amount;
     out.push({
       id: `due-${account.id}`,
       level: "urgent",
       title: `${account.name} vence ${days === 0 ? "hoy" : days === 1 ? "mañana" : `en ${days} días`}`,
       detail: `No hay pagos registrados en los últimos 25 días. ${
-        account.monthly_payment ? `Cuota: ${formatCOP(account.monthly_payment)}.` : `Debes ${formatCOP(balance)}.`
+        statement ? `Este mes: ${formatCOP(statement)}.` : account.monthly_payment ? `Cuota: ${formatCOP(account.monthly_payment)}.` : `Debes ${formatCOP(balance)}.`
       }`,
     });
   }
