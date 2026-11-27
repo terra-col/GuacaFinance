@@ -1,6 +1,7 @@
 // What the AI advisor knows: a plain-text snapshot of the person's finances,
 // rebuilt from the database on every question. Numbers are computed here, not by the model.
 import { advise } from "./advice.ts";
+import { formatForeign, type Foreign } from "./currency.ts";
 import { budgetViews, incomeChecklist, incomeSchedule, monthPlan, type Budget, type Income } from "./budget.ts";
 import { debtView } from "./debts.ts";
 import {
@@ -21,6 +22,7 @@ import {
   type Bill,
   type ChecklistItem,
   type Planned,
+  foreignOf,
   type Skip,
   type Tx,
   monthlyChecklist,
@@ -54,6 +56,13 @@ interface Snapshot {
 const month = (today: string, n: number | null) => (n === null ? "nunca con los pagos actuales" : monthLabel(shiftMonth(today.slice(0, 7), n)));
 
 const MONTH_SHORT = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+
+/** «$ 62.000», or «US$ 15,49 (≈ $ 62.000 hoy)» for what is in another currency. */
+const valueText = (x: Foreign) => {
+  const f = foreignOf(x);
+  if (f?.original) return `${formatForeign(f.original, f.currency)} (≈ ${formatCOP(x.amount ?? 0)} hoy)`;
+  return x.amount ? formatCOP(x.amount) : f ? `valor variable, en ${f.currency}` : "valor variable";
+};
 
 export function advisorContext({ accounts, txs, bills, goals, deposits, incomes = [], budgets = [], skips = [], planned = [], purchases = [], flows = txs, position, houseNow = [], houseNext = [], today }: Snapshot): string {
   const lines: string[] = [];
@@ -127,7 +136,7 @@ export function advisorContext({ accounts, txs, bills, goals, deposits, incomes 
   if (ownBills.length) {
     lines.push("\n## Pagos fijos (el valor es por cada vez)");
     for (const b of ownBills)
-      lines.push(`- ${b.name}: ${b.amount ? formatCOP(b.amount) : "valor variable"}, ${b.once_month ? `una sola vez, el ${b.due_day} de ${monthLabel(b.once_month)}` : cadenceText(billSchedule(b))}`);
+      lines.push(`- ${b.name}: ${valueText(b)}, ${b.once_month ? `una sola vez, el ${b.due_day} de ${monthLabel(b.once_month)}` : cadenceText(billSchedule(b))}`);
   }
   if (incomes.length) {
     lines.push("\n## Ingresos programados");
@@ -137,7 +146,7 @@ export function advisorContext({ accounts, txs, bills, goals, deposits, incomes 
         : incomeSchedule(i).every !== "monthly"
           ? `${cadenceText(incomeSchedule(i))} (el valor es por cada vez)`
           : `día ${i.day}${i.months ? `, solo en ${i.months.map((m) => MONTH_SHORT[m - 1]).join(", ")}` : ", cada mes"}`;
-      lines.push(`- ${i.name}: ${i.amount ? formatCOP(i.amount) : "valor variable"}, ${when}`);
+      lines.push(`- ${i.name}: ${valueText(i)}, ${when}`);
     }
   }
   if (budgets.length) {

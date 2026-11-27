@@ -3,6 +3,8 @@ import { houseChecklist } from "./house";
 import { loadHouse } from "./house-data";
 import { knownCategories, shiftMonth, todayInBogota, type Account, type Bill, type Planned, type Skip, type Tx } from "./finance";
 import type { Budget, Income } from "./budget";
+import { NO_RATES, atTodayRate, needsRates } from "./currency";
+import { todayRates } from "./rates";
 import type { Goal, GoalDeposit } from "./goals";
 import type { CardPurchase } from "./installments";
 import { allPages } from "./paging";
@@ -111,6 +113,9 @@ export async function loadData() {
   if (inbox.error) throw new Error(`No se pudo leer la bandeja de Wallet: ${inbox.error.message}`);
 
   const today = todayInBogota();
+  // Bills and incomes in another currency count in pesos at today's rate (kept six hours in memory).
+  const ownIncomes = planMissing ? [] : (incomes.data as Income[]);
+  const rates = needsRates([...(bills.data as Bill[]), ...ownIncomes]) ? await todayRates().catch(() => NO_RATES) : NO_RATES;
   return {
     supabase,
     user,
@@ -121,7 +126,7 @@ export async function loadData() {
     shared: sharing.shared,
     sharedReady: sharing.ready,
     position: myPosition(sharing.shared, user.id),
-    bills: bills.data as Bill[],
+    bills: atTodayRate(bills.data as Bill[], rates),
     inbox: inbox.data as InboxItem[],
     goals: goalsMissing ? [] : (goals.data as Goal[]),
     deposits: goalsMissing ? [] : deposits.rows,
@@ -129,7 +134,7 @@ export async function loadData() {
     budgets: planMissing ? [] : (budgets.data as Budget[]),
     // By month (monthly) and by date (the rest; none before migration 0017).
     skips: [...(planMissing ? [] : (skips.data as Skip[])), ...(dateSkips.error ? [] : dateSkips.rows.map((s) => ({ ...s, month: s.for_date!.slice(0, 7) })))],
-    incomes: planMissing ? [] : (incomes.data as Income[]),
+    incomes: atTodayRate(ownIncomes, rates),
     planned: planned.error ? [] : (planned.data as Planned[]),
     plannedReady: !planned.error,
     planReady: !planMissing,

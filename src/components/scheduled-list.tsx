@@ -5,6 +5,8 @@ import { deleteBill, deleteIncome } from "@/app/actions";
 import { incomeSchedule, type Income } from "@/lib/budget";
 import { billSchedule, formatCOP, formatDate, monthName, type Bill } from "@/lib/finance";
 import { cadenceText } from "@/lib/recurrence";
+import { foreignOf } from "@/lib/finance";
+import { formatForeign } from "@/lib/currency";
 import { BillForm, IncomeForm, type Debt } from "./bill-forms";
 import { SubmitButton } from "./submit-button";
 
@@ -36,6 +38,8 @@ function Row({ row, accounts, currentMonth, debts }: { row: ScheduledRow; accoun
   const income = row.kind === "income";
   const item = income ? row.income : row.bill;
   const label = income ? (row.income.once_month ? "Extra" : row.income.months ? "Algunos meses" : "Ingreso") : row.bill.once_month ? "Una vez" : "Pago fijo";
+  // In another currency: its value there, and about how much in pesos today.
+  const foreign = foreignOf(item);
 
   return (
     <li className="py-3">
@@ -43,7 +47,8 @@ function Row({ row, accounts, currentMonth, debts }: { row: ScheduledRow; accoun
         <span className={`pill ${income ? "bg-savings/15" : "bg-debt/12"}`}>{label}</span>
         <span className="min-w-0 flex-1 font-semibold">{item.name}</span>
         <span className={`num font-semibold ${income ? "text-[var(--savings)]" : ""}`}>
-          {item.amount ? `${income ? "+" : ""}${formatCOP(item.amount)}` : "Valor variable"}
+          {foreign?.original ? `${income ? "+" : ""}${formatForeign(foreign.original, foreign.currency)}` : item.amount ? `${income ? "+" : ""}${formatCOP(item.amount)}` : foreign ? `Variable, en ${foreign.currency}` : "Valor variable"}
+          {foreign?.original && item.amount ? <span className="block text-right text-xs font-normal text-ink-3">≈ {formatCOP(item.amount)} hoy</span> : null}
         </span>
       </div>
       <div className="mt-1 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-sm">

@@ -451,6 +451,23 @@ export interface Bill {
   pays_account?: string | null;
   /** A one-time payment (migration 0028): only that month, on its day. */
   once_month?: string | null;
+  /** In another currency (migration 0029): its value there and the rate; `amount` is in pesos. */
+  currency?: string | null;
+  original_amount?: number | string | null;
+  rate?: number | string | null;
+}
+
+/** What a row in another currency needs to be paid in it. */
+export interface ForeignValue {
+  currency: "USD" | "EUR" | "AED";
+  /** Its value in that currency; null when it varies. */
+  original: number | null;
+}
+
+/** A bill or an income in another currency, as its row shows and pays it; undefined in pesos. */
+export function foreignOf(item: { currency?: string | null; original_amount?: number | string | null }): ForeignValue | undefined {
+  if (item.currency !== "USD" && item.currency !== "EUR" && item.currency !== "AED") return undefined;
+  return { currency: item.currency, original: item.original_amount == null ? null : Number(item.original_amount) };
 }
 
 /** The fixed payments still one's own. */
@@ -551,6 +568,8 @@ export interface ChecklistItem {
   arrives?: { months: number[] | null; once: string | null };
   /** A one-time payment rather than a fixed one. */
   once?: boolean;
+  /** In another currency: paying it asks the rate of the day (unless a value in pesos was set for the month). */
+  foreign?: ForeignValue;
   /** Enough to record the payment in one tap; null when the amount or the account must be asked. */
   quick: { amount: number; accountId: string | null } | null;
   /** Once paid: the date and the account of the latest payment, to edit it in place. */
@@ -630,13 +649,16 @@ export function monthlyChecklist(accounts: Account[], bills: Bill[], txs: Tx[], 
           paidIds: ticked.map((t) => t.id),
           overdue: !paid && !skip && date !== null && date < today,
           skipped: skip,
-          quick: bill.amount && accountId ? { amount: bill.amount, accountId } : null,
+          foreign: foreignOf(bill),
+          quick: bill.amount && accountId && !foreignOf(bill) ? { amount: bill.amount, accountId } : null,
         });
       }
       continue;
     }
     const plan = findPlanned(planned, "bill", bill.id, month);
     const expected = plan?.amount ?? bill.amount;
+    // Its currency stays; a value set for the month is in pesos, so then it is paid in pesos (and in one tap).
+    const foreign = foreignOf(bill);
     items.push({
       type: "bill",
       id: bill.id,
@@ -655,7 +677,8 @@ export function monthlyChecklist(accounts: Account[], bills: Bill[], txs: Tx[], 
       paidFrom: payments[0]?.account_id ?? null,
       overdue: payments.length === 0 && due < today && !skipOf("bill", bill.id),
       skipped: payments.length === 0 ? skipOf("bill", bill.id) : null,
-      quick: expected && accountId ? { amount: expected, accountId } : null,
+      foreign,
+      quick: expected && accountId && (!foreign || plan) ? { amount: expected, accountId } : null,
     });
   }
 

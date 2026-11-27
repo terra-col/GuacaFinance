@@ -371,3 +371,18 @@ test("once_month: a one-time payment is monthly, and the calendar feed shows it 
   assert.equal(rows.find((r) => r.name === "Visa").once_month, null);
   assert.equal((await as(null, "select * from calendar_feed('nope')")).length, 0);
 });
+
+test("currencies on bills and incomes: pesos match the original and the rate, or it varies", async () => {
+  const [netflix] = await as(ANA, "insert into bills (name, amount, due_day, currency, original_amount, rate) values ('Netflix', 61960, 10, 'USD', 15.49, 4000) returning currency");
+  assert.equal(netflix.currency, "USD");
+  await as(ANA, "insert into bills (name, due_day, currency) values ('Hosting', 20, 'EUR')");
+  await as(ANA, "insert into incomes (name, amount, day, currency, original_amount, rate) values ('Sueldo', 18000000, 30, 'USD', 4500, 4000)");
+  // Pesos that do not match, a value without its rate, pesos alone in another currency, an original in pesos.
+  await assert.rejects(as(ANA, "insert into bills (name, amount, due_day, currency, original_amount, rate) values ('X', 50000, 1, 'USD', 15.49, 4000)"), /check constraint/);
+  await assert.rejects(as(ANA, "insert into bills (name, amount, due_day, currency, original_amount) values ('X', 61960, 1, 'USD', 15.49)"), /check constraint/);
+  await assert.rejects(as(ANA, "insert into incomes (name, amount, day, currency) values ('X', 100, 1, 'EUR')"), /check constraint/);
+  await assert.rejects(as(ANA, "insert into bills (name, amount, due_day, original_amount, rate) values ('X', 100, 1, 1, 100)"), /check constraint/);
+  await assert.rejects(as(ANA, "insert into incomes (name, day, currency) values ('X', 1, 'JPY')"), /check constraint/);
+  // Changing only the pesos of a bill in dollars (as an old page would) is refused, not silently wrong.
+  await assert.rejects(as(ANA, "update bills set amount = 1 where name = 'Netflix'"), /check constraint/);
+});

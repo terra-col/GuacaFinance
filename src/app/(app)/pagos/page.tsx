@@ -72,8 +72,8 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
   };
   const ownBills = currentBills(bills);
   const debts = accounts.filter((a) => a.kind === "credit_card" || a.kind === "loan").map(({ id, name, monthly_payment }) => ({ id, name, monthly_payment }));
-  // A one-time payment is not one a house takes over.
-  const addPayment = house.ready ? <AddPayment houses={houses} setup={setup} ownBills={ownBills.filter((b) => !b.once_month)} debts={debts} /> : <BillForm inModal debts={debts} />;
+  // A one-time payment, or one in another currency, is not one a house takes over (it splits in pesos).
+  const addPayment = house.ready ? <AddPayment houses={houses} setup={setup} ownBills={ownBills.filter((b) => !b.once_month && (!b.currency || b.currency === "COP"))} debts={debts} /> : <BillForm inModal debts={debts} />;
   const incomeItems = incomeChecklist(incomes, txs, month, today, skips, planned);
   // Where a payment can come from: cards and savings for a bill, savings and cash for the rest.
   const spendable = favoriteFirst(accounts.filter((a) => a.kind !== "loan")).map(({ id, name }) => ({ id, name }));

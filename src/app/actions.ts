@@ -12,7 +12,7 @@ import { normalizePhone } from "@/lib/phone";
 import { PHONE_TAKEN, emailForPhone, phoneLoginReady, phoneTaken } from "@/lib/phone-login";
 import { halfStart, type Every } from "@/lib/recurrence";
 import { readSchedule } from "@/lib/schedule-form";
-import { currencyColumns, readAmount } from "@/lib/money-form";
+import { currencyColumns, readAmount, readScheduledAmount, scheduledCurrencyColumns } from "@/lib/money-form";
 import { requestOrigin } from "@/lib/request-origin";
 import { INVITE_COOKIE, invitePath } from "@/lib/shared";
 import { REMEMBER_COOKIE, createClient, isSupabaseConfigured } from "@/lib/supabase/server";
@@ -38,6 +38,8 @@ const periodMissing = (message: string) => (/every_check/.test(message) ? "Falta
 
 const recurrenceMissing = (message: string) =>
   periodMissing(message) ?? (/\bevery\b|starts_on|plan_every|plan_start|for_date|date_skips/i.test(message) ? "Falta ejecutar la migración 0017 en Supabase." : null);
+
+const currencyMissing = (message: string) => (/original_amount|\bcurrency\b|\brate\b|currency_amount/.test(message) ? "Para pagos e ingresos en otra moneda falta ejecutar la migración 0029 en Supabase." : null);
 
 async function signedIn() {
   const supabase = await createClient();
@@ -337,9 +339,10 @@ export async function saveBill(_prev: FormState, form: FormData): Promise<FormSt
   const { data: current } = id ? await supabase.from("bills").select("*").eq("id", id).maybeSingle() : { data: null };
   const schedule = readSchedule(form, { every: "every", day: "due_day", start: "starts_on" }, { every: current?.every, start: current?.starts_on }, halfStart(todayInBogota()));
   if ("error" in schedule) return schedule;
-  const amountRaw = text(form, "amount");
-  const amount = amountRaw ? parsePesos(amountRaw) : null;
-  if (amountRaw && !amount) return { error: "El valor no es válido." };
+  // In pesos or in another currency (migration 0029); empty when it varies.
+  const money = readScheduledAmount(form);
+  if ("error" in money) return money;
+  const amount = money.amount;
   // A one-time payment (migration 0028): its month, on its day.
   const once_month = text(form, "repeat") === "once" ? text(form, "once_month") : null;
   if (once_month !== null && !MONTH.test(once_month)) return { error: "Elige el mes en que se paga." };
@@ -356,10 +359,11 @@ export async function saveBill(_prev: FormState, form: FormData): Promise<FormSt
     if (!debt || !isDebt(debt)) return { error: "Elige una de tus tarjetas o créditos." };
   }
   const debtLink = form.has("pays_account") && (pays || current?.pays_account) ? { pays_account: pays || null } : {};
-  const row: Record<string, unknown> = { name, due_day: schedule.day, amount, category: text(form, "category") || null, ...repeats, ...debtLink, ...onceLink };
+  const row: Record<string, unknown> = { name, due_day: schedule.day, amount, category: text(form, "category") || null, ...repeats, ...debtLink, ...onceLink, ...scheduledCurrencyColumns(money, current) };
   const { error } = id ? await supabase.from("bills").update(row).eq("id", id) : await supabase.from("bills").insert(row);
   if (error && /pays_account/.test(error.message)) return { error: "Falta ejecutar la migración 0026 en Supabase." };
   if (error && /once_month/.test(error.message)) return { error: "Para los pagos de una sola vez falta ejecutar la migración 0028 en Supabase." };
+  if (error && currencyMissing(error.message)) return { error: currencyMissing(error.message)! };
   if (error) return { error: recurrenceMissing(error.message) ?? `No se pudo guardar: ${error.message}` };
   revalidatePath("/", "layout");
   if (once_month && !id) return { message: `${name} quedó para ${monthName(once_month)}.` };
@@ -380,9 +384,11 @@ export async function updateRecurring(_prev: FormState, form: FormData): Promise
   const keepsDay = !form.has("day");
   const day = optionalDay(form, "day");
   if (!keepsDay && (day === null || day === "invalid")) return { error: "El día debe estar entre 1 y 31." };
-  const amountRaw = text(form, "amount");
-  const amount = amountRaw ? parsePesos(amountRaw) : null;
-  if (amountRaw && !amount) return { error: "El valor no es válido." };
+  const money = readScheduledAmount(form);
+  if ("error" in money) return money;
+  const { amount } = money;
+  // The currency columns only when it is or was in another one (form says so with `was`).
+  const fx = scheduledCurrencyColumns(money, { currency: text(form, "was_currency") || null });
   // The card or loan it is the instalment of (migration 0026).
   const pays = text(form, "pays_account");
   if (pays) {
@@ -392,9 +398,9 @@ export async function updateRecurring(_prev: FormState, form: FormData): Promise
   const debtLink = type === "bill" && form.has("pays_account") ? { pays_account: pays || null } : {};
   const { error } =
     type === "bill"
-      ? await supabase.from("bills").update({ name, amount, ...(keepsDay ? {} : { due_day: day }), ...debtLink }).eq("id", text(form, "id"))
-      : await supabase.from("incomes").update({ name, amount, ...(keepsDay ? {} : { day }) }).eq("id", text(form, "id"));
-  if (error) return { error: `No se pudo guardar: ${error.message}` };
+      ? await supabase.from("bills").update({ name, amount, ...fx, ...(keepsDay ? {} : { due_day: day }), ...debtLink }).eq("id", text(form, "id"))
+      : await supabase.from("incomes").update({ name, amount, ...fx, ...(keepsDay ? {} : { day }) }).eq("id", text(form, "id"));
+  if (error) return { error: currencyMissing(error.message) ?? `No se pudo guardar: ${error.message}` };
   revalidatePath("/", "layout");
   return { message: "Guardado." };
 }
@@ -479,8 +485,12 @@ export async function discardInbox(form: FormData) {
  */
 export async function markPaid(_prev: FormState, form: FormData): Promise<FormState> {
   const supabase = await signedIn();
-  const amount = parsePesos(text(form, "amount"));
-  if (!amount) return { error: "Escribe cuánto pagaste." };
+  // In pesos, or in another currency with the rate of the day (a bill or an income in dollars).
+  const money = readAmount(form, form.get("type") === "income" ? "Escribe cuánto llegó." : "Escribe cuánto pagaste.");
+  if ("error" in money) return money;
+  const { amount } = money;
+  // A goal's deposit has no currency columns.
+  const fx = form.get("type") === "goal" ? {} : currencyColumns(form, money);
   const occurred_on = text(form, "occurred_on");
   if (!DATE.test(occurred_on)) return { error: "La fecha no es válida." };
   const id = text(form, "id");
@@ -509,7 +519,7 @@ export async function markPaid(_prev: FormState, form: FormData): Promise<FormSt
     ]);
     if (!income) return { error: "Ese ingreso ya no existe." };
     if (!target || isDebt(target)) return { error: "El ingreso debe llegar a una cuenta de ahorros o a tu efectivo." };
-    const { error } = await supabase.from("transactions").insert({ kind: "income", account_id, amount, occurred_on, income_id: income.id, description: income.name, ...forMonth });
+    const { error } = await supabase.from("transactions").insert({ kind: "income", account_id, amount, occurred_on, income_id: income.id, description: income.name, ...fx, ...forMonth });
     if (error) return { error: forMonthMissing(error.message) ?? missingTable(error.message, "0007") ?? `No se pudo guardar: ${error.message}` };
   } else if (form.get("type") === "bill") {
     const { data: bill } = await supabase.from("bills").select("*").eq("id", id).maybeSingle();
@@ -528,6 +538,7 @@ export async function markPaid(_prev: FormState, form: FormData): Promise<FormSt
         occurred_on,
         bill_id: bill.id,
         description: bill.name,
+        ...fx,
         ...forMonth,
       });
       if (error) return { error: forMonthMissing(error.message) ?? `No se pudo guardar: ${error.message}` };
@@ -543,6 +554,7 @@ export async function markPaid(_prev: FormState, form: FormData): Promise<FormSt
       bill_id: bill.id,
       category: bill.category ?? "Recibos",
       description: bill.name,
+      ...fx,
       ...forMonth,
     });
     if (error) return { error: forMonthMissing(error.message) ?? `No se pudo guardar: ${error.message}` };
@@ -555,7 +567,7 @@ export async function markPaid(_prev: FormState, form: FormData): Promise<FormSt
     }
     const { error } = await supabase
       .from("transactions")
-      .insert({ kind: "payment", account_id: id, source_account_id: account_id, amount, occurred_on, ...forMonth });
+      .insert({ kind: "payment", account_id: id, source_account_id: account_id, amount, occurred_on, ...fx, ...forMonth });
     if (error) return { error: forMonthMissing(error.message) ?? `No se pudo guardar: ${error.message}` };
   }
   revalidatePath("/", "layout");
@@ -617,8 +629,8 @@ const LOGO = /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/;
  * replaced by one with the new data. Checked before anything is deleted, so a typo loses nothing.
  */
 export async function updatePaid(_prev: FormState, form: FormData): Promise<FormState> {
-  const amount = parsePesos(text(form, "amount"));
-  if (!amount) return { error: "Escribe el monto." };
+  const money = readAmount(form, "Escribe el monto.");
+  if ("error" in money) return money;
   if (!DATE.test(text(form, "occurred_on"))) return { error: "La fecha no es válida." };
   const type = form.get("type");
   if ((type === "bill" || type === "income") && !text(form, "account_id") && !form.get("pays")) return { error: type === "bill" ? "Elige con qué pagaste." : "Elige a qué cuenta llegó." };
@@ -1053,9 +1065,10 @@ export async function saveIncome(_prev: FormState, form: FormData): Promise<Form
     : { every: "monthly" as const, day: monthlyDay as number, start: null };
   if ("error" in schedule) return schedule;
   const day = schedule.day;
-  const amountRaw = text(form, "amount");
-  const amount = amountRaw ? parsePesos(amountRaw) : null;
-  if (amountRaw && !amount) return { error: "El valor no es válido." };
+  // In pesos or in another currency (migration 0029); empty when it varies.
+  const money = readScheduledAmount(form);
+  if ("error" in money) return money;
+  const amount = money.amount;
   const repeat = text(form, "repeat") || "monthly";
   const once_month = repeat === "once" ? text(form, "once_month") : null;
   if (once_month !== null && !MONTH.test(once_month)) return { error: "Elige el mes en que llega." };
@@ -1067,12 +1080,13 @@ export async function saveIncome(_prev: FormState, form: FormData): Promise<Form
     const { data: target } = await supabase.from("accounts").select("kind").eq("id", account_id).maybeSingle();
     if (!target || isDebt(target)) return { error: "El ingreso debe llegar a una cuenta de ahorros o a tu efectivo." };
   }
-  const row = {
+  const row: Record<string, unknown> = {
     name,
     day,
     amount,
     account_id,
     months: months.length === 0 || months.length === 12 ? null : [...new Set(months)].sort((a, b) => a - b),
+    ...scheduledCurrencyColumns(money, current),
     // Only sent for a one-time income (so recurring ones keep working before migration 0008 runs),
     // or cleared when an edit turns a one-time extra into a recurring income.
     ...(once_month ? { once_month } : text(form, "id") ? { once_month: null } : {}),
@@ -1082,6 +1096,7 @@ export async function saveIncome(_prev: FormState, form: FormData): Promise<Form
   const id = text(form, "id");
   const { error } = id ? await supabase.from("incomes").update(row).eq("id", id) : await supabase.from("incomes").insert(row);
   if (error && periodMissing(error.message)) return { error: periodMissing(error.message)! };
+  if (error && currencyMissing(error.message)) return { error: currencyMissing(error.message)! };
   if (error && /\bevery\b|starts_on/i.test(error.message)) return { error: "Falta ejecutar la migración 0019 en Supabase." };
   if (error) return { error: missingTable(error.message, once_month ? "0008" : "0007") ?? `No se pudo guardar: ${error.message}` };
   revalidatePath("/", "layout");

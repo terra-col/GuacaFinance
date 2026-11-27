@@ -16,6 +16,8 @@ import { SelectField, CategoryField } from "./pickers";
 import { MonthField } from "./month-field";
 import { todayInBogota } from "@/lib/finance";
 import { EveryFields, type EveryValue } from "./every-fields";
+import { AmountField } from "./amount-field";
+import { isCurrency } from "@/lib/currency";
 import { useCurrenciesReady } from "./currency-context";
 
 /**
@@ -54,6 +56,18 @@ export function BillForm({ bill, onDone, inModal = false, debts = [] }: { bill?:
     <form action={action} className={bare ? "flex flex-col gap-4" : "card flex flex-col gap-4"}>
       {!bare && <h2 className="display text-2xl">Nuevo pago fijo</h2>}
       {bill && <input type="hidden" name="id" value={bill.id} />}
+      <div className="flex flex-col items-center gap-1">
+        <AmountField
+          key={pays}
+          hero
+          label={once || schedule.every === "monthly" ? "¿Cuánto es?" : "¿Cuánto es cada vez?"}
+          defaultValue={bill?.amount ?? debt?.monthly_payment}
+          currency={isCurrency(bill?.currency) ? bill.currency : "COP"}
+          original={bill?.original_amount != null ? Number(bill.original_amount) : null}
+          rate={bill?.rate != null ? Number(bill.rate) : null}
+        />
+        <span className="text-xs text-ink-3">{once ? "Vacío si aún no sabes cuánto es." : "Vacío si cambia (servicios)."}</span>
+      </div>
       <fieldset className="flex flex-wrap gap-2">
         <legend className="sr-only">Cada cuánto</legend>
         {(
@@ -72,11 +86,6 @@ export function BillForm({ bill, onDone, inModal = false, debts = [] }: { bill?:
         <label className="field">
           Nombre
           <input className="input" name="name" defaultValue={bill?.name} placeholder={once ? "Matrícula, SOAT, impuesto…" : "Internet, arriendo, Netflix…"} required />
-        </label>
-        <label className="field">
-          {once || schedule.every === "monthly" ? "Valor" : "Valor cada vez"}
-          <MoneyInput key={pays} name="amount" defaultValue={bill?.amount ?? debt?.monthly_payment} placeholder="$ 90.000" />
-          <span className="text-xs font-normal text-ink-3">{once ? "Vacío si aún no sabes cuánto es." : "Vacío si cambia (servicios)."}</span>
         </label>
         {currencies && debts.length > 0 && (
           <label className="field sm:col-span-2">
@@ -169,6 +178,17 @@ export function IncomeForm({
     <form action={action} className={bare ? "flex flex-col gap-4" : "card flex flex-col gap-4"}>
       {!bare && <h2 className="display text-2xl">Nuevo ingreso</h2>}
       {income && <input type="hidden" name="id" value={income.id} />}
+      <div className="flex flex-col items-center gap-1">
+        <AmountField
+          hero
+          label={repeat === "monthly" && schedule.every !== "monthly" ? "¿Cuánto llega cada vez?" : "¿Cuánto llega?"}
+          defaultValue={income?.amount}
+          currency={isCurrency(income?.currency) ? income.currency : "COP"}
+          original={income?.original_amount != null ? Number(income.original_amount) : null}
+          rate={income?.rate != null ? Number(income.rate) : null}
+        />
+        <span className="text-xs text-ink-3">Vacío si cambia.</span>
+      </div>
       <fieldset className="flex flex-wrap gap-2">
         <legend className="sr-only">Tipo de ingreso</legend>
         {(
@@ -188,11 +208,6 @@ export function IncomeForm({
         <label className="field">
           Nombre
           <input className="input" name="name" defaultValue={income?.name} placeholder={repeat === "once" ? "Horas extra, bono…" : "Salario, prima…"} required />
-        </label>
-        <label className="field">
-          {repeat === "monthly" && schedule.every !== "monthly" ? "Valor cada vez" : "Valor"}
-          <MoneyInput name="amount" defaultValue={income?.amount} placeholder="$ 8.000.000" />
-          <span className="text-xs font-normal text-ink-3">Vacío si cambia.</span>
         </label>
         {repeat === "monthly" ? (
           <EveryFields value={schedule} onChange={setSchedule} today={todayInBogota()} names={{ every: "every", day: "day", start: "starts_on" }} editing={editing} what="ingreso" />

@@ -10,6 +10,8 @@ import { useDebts } from "./bill-forms";
 import { useCurrenciesReady } from "./currency-context";
 import { HouseReceiptRow } from "./house-receipt";
 import { MoneyInput } from "./money-input";
+import { AmountField } from "./amount-field";
+import { formatForeign } from "@/lib/currency";
 import { SelectField } from "./pickers";
 
 interface Props {
@@ -343,6 +345,7 @@ function OwnRow({ item, month, today, editable, accounts, canPlan = false }: Pro
             {status}
             {item.every && <span className="text-ink-3"> · {everyShort(item.every)}</span>}
             {item.once && <span className="text-ink-3"> · una vez</span>}
+            {item.foreign?.original && !paid && !item.planned && <span className="text-ink-3"> · {formatForeign(item.foreign.original, item.foreign.currency)}</span>}
             {item.planned && !paid && !skipped && <span className="text-ink-3"> · valor de {monthName(month)}</span>}
           </p>
         </button>
@@ -394,10 +397,14 @@ function OwnRow({ item, month, today, editable, accounts, canPlan = false }: Pro
               <input type="hidden" name="month" value={month} />
               {occurrence}
               {pays}
-              <label className="field">
-                {income ? "Cuánto llegó" : saving ? "Cuánto abonas" : "Cuánto pagaste"}
-                <MoneyInput name="amount" defaultValue={item.expected} required autoFocus />
-              </label>
+              {item.foreign && !item.planned ? (
+                <AmountField label={income ? "Cuánto llegó" : "Cuánto pagaste"} currency={item.foreign.currency} original={item.foreign.original} required />
+              ) : (
+                <label className="field">
+                  {income ? "Cuánto llegó" : saving ? "Cuánto abonas" : "Cuánto pagaste"}
+                  <MoneyInput name="amount" defaultValue={item.expected} required autoFocus />
+                </label>
+              )}
               <label className="field" hidden={saving}>
                 {item.type === "bill" && !item.paysDebt ? "Con qué" : income ? "Llegó a" : "Sale de"}
                 <SelectField
@@ -530,10 +537,22 @@ function OwnRow({ item, month, today, editable, accounts, canPlan = false }: Pro
                 Nombre
                 <input className="input" name="name" defaultValue={item.name} maxLength={80} required autoFocus />
               </label>
-              <label className="field">
-                Valor (vacío si cambia)
-                <MoneyInput name="amount" defaultValue={item.expected} />
-              </label>
+              {item.foreign || item.usual !== undefined ? (
+                <>
+                  <input type="hidden" name="was_currency" value={item.foreign?.currency ?? "COP"} />
+                  <AmountField
+                    label="Valor (vacío si cambia)"
+                    defaultValue={item.usual}
+                    currency={item.foreign?.currency ?? "COP"}
+                    original={item.foreign?.original ?? null}
+                  />
+                </>
+              ) : (
+                <label className="field">
+                  Valor (vacío si cambia)
+                  <MoneyInput name="amount" defaultValue={item.expected} />
+                </label>
+              )}
               {item.every ? (
                 <p className="text-xs text-ink-3">Los días y cada cuánto se cambian en Programados.</p>
               ) : (

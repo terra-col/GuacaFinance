@@ -71,3 +71,27 @@ export function formatForeign(amount: number, currency: Currency): string {
 
 /** "3.505,92". */
 export const formatRate = (rate: number) => new Intl.NumberFormat("es-CO", { maximumFractionDigits: 2 }).format(rate);
+
+/** A fixed bill or an income in another currency: its value there and the rate it was saved at. */
+export interface Foreign {
+  currency?: string | null;
+  original_amount?: number | string | null;
+  rate?: number | string | null;
+  amount: number | null;
+}
+
+/**
+ * Bills and incomes in another currency, in pesos at today's rate when it is known; otherwise they
+ * keep the pesos of the rate they were saved at. Those in pesos are left as they are.
+ */
+export function atTodayRate<T extends Foreign>(items: T[], rates: Rates): T[] {
+  return items.map((item) => {
+    if (!item.currency || item.currency === "COP" || !isCurrency(item.currency) || item.original_amount == null) return item;
+    const today = rates[item.currency as Exclude<Currency, "COP">];
+    if (!today) return item;
+    return { ...item, amount: toPesos(Math.round(Number(item.original_amount) * 100), today), rate: today };
+  });
+}
+
+/** Whether any of them is in another currency with a value (and so wants today's rates). */
+export const needsRates = (items: Foreign[]) => items.some((i) => i.currency && i.currency !== "COP" && i.original_amount != null);

@@ -1,6 +1,6 @@
 // Budgets per category, scheduled incomes and the month's free money. Pure, tested under `node --test`.
 
-import { daysInMonth, dueDates, findPlanned, findSkip, monthEnd, paidMonth, shiftMonth, type ChecklistItem, type Planned, type Skip, type Tx } from "./finance.ts";
+import { daysInMonth, dueDates, findPlanned, findSkip, foreignOf, monthEnd, paidMonth, shiftMonth, type ChecklistItem, type Planned, type Skip, type Tx } from "./finance.ts";
 import { assign, datesIn, nextDates, type Every, type Schedule } from "./recurrence.ts";
 
 export interface Budget {
@@ -20,6 +20,10 @@ export interface Income {
   /** 'YYYY-MM' for a one-time income (overtime, a bonus); it shows only that month. */
   once_month?: string | null;
   account_id: string | null;
+  /** In another currency (migration 0029): its value there and the rate; `amount` is in pesos. */
+  currency?: string | null;
+  original_amount?: number | string | null;
+  rate?: number | string | null;
   /** How often it arrives; absent (before migration 0019) is monthly. */
   every?: Every;
   starts_on?: string | null;
@@ -104,6 +108,8 @@ export interface IncomeItem {
   planned?: Planned | null;
   /** The usual value, without this month's. */
   usual?: number | null;
+  /** In another currency: received in it, with the rate of the day. */
+  foreign?: ChecklistItem["foreign"];
   /** Monthly incomes: the months it arrives in, to offer only those for a month's value. */
   arrives?: ChecklistItem["arrives"];
   accountId: string | null;
@@ -139,6 +145,7 @@ export function incomeChecklist(incomes: Income[], txs: Tx[], month: string, tod
           late: !received && !skipped && date !== null && date < today,
           skipped,
           accountId: i.account_id,
+          foreign: foreignOf(i),
           once: false,
         };
       }),
@@ -165,6 +172,7 @@ export function incomeChecklist(incomes: Income[], txs: Tx[], month: string, tod
         planned: plan,
         usual: i.amount,
         arrives: { months: i.months, once: i.once_month ?? null },
+        foreign: foreignOf(i),
         day: i.day,
         received: got.length > 0,
         receivedAmount: got.reduce((sum, t) => sum + t.amount, 0),
@@ -245,7 +253,8 @@ export function incomeRow(i: IncomeItem): ChecklistItem {
     planned: i.planned,
     usual: i.usual,
     arrives: i.arrives,
-    quick: i.expected && i.accountId ? { amount: i.expected, accountId: i.accountId } : null,
+    foreign: i.foreign,
+    quick: i.expected && i.accountId && (!i.foreign || i.planned) ? { amount: i.expected, accountId: i.accountId } : null,
   };
 }
 
