@@ -59,7 +59,9 @@ export function budgetViews(budgets: Budget[], txs: Tx[], month: string, today: 
 
   return budgets
     .map((b) => {
-      const spent = expenses.filter((t) => (t.category ?? "Otros") === b.category).reduce((sum, t) => sum + t.amount, 0);
+      // A category written by hand may differ in capitals from the movements' («gasolina», «Gasolina»).
+      const same = b.category.trim().toLocaleLowerCase("es");
+      const spent = expenses.filter((t) => (t.category ?? "Otros").trim().toLocaleLowerCase("es") === same).reduce((sum, t) => sum + t.amount, 0);
       const share = spent / b.amount;
       const left = b.amount - spent;
       const status: BudgetStatus = share > 1 ? "over" : share >= 0.9 || (share > pace + 0.15 && share >= 0.5) ? "watch" : "ok";

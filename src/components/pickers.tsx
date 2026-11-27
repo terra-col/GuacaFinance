@@ -203,6 +203,14 @@ interface CategoryProps {
   defaultValue?: string;
   required?: boolean;
   placeholder?: string;
+  /** Not offered (the categories that already have a budget). */
+  exclude?: string[];
+}
+
+/** The categories offered: the app's and the person's own, minus the excluded ones. */
+function useCategories(exclude?: string[]) {
+  const all = useContext(CategoriesContext);
+  return useMemo(() => (exclude?.length ? all.filter((c) => !exclude.some((x) => x.toLocaleLowerCase("es") === c.toLocaleLowerCase("es"))) : all), [all, exclude]);
 }
 
 /** A category: the combobox with a mouse or trackpad, the phone's own picker on touch screens. */
@@ -213,8 +221,8 @@ export function CategoryField(props: CategoryProps) {
 const NEW_CATEGORY = "__nueva__";
 
 /** On touch screens: the native picker, ending in a way to write a category that is not there yet. */
-function CategorySelect({ name, defaultValue = "", required }: CategoryProps) {
-  const categories = useContext(CategoriesContext);
+function CategorySelect({ name, defaultValue = "", required, exclude }: CategoryProps) {
+  const categories = useCategories(exclude);
   const [value, setValue] = useState(defaultValue);
   const [writing, setWriting] = useState<string | null>(null);
 
@@ -241,7 +249,7 @@ function CategorySelect({ name, defaultValue = "", required }: CategoryProps) {
   const options = !value || categories.includes(value) ? categories : [value, ...categories];
   return (
     <NativeSelect name={name} value={value} required={required} onPick={(v) => (v === NEW_CATEGORY ? setWriting("") : setValue(v))}>
-      <option value="">Sin categoría</option>
+      <option value="">{required ? "Elige una categoría" : "Sin categoría"}</option>
       {options.map((c) => (
         <option key={c} value={c}>
           {c}
@@ -256,8 +264,8 @@ function CategorySelect({ name, defaultValue = "", required }: CategoryProps) {
  * With a mouse: type to filter the list of existing ones (the app's and the person's own), pick
  * one, or keep a new one with «Agregar».
  */
-function CategoryCombobox({ name, defaultValue = "", required, placeholder = "Escribe o elige" }: CategoryProps) {
-  const categories = useContext(CategoriesContext);
+function CategoryCombobox({ name, defaultValue = "", required, placeholder = "Escribe o elige", exclude }: CategoryProps) {
+  const categories = useCategories(exclude);
   const [value, setValue] = useState(defaultValue);
   const [query, setQuery] = useState<string | null>(null); // null: show all (just opened)
   const [open, setOpen] = useState(false);

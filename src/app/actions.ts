@@ -1032,8 +1032,10 @@ export async function unskipItem(form: FormData) {
 
 export async function saveBudget(_prev: FormState, form: FormData): Promise<FormState> {
   const supabase = await signedIn();
-  const category = text(form, "category");
+  // One of the list or a new one the person writes; spaces tidied, and not endless.
+  const category = text(form, "category").replace(/\s+/g, " ");
   if (!category) return { error: "Elige la categoría." };
+  if (category.length > 40) return { error: "El nombre de la categoría es muy largo (máximo 40 letras)." };
   const amount = parsePesos(text(form, "amount"));
   if (!amount) return { error: "Escribe un tope mayor que cero." };
   const { error } = await supabase.from("budgets").upsert({ category, amount }, { onConflict: "user_id,category" });

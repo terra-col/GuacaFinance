@@ -232,3 +232,13 @@ test("a one-time payment: only its month, warned about only then, gone afterward
   assert.deepEqual(dates("2026-11-27"), ["DTSTART;VALUE=DATE:20270118"]);
   assert.deepEqual(dates("2027-01-19"), []);
 });
+
+test("budgets: a category of one's own counts its movements, whatever the capitals", () => {
+  const txs = [
+    tx({ amount: 120_000, category: "Gasolina" }),
+    tx({ amount: 80_000, category: "gasolina " }),
+    tx({ amount: 50_000, category: "Mascotas" }),
+  ];
+  const [fuel] = budgetViews([{ id: "g", category: "gasolina", amount: 400_000 }], txs, "2026-11", "2026-11-10");
+  assert.deepEqual([fuel.spent, fuel.left], [200_000, 200_000]);
+});

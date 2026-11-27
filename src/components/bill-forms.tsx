@@ -269,11 +269,13 @@ export function IncomeForm({
 
 /** Sets (or replaces) the monthly ceiling for one category. */
 export function BudgetForm({
-  categories,
   initial,
+  taken = [],
 }: {
-  categories: string[];
+  /** Changing one: its category stays. */
   initial?: { category: string; amount: number };
+  /** New: the categories that already have a budget, not offered again. */
+  taken?: string[];
 }) {
   const close = useCloseModal();
   const [state, action] = useActionState<FormState, FormData>(
@@ -289,7 +291,17 @@ export function BudgetForm({
       <div className="grid gap-4 sm:grid-cols-2">
         <label className="field">
           Categoría
-          <SelectField name="category" options={categories.map((c) => ({ value: c, label: c }))} defaultValue={initial?.category ?? categories[0]} required />
+          {initial ? (
+            <>
+              <input type="hidden" name="category" value={initial.category} />
+              <span className="input flex items-center">{initial.category}</span>
+            </>
+          ) : (
+            <>
+              <CategoryField name="category" required exclude={taken} placeholder="Mercado, gasolina, mascotas…" />
+              <span className="text-xs font-normal text-ink-3">Elige una o escribe una nueva. Cuenta lo que registres en Movimientos con esa misma categoría.</span>
+            </>
+          )}
         </label>
         <label className="field">
           Tope al mes

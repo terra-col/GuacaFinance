@@ -23,7 +23,7 @@ import { createClient } from "./supabase/server";
 /** What every screen's frame needs: accounts for the quick «new movement» sheet and the Wallet inbox count. */
 export async function loadShell() {
   const supabase = await createClient();
-  const [session, inbox, withFavorite, usedInTxs, usedInBills, groups, dated, datedIncomes, periods, waiting, currencies] = await Promise.all([
+  const [session, inbox, withFavorite, usedInTxs, usedInBills, budgeted, groups, dated, datedIncomes, periods, waiting, currencies] = await Promise.all([
     // Read from the cookie, no network: only to tell this person's things apart on the device (the
     // advisor's saved conversation), never to authorize anything.
     supabase.auth.getSession(),
@@ -32,6 +32,8 @@ export async function loadShell() {
     // The categories the person has used, newest first, to offer next to the app's own.
     supabase.from("transactions").select("category").not("category", "is", null).order("created_at", { ascending: false }).limit(1000),
     supabase.from("bills").select("category").not("category", "is", null),
+    // And the ones with a budget, so a new one written there is offered when recording a movement.
+    supabase.from("budgets").select("category"),
     // Only whether Compartidos exists yet (migration 0016).
     supabase.from("shared_groups").select("id").limit(1),
     // And whether periodicity does (migration 0017).
@@ -53,7 +55,7 @@ export async function loadShell() {
     userId: session.data.session?.user.id ?? null,
     // The welcome tour starts by itself until it is seen once (see markTourSeen).
     tourSeen: Boolean(session.data.session?.user.user_metadata?.tour_seen),
-    categories: knownCategories([...(usedInTxs.data ?? []), ...(usedInBills.data ?? [])].map((r) => r.category as string)),
+    categories: knownCategories([...(usedInTxs.data ?? []), ...(usedInBills.data ?? []), ...(budgeted.data ?? [])].map((r) => r.category as string)),
     sharedReady: !groups.error,
     socialReady: !waiting.error,
     noticeCount: Number(waiting.data) || 0,

@@ -1,6 +1,6 @@
 import { deleteBudget } from "@/app/actions";
 import type { BudgetView } from "@/lib/budget";
-import { CATEGORIES, formatCOP, type CategoryTotal } from "@/lib/finance";
+import { formatCOP, type CategoryTotal } from "@/lib/finance";
 import { Icon, txIconName } from "./icons";
 import { BudgetForm } from "./bill-forms";
 import { BudgetsViewToggle } from "./budgets-view-toggle";
@@ -20,8 +20,6 @@ const STATUS = {
  * Chart: a donut of where the month's spending went, by category.
  */
 export function BudgetsCard({ views, current, totals }: { views: BudgetView[]; current: boolean; totals: CategoryTotal[] }) {
-  const free = CATEGORIES.filter((c) => !views.some((v) => v.category === c));
-
   const bars =
     views.length === 0 ? (
       <p className="mt-3 text-sm text-ink-2">Ponle un tope mensual a una categoría (mercado, ocio, gasolina) y aquí verás cuánto te queda cada día.</p>
@@ -59,7 +57,7 @@ export function BudgetsCard({ views, current, totals }: { views: BudgetView[]; c
                 {current && (
                   <span className="flex shrink-0 items-center gap-3">
                     <Modal label="Cambiar" title={`Presupuesto de ${v.category}`} buttonClass="font-medium hover:text-ink">
-                      <BudgetForm categories={[v.category]} initial={v} />
+                      <BudgetForm initial={v} />
                     </Modal>
                     <form action={deleteBudget}>
                       <input type="hidden" name="id" value={v.id} />
@@ -80,11 +78,9 @@ export function BudgetsCard({ views, current, totals }: { views: BudgetView[]; c
     <section className="card" aria-label="Presupuestos del mes">
       <div className="flex items-center justify-between gap-3">
         <h2 className="display text-2xl">Presupuestos</h2>
-        {free.length > 0 && (
-          <Modal label="+ Agregar" title="Nuevo presupuesto" buttonClass="btn-quiet h-9 px-3 text-sm">
-            <BudgetForm categories={free} />
-          </Modal>
-        )}
+        <Modal label="+ Agregar" title="Nuevo presupuesto" buttonClass="btn-quiet h-9 px-3 text-sm">
+          <BudgetForm taken={views.map((v) => v.category)} />
+        </Modal>
       </div>
       <BudgetsViewToggle bars={bars} chart={<SpendingDonut totals={totals} />} />
     </section>
