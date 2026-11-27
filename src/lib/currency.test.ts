@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { NO_RATES, atTodayRate, formatForeign, needsRates, parseHundredths, parseRate, toPesos } from "./currency.ts";
+import { NO_RATES, PESOS, atTodayRate, formatForeign, formatMain, mainCurrencyCode, needsRates, parseHundredths, parseRate, showsForeign, toPesos } from "./currency.ts";
 import { balanceAt, balanceByCurrency, monthFlows, monthlyChecklist, nativeBalance, totals, valueRate, type Account, type Bill, type Planned, type Tx } from "./finance.ts";
 import { incomeChecklist, incomeRow, type Income } from "./budget.ts";
 
@@ -106,4 +106,17 @@ test("transfers: out of one account into the other, also changing currency, and 
   const t = totals([bank, cash, wise], txs);
   assert.equal(t.savings, 10_000_000 - 4_100_000 + 4_000_000);
   assert.deepEqual(monthFlows(txs, "2026-11"), { income: 0, expense: 0, payment: 0, transfer: 4_400_000 }, "not income nor spending");
+});
+
+test("main currency: totals in it at today's rate, pesos when unknown", () => {
+  assert.equal(mainCurrencyCode({ main_currency: "EUR" }), "EUR");
+  assert.equal(mainCurrencyCode({ main_currency: "JPY" }), "COP", "an unknown one is pesos");
+  assert.equal(mainCurrencyCode(null), "COP");
+  const plain = (s: string) => s.replace(/[  ]/g, " ");
+  assert.equal(plain(formatMain(8_130_890, PESOS)), "$ 8.130.890");
+  assert.equal(plain(formatMain(8_130_890, { code: "USD", rate: 4000 })), "US$ 2.032,72");
+  assert.equal(plain(formatMain(-400_000, { code: "EUR", rate: 4500 })), "€ -88,89");
+  // No rate today: still pesos, never a wrong figure.
+  assert.equal(showsForeign({ code: "USD", rate: null }), false);
+  assert.equal(plain(formatMain(1_000, { code: "USD", rate: null })), "$ 1.000");
 });

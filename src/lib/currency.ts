@@ -95,3 +95,28 @@ export function atTodayRate<T extends Foreign>(items: T[], rates: Rates): T[] {
 
 /** Whether any of them is in another currency with a value (and so wants today's rates). */
 export const needsRates = (items: Foreign[]) => items.some((i) => i.currency && i.currency !== "COP" && i.original_amount != null);
+
+/**
+ * The currency totals are shown in (chosen in Ajustes, kept in the profile). The data stays in
+ * pesos; totals are turned into it at today's rate. `rate`: pesos per unit (1 for pesos), null when
+ * today's is not known, and then totals stay in pesos.
+ */
+export interface MainCurrency {
+  code: Currency;
+  rate: number | null;
+}
+
+export const PESOS: MainCurrency = { code: "COP", rate: 1 };
+
+/** The main currency saved in the profile; pesos when none or an unknown one. */
+export const mainCurrencyCode = (metadata: Record<string, unknown> | null | undefined): Currency =>
+  isCurrency(metadata?.main_currency) ? metadata.main_currency : "COP";
+
+/** Whether totals are really shown in another currency (it has a rate today). */
+export const showsForeign = (main: MainCurrency) => main.code !== "COP" && Boolean(main.rate);
+
+/** A total in pesos, in the main currency: «$ 8.130.890», or «US$ 2.239,40» at today's rate. */
+export function formatMain(pesos: number, main: MainCurrency): string {
+  if (!showsForeign(main)) return new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 }).format(pesos);
+  return formatForeign(pesos / main.rate!, main.code);
+}

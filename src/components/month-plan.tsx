@@ -1,11 +1,12 @@
 import type { MonthPlan } from "@/lib/budget";
-import { formatCOP } from "@/lib/finance";
+import { PESOS, formatMain, type MainCurrency } from "@/lib/currency";
 
 /**
  * Income − obligations − budgets = free money, as one bar split into what the
  * salary already has a destination for and what is left to decide.
  */
-export function MonthPlanCard({ plan, compact = false }: { plan: MonthPlan; compact?: boolean }) {
+export function MonthPlanCard({ plan, compact = false, main = PESOS }: { plan: MonthPlan; compact?: boolean; /** Shown in the main currency (Ajustes). */ main?: MainCurrency }) {
+  const formatCOP = (n: number) => formatMain(n, main);
   const short = plan.free < 0;
   const whole = Math.max(plan.income, plan.obligations + plan.budgets, 1);
   const parts = [

@@ -3,7 +3,7 @@ import { houseChecklist } from "./house";
 import { loadHouse } from "./house-data";
 import { accountForeign, knownCategories, shiftMonth, todayInBogota, type Account, type Bill, type Planned, type Skip, type Tx } from "./finance";
 import type { Budget, Income } from "./budget";
-import { NO_RATES, atTodayRate, needsRates } from "./currency";
+import { NO_RATES, atTodayRate, mainCurrencyCode, needsRates, type MainCurrency } from "./currency";
 import { todayRates } from "./rates";
 import type { Goal, GoalDeposit } from "./goals";
 import type { CardPurchase } from "./installments";
@@ -127,7 +127,9 @@ export async function loadData() {
   const ownIncomes = planMissing ? [] : (incomes.data as Income[]);
   // Accounts in another currency are valued at it too.
   const foreignAccounts = (accounts as Account[]).some((a) => accountForeign(a));
-  const rates = foreignAccounts || needsRates([...(bills.data as Bill[]), ...ownIncomes]) ? await todayRates().catch(() => NO_RATES) : NO_RATES;
+  // Totals in the main currency chosen in Ajustes (pesos unless another one was picked).
+  const mainCode = mainCurrencyCode(user.user_metadata);
+  const rates = foreignAccounts || mainCode !== "COP" || needsRates([...(bills.data as Bill[]), ...ownIncomes]) ? await todayRates().catch(() => NO_RATES) : NO_RATES;
   return {
     supabase,
     user,
@@ -137,6 +139,7 @@ export async function loadData() {
     }),
     // Today's rates (or none): the balance's detail says which one it used and from when.
     rates,
+    main: { code: mainCode, rate: mainCode === "COP" ? 1 : (rates[mainCode] ?? null) } as MainCurrency,
     txs,
     // Balances read `txs`; totals of what came in or was spent read `flows` (see flowTxs).
     flows: flowTxs(txs, sharing.shared, user.id),

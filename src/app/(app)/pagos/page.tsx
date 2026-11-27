@@ -31,7 +31,7 @@ function Chevron({ dir }: { dir: "left" | "right" }) {
 const MONTH = /^\d{4}-(0[1-9]|1[0-2])$/;
 
 export default async function PaymentsPage({ searchParams }: { searchParams: Promise<{ mes?: string; vista?: string }> }) {
-  const { accounts, txs, bills, incomes, budgets, skips, planned, plannedReady, planReady, goals, deposits, shared, house, user, today } = await loadData();
+  const { accounts, txs, bills, incomes, budgets, skips, planned, plannedReady, main, planReady, goals, deposits, shared, house, user, today } = await loadData();
   const current = today.slice(0, 7);
   const { mes: asked, vista } = await searchParams;
   const view: PaymentsView = vista === "calendario" ? "calendario" : "lista";
@@ -197,7 +197,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
               : "Mes cerrado: así quedó la lista."}
         </p>
 
-        {planReady && (incomes.length > 0 || budgets.length > 0) && <MonthPlanCard plan={plan} />}
+        {planReady && (incomes.length > 0 || budgets.length > 0) && <MonthPlanCard plan={plan} main={main} />}
 
         {houses.map((h) => (
           <HouseCard key={h.id} id={h.id} name={h.name} month={month} people={h.members} summary={houseSummary(houseMonth(house, shared, user.id, h.id, month, today))} />

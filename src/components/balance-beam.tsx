@@ -1,4 +1,5 @@
 import { formatCOP, type CurrencyBalance } from "@/lib/finance";
+import { CURRENCIES, PESOS, formatMain, showsForeign, type MainCurrency } from "@/lib/currency";
 import { BalanceDetail } from "./balance-detail";
 import { AnimatedNumber } from "./animated-number";
 
@@ -13,6 +14,7 @@ export function BalanceBeam({
   previousNet,
   byCurrency = [],
   rateDate = null,
+  main = PESOS,
 }: {
   savings: number;
   debt: number;
@@ -20,8 +22,13 @@ export function BalanceBeam({
   /** The balance per currency: with more than one, the total is approximate and has a detail. */
   byCurrency?: CurrencyBalance[];
   rateDate?: string | null;
+  /** The currency totals are shown in (Ajustes). */
+  main?: MainCurrency;
 }) {
   const mixed = byCurrency.length > 1;
+  const converted = showsForeign(main);
+  const fmt = (n: number) => formatMain(n, main);
+  const mainName = CURRENCIES.find((c) => c.code === main.code)!.name.toLowerCase();
   const net = savings - debt;
   const total = savings + debt;
   const share = total > 0 ? savings / total : 0.5;
@@ -36,18 +43,20 @@ export function BalanceBeam({
           </h2>
           {diff !== null && diff !== 0 && (
             <span className={`pill ${diff > 0 ? "pill-idea" : "pill-urgent"}`}>
-              <span aria-hidden="true">{diff > 0 ? "↑" : "↓"}</span>&nbsp;{diff > 0 ? "Mejoró" : "Bajó"} {formatCOP(Math.abs(diff))} este mes
+              <span aria-hidden="true">{diff > 0 ? "↑" : "↓"}</span>&nbsp;{diff > 0 ? "Mejoró" : "Bajó"} {fmt(Math.abs(diff))} este mes
             </span>
           )}
         </div>
-        <p className="hero-number display mt-2 leading-none" style={{ "--chars": formatCOP(net).length } as React.CSSProperties}>
-          <AnimatedNumber value={net} from={previousNet ?? net} />
+        <p className="hero-number display mt-2 leading-none" style={{ "--chars": fmt(net).length } as React.CSSProperties}>
+          <AnimatedNumber value={net} from={previousNet ?? net} main={main} />
         </p>
         <p className="mt-3 text-ink-2">{net >= 0 ? "Tienes más de lo que debes." : "Debes más de lo que tienes."}</p>
-        {mixed && (
+        {(mixed || converted) && (
           <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-ink-3">
-            <span>En pesos, con la tasa de hoy ({byCurrency.map((g) => g.currency).join(", ")}).</span>
-            <BalanceDetail groups={byCurrency} rateDate={rateDate} />
+            <span>
+              ≈ En {converted ? mainName : "pesos"}, con la tasa de hoy{mixed ? ` (${byCurrency.map((g) => g.currency).join(", ")})` : ""}.
+            </span>
+            <BalanceDetail groups={byCurrency} rateDate={rateDate} main={main} />
           </div>
         )}
       </div>
@@ -56,11 +65,11 @@ export function BalanceBeam({
         <div className="flex items-end justify-between gap-4">
           <div>
             <p className="eyebrow">Tienes</p>
-            <p className="display text-xl min-[360px]:text-2xl sm:text-3xl">{formatCOP(savings)}</p>
+            <p className="display text-xl min-[360px]:text-2xl sm:text-3xl">{fmt(savings)}</p>
           </div>
           <div className="text-right">
             <p className="eyebrow">Debes</p>
-            <p className="display text-xl min-[360px]:text-2xl sm:text-3xl">{formatCOP(debt)}</p>
+            <p className="display text-xl min-[360px]:text-2xl sm:text-3xl">{fmt(debt)}</p>
           </div>
         </div>
         <Track share={share} label={`De cada 100 pesos entre lo que tienes y lo que debes, ${Math.round(share * 100)} son tuyos y ${100 - Math.round(share * 100)} son deuda.`} />

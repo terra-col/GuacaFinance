@@ -1,4 +1,4 @@
-import { CURRENCIES, formatForeign, formatRate } from "@/lib/currency";
+import { CURRENCIES, PESOS, formatForeign, formatMain, formatRate, showsForeign, type MainCurrency } from "@/lib/currency";
 import { formatCOP, formatDate, type CurrencyBalance } from "@/lib/finance";
 import { Modal } from "./modal";
 
@@ -9,7 +9,7 @@ const symbolOf = (code: string) => CURRENCIES.find((c) => c.code === code)!.symb
  * «Por moneda»: when there are accounts in more than one currency, what one has and owes in each,
  * there and in pesos today, with the rate used. The total above is the sum of those pesos.
  */
-export function BalanceDetail({ groups, rateDate }: { groups: CurrencyBalance[]; rateDate: string | null }) {
+export function BalanceDetail({ groups, rateDate, main = PESOS }: { groups: CurrencyBalance[]; rateDate: string | null; main?: MainCurrency }) {
   const total = groups.reduce((sum, g) => sum + g.haveValue - g.oweValue, 0);
   return (
     <Modal label="Ver por moneda" title="Tu balance por moneda" buttonClass="text-sm font-semibold text-brand">
@@ -50,8 +50,14 @@ export function BalanceDetail({ groups, rateDate }: { groups: CurrencyBalance[];
         </ul>
         <div className="flex items-baseline justify-between gap-3 border-t border-line pt-3">
           <p className="font-semibold">Total en pesos</p>
-          <p className="display num text-2xl">≈ {formatCOP(total)}</p>
+          <p className="display num shrink-0 whitespace-nowrap text-2xl">≈ {formatCOP(total)}</p>
         </div>
+        {showsForeign(main) && (
+          <div className="-mt-2 flex items-baseline justify-between gap-3" data-main-total>
+            <p className="font-semibold">En {nameOf(main.code).toLowerCase()}, tu moneda principal</p>
+            <p className="display num shrink-0 whitespace-nowrap text-xl">≈ {formatMain(total, main)}</p>
+          </div>
+        )}
         <p className="text-xs text-ink-3">
           Lo que está en otra moneda se suma con la tasa de hoy. Si la tasa sube o baja, tu balance en pesos cambia aunque no hayas movido nada.
         </p>

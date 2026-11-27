@@ -56,7 +56,7 @@ function greetingLine(today: string) {
 }
 
 async function Dashboard({ searchParams }: Props) {
-  const { supabase, accounts, txs, flows, position, shared, bills, inbox, incomes, budgets, skips, planned, planReady, goals, deposits, houseNow, houseNext, user, rates, today } = await loadData();
+  const { supabase, accounts, txs, flows, position, shared, bills, inbox, incomes, budgets, skips, planned, planReady, goals, deposits, houseNow, houseNext, user, rates, main, today } = await loadData();
   const addNow = (await searchParams).nueva === "1";
   const name = profileName(user);
   const invitations = pendingCount(await loadPending(supabase, shared, user.id));
@@ -126,7 +126,7 @@ async function Dashboard({ searchParams }: Props) {
       {greeting}
       <div className="grid gap-4 lg:grid-cols-6 lg:gap-5">
         <div className="min-w-0 lg:col-span-4">
-          <BalanceBeam savings={now.savings} debt={now.debt} previousNet={previous ? previous.net : null} byCurrency={balanceByCurrency(accounts, txs)} rateDate={rates.date} />
+          <BalanceBeam savings={now.savings} debt={now.debt} previousNet={previous ? previous.net : null} byCurrency={balanceByCurrency(accounts, txs)} rateDate={rates.date} main={main} />
         </div>
 
         {/* Phones: the two side by side, ring on top and everything centred; from tablets on, ring beside the words. */}
@@ -290,7 +290,7 @@ async function Dashboard({ searchParams }: Props) {
       <div className="grid gap-4 lg:grid-cols-6 lg:gap-5">
         {plan && (
           <div className="lg:col-span-3">
-            <MonthPlanCard plan={plan} compact />
+            <MonthPlanCard plan={plan} compact main={main} />
           </div>
         )}
 

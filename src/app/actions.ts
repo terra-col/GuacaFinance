@@ -13,7 +13,7 @@ import { PHONE_TAKEN, emailForPhone, phoneLoginReady, phoneTaken } from "@/lib/p
 import { halfStart, type Every } from "@/lib/recurrence";
 import { readSchedule } from "@/lib/schedule-form";
 import { currencyColumns, readAmount, readScheduledAmount, scheduledCurrencyColumns } from "@/lib/money-form";
-import { NO_RATES, parseHundredths } from "@/lib/currency";
+import { NO_RATES, isCurrency, parseHundredths } from "@/lib/currency";
 import { todayRates } from "@/lib/rates";
 import { requestOrigin } from "@/lib/request-origin";
 import { INVITE_COOKIE, invitePath } from "@/lib/shared";
@@ -161,6 +161,17 @@ export async function updateProfile(_prev: FormState, form: FormData): Promise<F
 }
 
 /** The welcome tour was seen (or skipped): kept with the profile, so it does not start again on another device. */
+/** The currency totals are shown in (Ajustes). Kept in the profile: nothing in the data changes. */
+export async function setMainCurrency(_prev: FormState, form: FormData): Promise<FormState> {
+  const supabase = await signedIn();
+  const code = text(form, "main_currency");
+  if (!isCurrency(code)) return { error: "Esa moneda no está disponible." };
+  const { error } = await supabase.auth.updateUser({ data: { main_currency: code } });
+  if (error) return { error: `No se pudo guardar: ${error.message}` };
+  revalidatePath("/", "layout");
+  return { message: "Guardado." };
+}
+
 export async function markTourSeen() {
   const supabase = await createClient();
   await supabase.auth.updateUser({ data: { tour_seen: true } });

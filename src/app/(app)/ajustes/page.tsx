@@ -17,6 +17,8 @@ import { bankKey, bankLogoUrl } from "@/lib/banks";
 import { loadData } from "@/lib/data";
 import { SCALE_COOKIE, THEME_COOKIE, parseScale, parseTheme } from "@/lib/theme";
 import { SubmitButton } from "@/components/submit-button";
+import { MainCurrencyPicker } from "@/components/main-currency";
+import { mainCurrencyCode } from "@/lib/currency";
 
 export default async function SettingsPage() {
   const { supabase, accounts, user } = await loadData();
@@ -38,6 +40,14 @@ export default async function SettingsPage() {
           <p className="text-sm text-ink-3">Cómo te saludamos en la app y con qué correo entras.</p>
         </div>
         <ProfileForm name={profileName(user)} email={user.email ?? ""} phone={profilePhone(user)} />
+      </section>
+
+      <section id="moneda" className="card flex scroll-mt-4 flex-col gap-4">
+        <div>
+          <h2 className="display text-2xl">Moneda principal</h2>
+          <p className="text-sm text-ink-3">En la que ves tus totales. Si tienes cuentas en otra moneda, se suman con la tasa de hoy.</p>
+        </div>
+        <MainCurrencyPicker initial={mainCurrencyCode(user.user_metadata)} />
       </section>
 
       <InstallCard />
