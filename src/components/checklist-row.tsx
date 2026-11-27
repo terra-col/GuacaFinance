@@ -21,7 +21,7 @@ interface Props {
   /** Past months are a record: they can be read but not ticked. */
   editable: boolean;
   /** Accounts the payment can come from: cards and savings for a bill, savings for a debt. */
-  accounts: { id: string; name: string }[];
+  accounts: { id: string; name: string; currency?: string | null }[];
   /** A month's value can be set (migration 0027 ran). */
   canPlan?: boolean;
 }
@@ -41,8 +41,10 @@ function buzz() {
  * One row of the month. A house's receipt is the same one its screen has: ticked in either place.
  */
 export function ChecklistRow(props: Props) {
-  if (props.item.house) return <HouseReceiptRow receipt={props.item.house} own={props.item} today={props.today} editable={props.editable} accounts={props.accounts} />;
-  return <OwnRow {...props} />;
+  // An account in another currency takes only movements in it: a row in pesos does not offer it.
+  const usable = props.accounts.filter((a) => !a.currency || a.currency === "COP" || (!props.item.house && !props.item.planned && a.currency === props.item.foreign?.currency));
+  if (props.item.house) return <HouseReceiptRow receipt={props.item.house} own={props.item} today={props.today} editable={props.editable} accounts={usable} />;
+  return <OwnRow {...props} accounts={usable} />;
 }
 
 /**

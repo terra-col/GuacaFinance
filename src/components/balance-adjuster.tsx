@@ -3,6 +3,7 @@
 import { useActionState, useState } from "react";
 import { adjustBalance, type FormState } from "@/app/actions";
 import { formatCOP } from "@/lib/finance";
+import { CURRENCIES, formatForeign, type Currency } from "@/lib/currency";
 import { DateField } from "./date-field";
 import { Icon } from "./icons";
 import { MoneyInput } from "./money-input";
@@ -15,6 +16,8 @@ import { SubmitButton } from "./submit-button";
 export function BalanceAdjuster({
   id,
   current,
+  native = null,
+  currency = null,
   debt,
   today,
   defaultOpen = false,
@@ -22,6 +25,9 @@ export function BalanceAdjuster({
 }: {
   id: string;
   current: number;
+  /** An account in another currency: its balance there (cents), and the currency it is typed in. */
+  native?: number | null;
+  currency?: Exclude<Currency, "COP"> | null;
   debt: boolean;
   today: string;
   defaultOpen?: boolean;
@@ -42,13 +48,17 @@ export function BalanceAdjuster({
         <form action={action} className="card rise flex flex-col gap-3">
           <input type="hidden" name="id" value={id} />
           <p className="text-sm text-ink-2">
-            Aquí dice <span className="num font-semibold text-ink">{formatCOP(current)}</span>. Escribe {debt ? "lo que debes según el banco" : "el saldo que ves en el banco"} y la
+            Aquí dice <span className="num font-semibold text-ink">{currency && native !== null ? formatForeign(native / 100, currency) : formatCOP(current)}</span>. Escribe {debt ? "lo que debes según el banco" : "el saldo que ves en el banco"} y la
             cuenta sigue desde ese número; la diferencia no es gasto ni ingreso. Lo de días anteriores que registres después ya no lo mueve. Lo de hoy que registres después sí: si ya salió del banco, regístralo antes.
           </p>
           <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
             <label className="field">
               {debt ? "Deuda según el banco" : "Saldo según el banco"}
-              <MoneyInput name="balance" required autoFocus />
+              {currency ? (
+                <input className="input num" name="balance" inputMode="decimal" autoComplete="off" placeholder={`${CURRENCIES.find((c) => c.code === currency)!.symbol} 0,00`} required autoFocus />
+              ) : (
+                <MoneyInput name="balance" required autoFocus />
+              )}
             </label>
             <label className="field">
               A la fecha

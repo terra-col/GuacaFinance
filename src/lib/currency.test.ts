@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { NO_RATES, atTodayRate, formatForeign, needsRates, parseHundredths, parseRate, toPesos } from "./currency.ts";
-import { monthlyChecklist, type Bill, type Planned } from "./finance.ts";
+import { balanceAt, balanceByCurrency, monthlyChecklist, nativeBalance, totals, valueRate, type Account, type Bill, type Planned, type Tx } from "./finance.ts";
 import { incomeChecklist, incomeRow, type Income } from "./budget.ts";
 
 test("amounts as people write them", () => {
@@ -54,4 +54,36 @@ test("bills and incomes in another currency: pesos at today's rate, paid in thei
   const [inc] = incomeChecklist([salary], [], "2026-12", "2026-11-27");
   assert.deepEqual([inc.expected, inc.foreign], [18_000_000, { currency: "USD", original: 4500 }]);
   assert.equal(incomeRow(inc).quick, null);
+});
+
+test("accounts in another currency: balance there, valued in pesos at today's rate", () => {
+  const base = { institution: null, opening_date: "2026-01-01", credit_limit: null, annual_rate: null, monthly_payment: null, statement_day: null, due_day: null, wallet_card_name: null };
+  const wise: Account = { ...base, id: "wise", kind: "savings", name: "Wise", opening_balance: 4_000_000, currency: "USD", opening_original: "1000.00", fx_rate: 4200 };
+  const bank: Account = { ...base, id: "bank", kind: "savings", name: "Banco", opening_balance: 2_000_000 };
+  const card: Account = { ...base, id: "card", kind: "credit_card", name: "Visa", opening_balance: 500_000 };
+  const tx = (over: Partial<Tx>): Tx => ({ id: crypto.randomUUID(), account_id: "wise", source_account_id: null, kind: "expense", amount: 0, category: "Ocio", description: null, occurred_on: "2026-11-05", source: "manual", bill_id: null, income_id: null, ...over });
+  const txs = [
+    // US$ 50,25 spent at 4.000, then US$ 300 paid in, at 4.100.
+    tx({ kind: "expense", amount: 201_000, currency: "USD", original_amount: "50.25", rate: "4000" }),
+    tx({ kind: "income", amount: 1_230_000, currency: "USD", original_amount: "300", rate: "4100" }),
+    // US$ 100 from Wise pay the peso card: the card owes $ 410.000 less.
+    tx({ kind: "payment", account_id: "card", source_account_id: "wise", amount: 410_000, currency: "USD", original_amount: "100", rate: "4100", occurred_on: "2026-11-06" }),
+  ];
+  assert.equal(nativeBalance(wise, txs), 114_975, "US$ 1.000 − 50,25 + 300 − 100 = 1.149,75");
+  assert.equal(balanceAt(wise, txs), Math.round(1149.75 * 4200), "valued at today's rate, not the rates of each day");
+  assert.equal(balanceAt(card, txs), 90_000);
+  // Without today's rate: the latest one known on the account.
+  assert.equal(valueRate({ ...wise, fx_rate: null }, txs), 4100);
+  assert.equal(valueRate({ ...wise, fx_rate: null }, []), 4000, "or that of its opening balance");
+
+  // The bank's balance as a checkpoint, in cents of the currency.
+  const check = tx({ kind: "income", amount: 0, category: "Ajuste de saldo", occurred_on: "2026-11-10", checkpoint: 120_000, created_at: "2026-11-10T15:00:00Z" });
+  const later = tx({ kind: "expense", amount: 40_000, currency: "USD", original_amount: "10", rate: "4000", occurred_on: "2026-11-12" });
+  assert.equal(nativeBalance(wise, [...txs, check, later]), 119_000, "US$ 1.200 checked, then US$ 10 spent");
+
+  const t = totals([wise, bank, card], txs);
+  assert.equal(t.savings, Math.round(1149.75 * 4200) + 2_000_000);
+  const groups = balanceByCurrency([wise, bank, card], txs);
+  assert.deepEqual(groups.map((g) => [g.currency, g.have, g.owe, g.rate]), [["COP", 2_000_000, 90_000, null], ["USD", 1149.75, 0, 4200]]);
+  assert.equal(balanceByCurrency([bank, card], txs).length, 1, "all in pesos: no detail");
 });

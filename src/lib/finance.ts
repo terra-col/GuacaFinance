@@ -39,6 +39,36 @@ export interface Account {
   favorite?: boolean;
   /** Place in its carousel, chosen by dragging; null = after the ordered ones, oldest first. */
   position?: number | null;
+  /** Its currency (migration 0030); absent or COP is pesos. */
+  currency?: string | null;
+  /** In another currency: the opening balance in it (`opening_balance` is its pesos that day). */
+  opening_original?: number | string | null;
+  /** In another currency: pesos per unit today, set when the data is loaded (or the last one known). */
+  fx_rate?: number | null;
+}
+
+export type ForeignCode = "USD" | "EUR" | "AED";
+const FOREIGN: ForeignCode[] = ["USD", "EUR", "AED"];
+const isForeignCode = (raw: unknown): raw is ForeignCode => FOREIGN.includes(raw as ForeignCode);
+
+/** The account's currency when it is not pesos; null for pesos. */
+export const accountForeign = (account: Pick<Account, "currency">): ForeignCode | null => (isForeignCode(account.currency) ? account.currency : null);
+
+/**
+ * Pesos per unit to value an account in another currency: today's (`fx_rate`), else the rate of
+ * its latest movement in that currency, else the one of its opening balance. 0 when none is known.
+ */
+export function valueRate(account: Account, txs: Tx[]): number {
+  if (account.fx_rate && account.fx_rate > 0) return account.fx_rate;
+  const currency = accountForeign(account);
+  let latest: Tx | null = null;
+  for (const tx of txs) {
+    if ((tx.account_id !== account.id && tx.source_account_id !== account.id) || tx.currency !== currency || !Number(tx.rate)) continue;
+    if (!latest || tx.occurred_on > latest.occurred_on) latest = tx;
+  }
+  if (latest) return Number(latest.rate);
+  const original = Number(account.opening_original ?? 0);
+  return original > 0 ? account.opening_balance / original : 0;
 }
 
 /** The favourite account for payments, if one is set. */
@@ -234,8 +264,33 @@ export function lastCheckpoint(account: Pick<Account, "id">, txs: Tx[], date?: s
  * that day. A check dated in the past is that day's closing balance, so it includes all of it.
  */
 export function balanceAt(account: Account, txs: Tx[], date?: string): number {
+  // In another currency: its own balance, valued in pesos at today's rate (or the last one known).
+  if (accountForeign(account)) return Math.round((nativeBalance(account, txs, date) / 100) * valueRate(account, txs));
+  return running(account, txs, date, false);
+}
+
+/**
+ * The balance in the account's own currency: pesos for an account in pesos, cents (hundredths)
+ * for one in dollars, euros or dirhams. Its checkpoints are in those same units.
+ */
+export function nativeBalance(account: Account, txs: Tx[], date?: string): number {
+  return running(account, txs, date, Boolean(accountForeign(account)));
+}
+
+/** What a movement does to an account in another currency, in cents of that currency. */
+function nativeEffect(account: Account, tx: Tx): number {
+  const pesos = effect(account, tx);
+  if (!pesos) return 0;
+  if (tx.currency === account.currency && tx.original_amount != null) return Math.sign(pesos) * Math.round(Number(tx.original_amount) * 100);
+  // Only an adjustment (its checkpoint is what counts) or a movement from before it had a currency.
+  if (isAdjustment(tx)) return 0;
+  const rate = Number(tx.rate) || account.fx_rate || 0;
+  return rate ? Math.round((pesos / rate) * 100) : 0;
+}
+
+function running(account: Account, txs: Tx[], date: string | undefined, native: boolean): number {
   const check = lastCheckpoint(account, txs, date);
-  let balance = check ? check.checkpoint! : account.opening_balance;
+  let balance = check ? check.checkpoint! : native ? Math.round(Number(account.opening_original ?? 0) * 100) : account.opening_balance;
   const sameDayCounts = Boolean(check?.created_at && todayInBogota(new Date(check.created_at)) === check.occurred_on);
   const checkedAt = check ? writtenAt(check) : 0;
   for (const tx of txs) {
@@ -244,7 +299,7 @@ export function balanceAt(account: Account, txs: Tx[], date?: string): number {
       if (tx === check || tx.occurred_on < check.occurred_on) continue;
       if (tx.occurred_on === check.occurred_on && !(sameDayCounts && writtenAt(tx) > checkedAt)) continue;
     }
-    balance += effect(account, tx);
+    balance += native ? nativeEffect(account, tx) : effect(account, tx);
   }
   return balance;
 }
@@ -268,6 +323,42 @@ export function totals(accounts: Account[], txs: Tx[], date?: string): Totals {
 }
 
 const pad = (n: number) => String(n).padStart(2, "0");
+
+/** What one has and owes in one currency, there and in pesos today. */
+export interface CurrencyBalance {
+  currency: "COP" | ForeignCode;
+  /** In that currency (whole pesos, or dollars with decimals). */
+  have: number;
+  owe: number;
+  /** In pesos at today's rate (the same for pesos). */
+  haveValue: number;
+  oweValue: number;
+  /** Pesos per unit it was valued at; null for pesos. */
+  rate: number | null;
+}
+
+/**
+ * The balance split by currency, for the detail behind the total: pesos first, then the others by
+ * what they are worth. Only currencies with an account.
+ */
+export function balanceByCurrency(accounts: Account[], txs: Tx[]): CurrencyBalance[] {
+  const groups = new Map<string, CurrencyBalance>();
+  for (const account of accounts) {
+    const code = accountForeign(account) ?? "COP";
+    const group = groups.get(code) ?? { currency: code, have: 0, owe: 0, haveValue: 0, oweValue: 0, rate: code === "COP" ? null : valueRate(account, txs) || null };
+    const value = balanceAt(account, txs);
+    const own = code === "COP" ? value : nativeBalance(account, txs) / 100;
+    if (isDebt(account)) {
+      group.owe += own;
+      group.oweValue += value;
+    } else {
+      group.have += own;
+      group.haveValue += value;
+    }
+    groups.set(code, group);
+  }
+  return [...groups.values()].sort((a, b) => (a.currency === "COP" ? -1 : b.currency === "COP" ? 1 : b.haveValue + b.oweValue - (a.haveValue + a.oweValue)));
+}
 
 export function daysInMonth(year: number, month: number): number {
   return new Date(Date.UTC(year, month, 0)).getUTCDate(); // month is 1-based

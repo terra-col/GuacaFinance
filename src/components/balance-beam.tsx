@@ -1,4 +1,5 @@
-import { formatCOP } from "@/lib/finance";
+import { formatCOP, type CurrencyBalance } from "@/lib/finance";
+import { BalanceDetail } from "./balance-detail";
 import { AnimatedNumber } from "./animated-number";
 
 /**
@@ -6,7 +7,21 @@ import { AnimatedNumber } from "./animated-number";
  * meet at one point, on a track whose midpoint means "even". When the meeting
  * point sits right of the midpoint you have more than you owe.
  */
-export function BalanceBeam({ savings, debt, previousNet }: { savings: number; debt: number; previousNet: number | null }) {
+export function BalanceBeam({
+  savings,
+  debt,
+  previousNet,
+  byCurrency = [],
+  rateDate = null,
+}: {
+  savings: number;
+  debt: number;
+  previousNet: number | null;
+  /** The balance per currency: with more than one, the total is approximate and has a detail. */
+  byCurrency?: CurrencyBalance[];
+  rateDate?: string | null;
+}) {
+  const mixed = byCurrency.length > 1;
   const net = savings - debt;
   const total = savings + debt;
   const share = total > 0 ? savings / total : 0.5;
@@ -29,6 +44,12 @@ export function BalanceBeam({ savings, debt, previousNet }: { savings: number; d
           <AnimatedNumber value={net} from={previousNet ?? net} />
         </p>
         <p className="mt-3 text-ink-2">{net >= 0 ? "Tienes más de lo que debes." : "Debes más de lo que tienes."}</p>
+        {mixed && (
+          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-ink-3">
+            <span>En pesos, con la tasa de hoy ({byCurrency.map((g) => g.currency).join(", ")}).</span>
+            <BalanceDetail groups={byCurrency} rateDate={rateDate} />
+          </div>
+        )}
       </div>
 
       <div>

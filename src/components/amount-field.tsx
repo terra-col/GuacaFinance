@@ -21,6 +21,7 @@ export function AmountField({
   required,
   placeholder,
   hero = false,
+  lock = null,
 }: {
   label: string;
   /** In pesos. */
@@ -33,9 +34,11 @@ export function AmountField({
   placeholder?: string;
   /** The main figure of the form: large and centred at the top. */
   hero?: boolean;
+  /** The account's currency when it is not pesos: the amount must be in it, so no other is offered. */
+  lock?: Currency | null;
 }) {
   const ready = useCurrenciesReady();
-  const [currency, setCurrency] = useState<Currency>(initialCurrency);
+  const [currency, setCurrency] = useState<Currency>(lock ?? initialCurrency);
   const foreign = currency !== "COP";
   const rates = useRates(foreign);
   const [typed, setTyped] = useState(original ? String(original).replace(".", ",") : "");
@@ -57,7 +60,7 @@ export function AmountField({
     setRateText(initialCurrency === next && initialRate ? formatRate(initialRate) : null);
   }
 
-  const picker = ready && (
+  const picker = ready && !lock && (
     <div className="flex gap-1" role="group" aria-label="Moneda">
       {CURRENCIES.map((c) => (
         <button key={c.code} type="button" className="chip h-9 px-2.5 text-xs" aria-pressed={currency === c.code} title={c.name} data-currency={c.code} onClick={() => pick(c.code)}>

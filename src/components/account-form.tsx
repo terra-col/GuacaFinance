@@ -7,6 +7,8 @@ import { DateField } from "./date-field";
 import { Icon, KIND_ICON } from "./icons";
 import { CreditDetailFields } from "./credit-detail-fields";
 import { MoneyInput } from "./money-input";
+import { AmountField } from "./amount-field";
+import { useAccountCurrenciesReady } from "./currency-context";
 import { SubmitButton } from "./submit-button";
 
 const KINDS: { kind: AccountKind; tone: string; label: string; hint: string }[] = [
@@ -32,6 +34,8 @@ export function AccountForm({ today, onSaved, initialKind = "savings", kinds }: 
   const [state, action] = useActionState<FormState, FormData>(saveAccount, {});
   const [kind, setKind] = useState<AccountKind>(initialKind);
   const debt = isDebt({ kind });
+  // An account in dollars, euros or dirhams keeps its balance in that currency (migration 0030).
+  const currencies = useAccountCurrenciesReady();
 
   useEffect(() => {
     if (state.message) onSaved?.();
@@ -72,10 +76,17 @@ export function AccountForm({ today, onSaved, initialKind = "savings", kinds }: 
             <input className="input" name="institution" placeholder="Bancolombia, Nu, Davivienda…" />
           </label>
         )}
-        <label className="field">
-          {debt ? "Cuánto debes hoy" : kind === "cash" ? "Cuánto efectivo tienes hoy" : "Saldo hoy"}
-          <MoneyInput key={kind} name="opening_balance" placeholder="$ 1.500.000" required />
-        </label>
+        {currencies ? (
+          <div className="flex flex-col gap-1">
+            <AmountField key={kind} label={debt ? "Cuánto debes hoy" : kind === "cash" ? "Cuánto efectivo tienes hoy" : "Saldo hoy"} placeholder="$ 1.500.000" required />
+            <span className="text-xs text-ink-3">En otra moneda, la cuenta lleva su saldo y sus movimientos en esa moneda. No se cambia después.</span>
+          </div>
+        ) : (
+          <label className="field">
+            {debt ? "Cuánto debes hoy" : kind === "cash" ? "Cuánto efectivo tienes hoy" : "Saldo hoy"}
+            <MoneyInput key={kind} name="opening_balance" placeholder="$ 1.500.000" required />
+          </label>
+        )}
         <label className="field">
           Fecha de ese saldo
           <DateField name="opening_date" defaultValue={today} max={today} required />

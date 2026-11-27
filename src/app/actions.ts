@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { passwordProblem } from "@/lib/auth-links";
-import { ADJUSTMENT, allowedTxKinds, balanceAt, isDebt, lastCheckpoint, monthName, PLAN_AHEAD, paidMonth, parsePesos, shiftMonth, todayInBogota, type Account, type AccountKind, type Tx, type TxKind } from "@/lib/finance";
+import { ADJUSTMENT, accountForeign, allowedTxKinds, balanceAt, isDebt, nativeBalance, valueRate, lastCheckpoint, monthName, PLAN_AHEAD, paidMonth, parsePesos, shiftMonth, todayInBogota, type Account, type AccountKind, type Tx, type TxKind } from "@/lib/finance";
 import { firstMonthFor } from "@/lib/installments";
 import { allPages } from "@/lib/paging";
 import { normalizePhone } from "@/lib/phone";
@@ -13,6 +13,8 @@ import { PHONE_TAKEN, emailForPhone, phoneLoginReady, phoneTaken } from "@/lib/p
 import { halfStart, type Every } from "@/lib/recurrence";
 import { readSchedule } from "@/lib/schedule-form";
 import { currencyColumns, readAmount, readScheduledAmount, scheduledCurrencyColumns } from "@/lib/money-form";
+import { NO_RATES, parseHundredths } from "@/lib/currency";
+import { todayRates } from "@/lib/rates";
 import { requestOrigin } from "@/lib/request-origin";
 import { INVITE_COOKIE, invitePath } from "@/lib/shared";
 import { REMEMBER_COOKIE, createClient, isSupabaseConfigured } from "@/lib/supabase/server";
@@ -221,7 +223,16 @@ export async function saveAccount(_prev: FormState, form: FormData): Promise<For
   if (!["savings", "cash", "credit_card", "loan"].includes(kind)) return { error: "Tipo de cuenta no válido." };
   const name = text(form, "name");
   if (!name) return { error: "Ponle un nombre a la cuenta." };
-  const opening_balance = parsePesos(text(form, "opening_balance") || "0");
+  // In pesos, or in another currency (migration 0030): its balance there and its pesos that day.
+  const currency = text(form, "currency") || "COP";
+  let opening_balance: number | null;
+  let foreignOpening: { currency: string; opening_original: number | null } | null = null;
+  if (currency !== "COP") {
+    const money = readAmount(form, "Escribe el saldo.");
+    if ("error" in money) return money;
+    opening_balance = money.amount;
+    foreignOpening = { currency: money.currency, opening_original: money.original_amount };
+  } else opening_balance = parsePesos(text(form, "opening_balance") || text(form, "amount") || "0");
   if (opening_balance === null) return { error: "El saldo no es un número válido." };
   const opening_date = text(form, "opening_date");
   if (!DATE.test(opening_date)) return { error: "La fecha del saldo no es válida." };
@@ -252,10 +263,13 @@ export async function saveAccount(_prev: FormState, form: FormData): Promise<For
     annual_rate,
     statement_day,
     due_day,
+    ...foreignOpening,
   });
   if (error) {
     return {
-      error: /accounts_kind_check/.test(error.message) ? "Para registrar efectivo falta ejecutar la migración 0005 en Supabase." : accountWriteError(error.message),
+      error: foreignOpening && /currency|opening_original/.test(error.message)
+        ? "Para cuentas en otra moneda falta ejecutar la migración 0030 en Supabase."
+        : /accounts_kind_check/.test(error.message) ? "Para registrar efectivo falta ejecutar la migración 0005 en Supabase." : accountWriteError(error.message),
     };
   }
   revalidatePath("/", "layout");
@@ -650,7 +664,7 @@ export async function updatePaid(_prev: FormState, form: FormData): Promise<Form
 export async function updateAccount(_prev: FormState, form: FormData): Promise<FormState> {
   const supabase = await signedIn();
   const id = text(form, "id");
-  const { data: current } = await supabase.from("accounts").select("kind").eq("id", id).maybeSingle();
+  const { data: current } = await supabase.from("accounts").select("*").eq("id", id).maybeSingle();
   if (!current) return { error: "Esa cuenta ya no existe." };
   const kind = current.kind as AccountKind;
 
@@ -696,7 +710,9 @@ export async function updateAccount(_prev: FormState, form: FormData): Promise<F
   // adjustment, so saving the other fields never creates one by accident.
   const typed = text(form, "balance");
   const shown = text(form, "balance_shown");
-  if (typed && shown && parsePesos(typed) !== Number(shown)) {
+  // In another currency both are in cents of it.
+  const typedValue = accountForeign(current) ? parseHundredths(typed) : parsePesos(typed);
+  if (typed && shown && typedValue !== Number(shown)) {
     const adjusted = await adjustBalance({}, form);
     if (adjusted.error) return { error: `Los datos quedaron guardados, pero el saldo no: ${adjusted.error}` };
   }
@@ -809,21 +825,27 @@ export async function adjustBalance(_prev: FormState, form: FormData): Promise<F
   const supabase = await signedIn();
   const id = text(form, "id");
   if (!/^[0-9a-f-]{36}$/i.test(id)) return { error: "Cuenta no válida." };
-  const target = parsePesos(text(form, "balance"));
-  if (target === null) return { error: "Escribe el saldo que te muestra el banco." };
   const occurred_on = text(form, "occurred_on") || todayInBogota();
   if (!DATE.test(occurred_on)) return { error: "La fecha no es válida." };
 
   // The balance is computed here, from the database, as of the chosen date: never trusted from the page.
   const { data: account } = await supabase.from("accounts").select("*").eq("id", id).maybeSingle();
   if (!account) return { error: "Esa cuenta ya no existe." };
+  // An account in another currency is typed and kept in it, in cents (migration 0030).
+  const code = accountForeign(account);
+  const typedBalance = text(form, "balance");
+  const target = code ? (typedBalance.replace(/[^\d]/g, "") === "" ? null : (parseHundredths(typedBalance) ?? null)) : parsePesos(typedBalance);
+  if (target === null) return { error: "Escribe el saldo que te muestra el banco." };
   // Every movement, page by page: Supabase returns 1000 rows at most, and a balance computed
   // from a cut list would record a wrong adjustment.
   const read = await allPages<Tx>((from, to) =>
     supabase.from("transactions").select("*").or(`account_id.eq.${id},source_account_id.eq.${id}`).order("id").range(from, to),
   );
   if (read.error) return { error: `No se pudo leer la cuenta: ${read.error.message}` };
-  const diff = target - balanceAt(account as Account, read.rows, occurred_on);
+  // In another currency the difference is in cents; its pesos, at today's rate, are only a reference.
+  const rate = code ? ((await todayRates().catch(() => NO_RATES))[code] ?? valueRate(account as Account, read.rows)) : 1;
+  const nativeDiff = code ? target - nativeBalance(account as Account, read.rows, occurred_on) : 0;
+  const diff = code ? Math.sign(nativeDiff) * Math.round((Math.abs(nativeDiff) / 100) * rate) : target - balanceAt(account as Account, read.rows, occurred_on);
 
   const debt = isDebt(account);
   // For a debt, more owed is a charge (interest, fees, a purchase not yet recorded); less is a payment.
@@ -834,7 +856,7 @@ export async function adjustBalance(_prev: FormState, form: FormData): Promise<F
     amount: Math.abs(diff),
     occurred_on,
     category: ADJUSTMENT,
-    description: diff === 0 ? "Coincidía con lo registrado" : diff > 0 ? (debt ? "Subió la deuda: intereses o cargos" : "Saldo mayor al registrado") : debt ? "Bajó la deuda" : "Saldo menor al registrado",
+    description: (code ? nativeDiff === 0 : diff === 0) ? "Coincidía con lo registrado" : diff > 0 ? (debt ? "Subió la deuda: intereses o cargos" : "Saldo mayor al registrado") : debt ? "Bajó la deuda" : "Saldo menor al registrado",
   };
   // The bank's balance is kept as a checkpoint, also when it matches: from there on it is what counts.
   let { error } = await supabase.from("transactions").insert({ ...row, checkpoint: target });

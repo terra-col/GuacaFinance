@@ -11,7 +11,7 @@ import { advise, type Advice } from "@/lib/advice";
 import { incomeChecklist, monthPlan } from "@/lib/budget";
 import { profileName } from "@/lib/brand";
 import { loadData } from "@/lib/data";
-import { balanceAt, byDue, daysBetween, formatCOP, isDebt, monthName, monthlyChecklist, monthlySeries, relativeDay, spendingByCategory, totals } from "@/lib/finance";
+import { balanceAt, balanceByCurrency, byDue, daysBetween, formatCOP, isDebt, monthName, monthlyChecklist, monthlySeries, relativeDay, spendingByCategory, totals } from "@/lib/finance";
 import { goalChecklist } from "@/lib/goals";
 import { SharedSummary } from "@/components/shared-summary";
 import { loadPending, pendingCount } from "@/lib/pending";
@@ -56,7 +56,7 @@ function greetingLine(today: string) {
 }
 
 async function Dashboard({ searchParams }: Props) {
-  const { supabase, accounts, txs, flows, position, shared, bills, inbox, incomes, budgets, skips, planned, planReady, goals, deposits, houseNow, houseNext, user, today } = await loadData();
+  const { supabase, accounts, txs, flows, position, shared, bills, inbox, incomes, budgets, skips, planned, planReady, goals, deposits, houseNow, houseNext, user, rates, today } = await loadData();
   const addNow = (await searchParams).nueva === "1";
   const name = profileName(user);
   const invitations = pendingCount(await loadPending(supabase, shared, user.id));
@@ -126,7 +126,7 @@ async function Dashboard({ searchParams }: Props) {
       {greeting}
       <div className="grid gap-4 lg:grid-cols-6 lg:gap-5">
         <div className="min-w-0 lg:col-span-4">
-          <BalanceBeam savings={now.savings} debt={now.debt} previousNet={previous ? previous.net : null} />
+          <BalanceBeam savings={now.savings} debt={now.debt} previousNet={previous ? previous.net : null} byCurrency={balanceByCurrency(accounts, txs)} rateDate={rates.date} />
         </div>
 
         {/* Phones: the two side by side, ring on top and everything centred; from tablets on, ring beside the words. */}

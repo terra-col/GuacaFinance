@@ -2,9 +2,10 @@ import { ViewTransition } from "react";
 import { bankKey, bankLogoUrl, cardColor, cardInk, initials, shade } from "@/lib/banks";
 import { BankLogo } from "./bank-logo";
 import { Icon } from "./icons";
-import { KIND_LABEL, formatCOP, type Account } from "@/lib/finance";
+import { KIND_LABEL, accountForeign, formatCOP, type Account } from "@/lib/finance";
+import { formatForeign } from "@/lib/currency";
 
-type CardAccount = Pick<Account, "kind" | "name" | "institution" | "color" | "last4" | "logo">;
+type CardAccount = Pick<Account, "kind" | "name" | "institution" | "color" | "last4" | "logo" | "currency" | "fx_rate">;
 
 /**
  * An account drawn as a card, in its bank's colour (or the one chosen), with
@@ -32,6 +33,9 @@ export function AccountCard({
   const light = ink === "#FFFFFF";
   const mark = account.institution || account.name;
   const big = size === "lg";
+  // In another currency: its balance there first, and about how much in pesos today.
+  const code = accountForeign(account);
+  const native = code && balance !== undefined && account.fx_rate ? formatForeign(balance / account.fx_rate, code) : null;
   // Uploaded image first; then the bank's own icon when the bank is known; else initials.
   const bank = bankKey(account.institution);
   const monogram = (
@@ -79,6 +83,7 @@ export function AccountCard({
           style={{ background: light ? "rgba(255,255,255,0.2)" : "rgba(20,17,46,0.1)" }}
         >
           {KIND_LABEL[account.kind]}
+          {code ? ` · ${code}` : ""}
         </span>
       </div>
 
@@ -94,8 +99,9 @@ export function AccountCard({
         <div className="flex items-end justify-between gap-3">
           <div className="min-w-0">
             <p className="truncate text-sm font-medium opacity-90">{account.name}</p>
-            {balance !== undefined && <p className={`display leading-tight ${big ? "text-4xl" : "text-2xl"}`}>{formatCOP(balance)}</p>}
-            {caption && <p className="text-xs font-medium opacity-85">{caption}</p>}
+            {balance !== undefined && <p className={`display leading-tight ${big ? "text-4xl" : "text-2xl"}`}>{native ?? formatCOP(balance)}</p>}
+            {caption && <p className="text-xs font-medium opacity-85">{caption}{native ? ` · ≈ ${formatCOP(balance!)} hoy` : ""}</p>}
+            {!caption && native && <p className="text-xs font-medium opacity-85">≈ {formatCOP(balance!)} hoy</p>}
           </div>
           {account.last4 && <p className="num shrink-0 text-sm font-semibold tracking-widest opacity-90">•••• {account.last4}</p>}
         </div>

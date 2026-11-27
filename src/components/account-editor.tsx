@@ -3,7 +3,10 @@
 import { useActionState, useEffect, useRef, useState } from "react";
 import { deleteAccount, toggleFavorite, updateAccount, type FormState } from "@/app/actions";
 import { CARD_COLORS, bankColor, bankKey, cardColor } from "@/lib/banks";
-import type { Account } from "@/lib/finance";
+import { accountForeign, type Account } from "@/lib/finance";
+
+/** Cents as people type them back: «1234,56». */
+const centsText = (cents: number) => (cents / 100).toFixed(2).replace(".", ",");
 import { installmentsPaid } from "@/lib/installments";
 import { AccountCard } from "./account-card";
 import { CreditDetailFields } from "./credit-detail-fields";
@@ -51,18 +54,22 @@ const DATA_HINT: Record<Account["kind"], string> = {
 export function AccountHero({
   account,
   balance,
+  native = null,
   debt,
   today,
   movements,
 }: {
   account: Account;
   balance: number;
+  /** In another currency: the balance there, in cents; it is what one types to update it. */
+  native?: number | null;
   debt: boolean;
   today: string;
   /** How many movements deleting the account would remove. */
   movements: number;
 }) {
   const [mode, setMode] = useState<Mode | null>(null);
+  const code = accountForeign(account);
   const [balanceOpen, setBalanceOpen] = useState(false);
   const [saved, setSaved] = useState(false);
   const [round, setRound] = useState(0);
@@ -271,10 +278,14 @@ export function AccountHero({
           // key: a movement saved meanwhile refreshes the typed field along with `balance_shown`.
           // Out of step, saving the other fields would record an adjustment undoing that movement.
           <div key={balance} className="grid gap-4 rounded-2xl bg-brand/6 p-4 sm:grid-cols-2">
-            <input type="hidden" name="balance_shown" value={Math.max(0, balance)} />
+            <input type="hidden" name="balance_shown" value={native !== null ? Math.max(0, native) : Math.max(0, balance)} />
             <label className="field">
-              Saldo de la deuda hoy
-              <MoneyInput name="balance" defaultValue={Math.max(0, balance)} autoFocus={mode === "data" && balanceOpen} />
+              Saldo de la deuda hoy{code ? ` (en ${code})` : ""}
+              {native !== null ? (
+                <input className="input num" name="balance" inputMode="decimal" autoComplete="off" defaultValue={centsText(Math.max(0, native))} autoFocus={mode === "data" && balanceOpen} />
+              ) : (
+                <MoneyInput name="balance" defaultValue={Math.max(0, balance)} autoFocus={mode === "data" && balanceOpen} />
+              )}
             </label>
             <label className="field">
               Según el banco a la fecha
@@ -478,7 +489,7 @@ export function AccountHero({
           {debt ? (
             form
           ) : (
-            <BalanceAdjuster id={account.id} current={balance} debt={false} today={today} defaultOpen onCancel={close} />
+            <BalanceAdjuster id={account.id} current={balance} native={native} currency={code} debt={false} today={today} defaultOpen onCancel={close} />
           )}
         </div>
       )}

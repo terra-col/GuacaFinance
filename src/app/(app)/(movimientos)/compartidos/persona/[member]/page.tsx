@@ -10,7 +10,7 @@ import { profileName } from "@/lib/brand";
 import { PENDING_ME, PENDING_OTHER } from "@/lib/people";
 import { memberOf } from "@/lib/shared";
 import { loadData } from "@/lib/data";
-import { favoriteAccountId, favoriteFirst, formatCOP } from "@/lib/finance";
+import { accountForeign, favoriteAccountId, favoriteFirst, formatCOP } from "@/lib/finance";
 import { EntryRow, entryScope, SwipeHint } from "@/components/entry-list";
 import { formatPhone } from "@/lib/phone";
 import { movesWith, peopleWith } from "@/lib/people";
@@ -41,7 +41,8 @@ export default async function PersonPage({ params }: { params: Promise<{ member:
     person.direct && mine
       ? { group: person.direct, me: mine.id, members: shared.members.filter((m) => m.group_id === person.direct && !m.removed_at).map(({ id, name }) => ({ id, name })) }
       : { group: "", me: PENDING_ME, members: [{ id: PENDING_ME, name: profileName(user) || "Tú" }, { id: PENDING_OTHER, name: person.name }] };
-  const payable = favoriteFirst(accounts.filter((a) => a.kind !== "loan")).map((a) => ({ value: a.id, label: a.name, star: Boolean(a.favorite) }));
+  // Shared expenses, houses and the Wallet inbox are in pesos: accounts in another currency are not offered.
+  const payable = favoriteFirst(accounts.filter((a) => a.kind !== "loan" && !accountForeign(a))).map((a) => ({ value: a.id, label: a.name, star: Boolean(a.favorite) }));
 
   return (
     <>

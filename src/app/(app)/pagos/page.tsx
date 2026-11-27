@@ -76,8 +76,9 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
   const addPayment = house.ready ? <AddPayment houses={houses} setup={setup} ownBills={ownBills.filter((b) => !b.once_month && (!b.currency || b.currency === "COP"))} debts={debts} /> : <BillForm inModal debts={debts} />;
   const incomeItems = incomeChecklist(incomes, txs, month, today, skips, planned);
   // Where a payment can come from: cards and savings for a bill, savings and cash for the rest.
-  const spendable = favoriteFirst(accounts.filter((a) => a.kind !== "loan")).map(({ id, name }) => ({ id, name }));
-  const savings = favoriteFirst(accounts.filter((a) => a.kind === "savings" || a.kind === "cash")).map(({ id, name }) => ({ id, name }));
+  // With their currency: each row offers those in pesos or in its own currency.
+  const spendable = favoriteFirst(accounts.filter((a) => a.kind !== "loan")).map(({ id, name, currency }) => ({ id, name, currency }));
+  const savings = favoriteFirst(accounts.filter((a) => a.kind === "savings" || a.kind === "cash")).map(({ id, name, currency }) => ({ id, name, currency }));
 
   /** The month picker: the title centred between the previous and next month. */
   function monthRow(v: PaymentsView) {

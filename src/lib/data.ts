@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { houseChecklist } from "./house";
 import { loadHouse } from "./house-data";
-import { knownCategories, shiftMonth, todayInBogota, type Account, type Bill, type Planned, type Skip, type Tx } from "./finance";
+import { accountForeign, knownCategories, shiftMonth, todayInBogota, type Account, type Bill, type Planned, type Skip, type Tx } from "./finance";
 import type { Budget, Income } from "./budget";
 import { NO_RATES, atTodayRate, needsRates } from "./currency";
 import { todayRates } from "./rates";
@@ -23,7 +23,7 @@ import { createClient } from "./supabase/server";
 /** What every screen's frame needs: accounts for the quick «new movement» sheet and the Wallet inbox count. */
 export async function loadShell() {
   const supabase = await createClient();
-  const [session, inbox, withFavorite, usedInTxs, usedInBills, budgeted, groups, dated, datedIncomes, periods, waiting, currencies] = await Promise.all([
+  const [session, inbox, withFavorite, usedInTxs, usedInBills, budgeted, groups, dated, datedIncomes, periods, waiting, currencies, accountCurrencies] = await Promise.all([
     // Read from the cookie, no network: only to tell this person's things apart on the device (the
     // advisor's saved conversation), never to authorize anything.
     supabase.auth.getSession(),
@@ -46,12 +46,17 @@ export async function loadShell() {
     supabase.rpc("shared_pending_count"),
     // Other currencies (migration 0026).
     supabase.rpc("currencies_ready"),
+    // Each account's currency (migration 0030), so the quick sheet takes an account in dollars in
+    // dollars. Its own read: before the migration it fails alone and everything stays in pesos.
+    supabase.from("accounts").select("id, currency"),
   ]);
   // Until migration 0012 runs there is no favourite column: ask again without it.
   const accounts = withFavorite.error ? await supabase.from("accounts").select("id, name, kind").order("created_at") : withFavorite;
+  const currencyOf = new Map((accountCurrencies.data ?? []).map((r) => [r.id as string, r.currency as string]));
   return {
     pending: inbox.count ?? 0,
-    accounts: (accounts.data ?? []) as Pick<Account, "id" | "name" | "kind" | "favorite">[],
+    accounts: ((accounts.data ?? []) as Pick<Account, "id" | "name" | "kind" | "favorite">[]).map((a) => ({ ...a, currency: currencyOf.get(a.id) ?? "COP" })),
+    accountCurrenciesReady: !accountCurrencies.error,
     userId: session.data.session?.user.id ?? null,
     // The welcome tour starts by itself until it is seen once (see markTourSeen).
     tourSeen: Boolean(session.data.session?.user.user_metadata?.tour_seen),
@@ -117,11 +122,18 @@ export async function loadData() {
   const today = todayInBogota();
   // Bills and incomes in another currency count in pesos at today's rate (kept six hours in memory).
   const ownIncomes = planMissing ? [] : (incomes.data as Income[]);
-  const rates = needsRates([...(bills.data as Bill[]), ...ownIncomes]) ? await todayRates().catch(() => NO_RATES) : NO_RATES;
+  // Accounts in another currency are valued at it too.
+  const foreignAccounts = (accounts as Account[]).some((a) => accountForeign(a));
+  const rates = foreignAccounts || needsRates([...(bills.data as Bill[]), ...ownIncomes]) ? await todayRates().catch(() => NO_RATES) : NO_RATES;
   return {
     supabase,
     user,
-    accounts: accounts as Account[],
+    accounts: (accounts as Account[]).map((a) => {
+      const code = accountForeign(a);
+      return code && rates[code] ? { ...a, fx_rate: rates[code] } : a;
+    }),
+    // Today's rates (or none): the balance's detail says which one it used and from when.
+    rates,
     txs,
     // Balances read `txs`; totals of what came in or was spent read `flows` (see flowTxs).
     flows: flowTxs(txs, sharing.shared, user.id),

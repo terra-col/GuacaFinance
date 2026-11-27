@@ -7,7 +7,7 @@ import { loadData } from "@/lib/data";
 import { CardPurchases } from "@/components/card-purchases";
 import { DebtTags, InstallmentMeter } from "@/components/installment-meter";
 import { debtView } from "@/lib/debts";
-import { balanceAt, formatCOP, formatDate, isDebt, monthLabel, monthlySeries, nextDueDate, relativeDay, daysBetween } from "@/lib/finance";
+import { accountForeign, balanceAt, nativeBalance, formatCOP, formatDate, isDebt, monthLabel, monthlySeries, nextDueDate, relativeDay, daysBetween } from "@/lib/finance";
 import { purchaseView } from "@/lib/installments";
 import { sharedMarks } from "@/lib/shared";
 
@@ -60,7 +60,7 @@ export default async function AccountPage({ params }: { params: Promise<{ id: st
           ‹ {debt ? "Créditos" : "Inicio"}
         </Link>
         <h1 className="sr-only">{account.name}</h1>
-        <AccountHero account={account} balance={balance} debt={debt} today={today} movements={own.length} />
+        <AccountHero account={account} balance={balance} native={accountForeign(account) ? nativeBalance(account, txs) : null} debt={debt} today={today} movements={own.length} />
       </div>
 
       {account.kind === "loan" && (

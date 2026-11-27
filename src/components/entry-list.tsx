@@ -5,7 +5,7 @@ import { EntrySwipe } from "@/components/entry-swipe";
 import { ExpenseForm } from "@/components/expense-form";
 import { DeleteEntryForm, RecordForm, SettlementForm, type EditableEntry } from "@/components/shared-forms";
 import type { loadData } from "@/lib/data";
-import { favoriteAccountId, favoriteFirst, formatCOP, formatDate, holdsMoney } from "@/lib/finance";
+import { accountForeign, favoriteAccountId, favoriteFirst, formatCOP, formatDate, holdsMoney } from "@/lib/finance";
 import { memberOf, type SharedEntry } from "@/lib/shared";
 import { parseSplit, splitTitle } from "@/lib/split";
 import { formatForeign, isCurrency } from "@/lib/currency";
@@ -41,8 +41,9 @@ export async function entryScope(groupId: string, { supabase, shared, accounts, 
     name: new Map(members.map((m) => [m.id, m.name])),
     gone: new Set(members.filter((m) => m.removed_at).map((m) => m.id)),
     form: { group: groupId, members: members.filter((m) => !m.removed_at).map(({ id, name }) => ({ id, name })), me: me.id, favorite, today },
-    payable: favoriteFirst(accounts.filter((a) => a.kind !== "loan")).map(option),
-    money: favoriteFirst(accounts.filter(holdsMoney)).map(option),
+    // In pesos: accounts in another currency are not offered for shared expenses.
+    payable: favoriteFirst(accounts.filter((a) => a.kind !== "loan" && !accountForeign(a))).map(option),
+    money: favoriteFirst(accounts.filter((a) => holdsMoney(a) && !accountForeign(a))).map(option),
     recordedByOthers: new Set<string>((recorded as string[] | null) ?? []),
   };
 }

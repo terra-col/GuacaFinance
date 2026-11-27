@@ -15,6 +15,7 @@ import { SplitPanel, draftShares, draftSplit } from "./split-panel";
 import { SplitWith, type Dividing } from "./split-with";
 import { SubmitButton } from "./submit-button";
 import {
+  accountForeign,
   allowedTxKinds,
   favoriteAccountId,
   favoriteFirst,
@@ -29,7 +30,7 @@ const KIND_OPTIONS: { kind: TxKind; label: string }[] = [
   { kind: "income", label: "Ingreso" },
 ];
 
-type AccountOption = Pick<Account, "id" | "name" | "kind" | "favorite">;
+type AccountOption = Pick<Account, "id" | "name" | "kind" | "favorite" | "currency">;
 
 const GROUP: Record<Account["kind"], string> = { savings: "Cuentas bancarias", cash: "Efectivo", credit_card: "Tarjetas de crédito", loan: "Préstamos" };
 const KIND_ORDER: Account["kind"][] = ["savings", "cash", "credit_card", "loan"];
@@ -37,7 +38,10 @@ const KIND_ORDER: Account["kind"][] = ["savings", "cash", "credit_card", "loan"]
 /** Accounts as picker options: grouped by kind, the favourite first in its group and starred. */
 function accountOptions(accounts: AccountOption[]): PickOption[] {
   return KIND_ORDER.flatMap((kind) =>
-    favoriteFirst(accounts.filter((a) => a.kind === kind)).map((a) => ({ value: a.id, label: a.name, group: GROUP[kind], star: Boolean(a.favorite) })),
+    favoriteFirst(accounts.filter((a) => a.kind === kind)).map((a) => {
+      const code = accountForeign(a);
+      return { value: a.id, label: code ? `${a.name} · ${code}` : a.name, group: GROUP[kind], star: Boolean(a.favorite) };
+    }),
   );
 }
 
@@ -116,6 +120,13 @@ export function TxForm({
   const targets = favoriteFirst(accounts.filter((a) => allowedTxKinds(a.kind).includes(kind)));
   const savings = favoriteFirst(accounts.filter((a) => a.kind === "savings" || a.kind === "cash"));
   const favorite = favoriteAccountId(accounts);
+  // The accounts chosen, to know the currency: an account in dollars takes its movements in dollars.
+  const firstTarget = own?.account_id ?? (kind !== "payment" && targets.some((a) => a.id === favorite) ? favorite! : (targets[0]?.id ?? ""));
+  const [picked, setPicked] = useState<{ kind: TxKind; target: string; source: string } | null>(null);
+  const chosen = picked && picked.kind === kind ? picked : { kind, target: firstTarget, source: own ? (own.source_account_id ?? "") : (favorite ?? "") };
+  const pick = (part: Partial<typeof chosen>) => setPicked({ ...chosen, ...part });
+  const currencyOf = (id: string) => accountForeign(accounts.find((a) => a.id === id) ?? {});
+  const lock = currencyOf(chosen.target) ?? (kind === "payment" ? currencyOf(chosen.source) : null);
 
   return (
     // Lives inside a sheet (new or edit), so it has no card or title of its own.
@@ -153,6 +164,8 @@ export function TxForm({
       <div hidden={splitting} className="flex flex-col gap-4">
       {editing && <input type="hidden" name="id" value={tx!.id} />}
       <AmountField
+        key={lock ?? "free"}
+        lock={lock}
         hero
         label={kind === "income" ? "¿Cuánto llegó?" : kind === "payment" ? "¿Cuánto pagaste?" : "¿Cuánto fue?"}
         defaultValue={tx?.amount}
@@ -206,12 +219,7 @@ export function TxForm({
                 : kind === "income"
                   ? "Cuenta que recibe"
                   : "Con qué pagaste"}
-              <SelectField
-                name="account_id"
-                options={accountOptions(targets)}
-                defaultValue={own?.account_id ?? (kind !== "payment" && targets.some((a) => a.id === favorite) ? favorite! : (targets[0]?.id ?? ""))}
-                required
-              />
+              <SelectField name="account_id" options={accountOptions(targets)} value={chosen.target} onChange={(target) => pick({ target })} required />
             </label>
             )}
             {kind === "payment" && (
@@ -220,7 +228,8 @@ export function TxForm({
                 <SelectField
                   name="source_account_id"
                   options={[{ value: "", label: "Otra fuente (no registrada)" }, ...accountOptions(savings)]}
-                  defaultValue={own ? (own.source_account_id ?? "") : (favorite ?? "")}
+                  value={chosen.source}
+                  onChange={(source) => pick({ source })}
                 />
               </label>
             )}

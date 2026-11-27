@@ -7,7 +7,7 @@ import { HouseReceiptRow } from "@/components/house-receipt";
 import { Modal } from "@/components/modal";
 import { PaidGroup } from "@/components/paid-group";
 import { loadData } from "@/lib/data";
-import { currentBills, favoriteFirst, formatCOP, monthName, shiftMonth } from "@/lib/finance";
+import { accountForeign, currentBills, favoriteFirst, formatCOP, monthName, shiftMonth } from "@/lib/finance";
 import { houseBillSchedule, houseMonth, type HouseReceipt } from "@/lib/house";
 import { cadenceText, isFrequent } from "@/lib/recurrence";
 import { groupNets, memberOf } from "@/lib/shared";
@@ -31,7 +31,8 @@ export default async function HousePage({ params, searchParams }: { params: Prom
 
   const members = shared.members.filter((m) => m.group_id === id);
   const option: HouseOption = { id, name: group.name, me: me.id, members: members.filter((m) => !m.removed_at).map(({ id, name }) => ({ id, name })) };
-  const spendable = favoriteFirst(accounts.filter((a) => a.kind !== "loan")).map(({ id, name }) => ({ id, name }));
+  // Shared expenses, houses and the Wallet inbox are in pesos: accounts in another currency are not offered.
+  const spendable = favoriteFirst(accounts.filter((a) => a.kind !== "loan" && !accountForeign(a))).map(({ id, name }) => ({ id, name }));
   // A one-time payment, or one in another currency, is not one a house takes over (it splits in pesos).
   const own = currentBills(bills).filter((b) => !b.once_month && (!b.currency || b.currency === "COP"));
   const payments = house.payments.filter((p) => p.group_id === id);

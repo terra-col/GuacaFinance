@@ -386,3 +386,22 @@ test("currencies on bills and incomes: pesos match the original and the rate, or
   // Changing only the pesos of a bill in dollars (as an old page would) is refused, not silently wrong.
   await assert.rejects(as(ANA, "update bills set amount = 1 where name = 'Netflix'"), /check constraint/);
 });
+
+test("accounts in another currency: their movements in it, and their currency fixed once they have some", async () => {
+  const [wise] = await as(ANA, "insert into accounts (kind, name, opening_balance, currency, opening_original) values ('savings', 'Wise', 4000000, 'USD', 1000) returning id");
+  await assert.rejects(as(ANA, "insert into accounts (kind, name, opening_balance, currency) values ('savings', 'X', 1, 'EUR')"), /check constraint/);
+  await assert.rejects(as(ANA, "insert into accounts (kind, name, opening_balance, opening_original) values ('savings', 'X', 1, 5)"), /check constraint/);
+  // In pesos into a dollar account: refused. In dollars: fine. An adjustment: in pesos is fine.
+  await assert.rejects(as(ANA, "insert into transactions (account_id, kind, amount) values ($1, 'expense', 1000)", [wise.id]), /debe ir en esa moneda/);
+  await assert.rejects(as(ANA, "insert into transactions (account_id, kind, amount, currency, original_amount, rate) values ($1, 'expense', 5000, 'EUR', 1, 5000)", [wise.id]), /debe ir en esa moneda/);
+  await as(ANA, "insert into transactions (account_id, kind, amount, currency, original_amount, rate) values ($1, 'expense', 40000, 'USD', 10, 4000)", [wise.id]);
+  await as(ANA, "insert into transactions (account_id, kind, amount, category, checkpoint) values ($1, 'income', 0, 'Ajuste de saldo', 99000)", [wise.id]);
+  // Paying a peso card from it: in dollars.
+  await assert.rejects(as(ANA, "insert into transactions (account_id, source_account_id, kind, amount) values ($1, $2, 'payment', 1000)", [visa.id, wise.id]), /debe ir en esa moneda/);
+  await as(ANA, "insert into transactions (account_id, source_account_id, kind, amount, currency, original_amount, rate) values ($1, $2, 'payment', 41000, 'USD', 10, 4100)", [visa.id, wise.id]);
+  // With movements its currency no longer changes; a new one without them can.
+  await assert.rejects(as(ANA, "update accounts set currency = 'COP', opening_original = null where id = $1", [wise.id]), /no se puede cambiar/);
+  const [fresh] = await as(ANA, "insert into accounts (kind, name, opening_balance, currency, opening_original) values ('cash', 'Dírhams', 110000, 'AED', 100) returning id");
+  await as(ANA, "update accounts set currency = 'EUR' where id = $1", [fresh.id]);
+  assert.equal((await as(ANA, "select account_currencies_ready() as ok"))[0].ok, true);
+});

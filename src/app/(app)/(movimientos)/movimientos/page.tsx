@@ -7,7 +7,7 @@ import { TxList } from "@/components/tx-list";
 import { SectionHead } from "@/components/section-head";
 import { sharedMarks } from "@/lib/shared";
 import { loadData } from "@/lib/data";
-import { formatCOP, monthFlows, monthLabel, spendingByCategory } from "@/lib/finance";
+import { accountForeign, formatCOP, monthFlows, monthLabel, spendingByCategory } from "@/lib/finance";
 
 export default async function TransactionsPage() {
   const { accounts, txs, flows: counted, shared, user, inbox, budgets, planReady, today } = await loadData();
@@ -33,7 +33,8 @@ export default async function TransactionsPage() {
     { label: "Pagos a deuda", amount: sum.payment, bar: "fill-brand" },
   ];
   const largest = Math.max(1, ...flows.map((f) => f.amount));
-  const spendable = accounts.filter((a) => a.kind !== "loan").map(({ id, name }) => ({ id, name }));
+  // Shared expenses, houses and the Wallet inbox are in pesos: accounts in another currency are not offered.
+  const spendable = accounts.filter((a) => a.kind !== "loan" && !accountForeign(a)).map(({ id, name }) => ({ id, name }));
 
   return (
     <>
