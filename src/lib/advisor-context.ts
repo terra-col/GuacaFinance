@@ -120,14 +120,15 @@ export function advisorContext({ accounts, txs, bills, goals, deposits, incomes 
     }
   }
 
-  const ownBills = currentBills(bills);
-  if (ownBills.length) {
-    lines.push("\n## Pagos fijos (el valor es por cada vez)");
-    for (const b of ownBills) lines.push(`- ${b.name}: ${b.amount ? formatCOP(b.amount) : "valor variable"}, ${cadenceText(billSchedule(b))}`);
-  }
-
   const months = lastMonths(today, 3);
   const current = today.slice(0, 7);
+  // One-time payments already behind are the past: only the movement remains.
+  const ownBills = currentBills(bills).filter((b) => !b.once_month || b.once_month >= current);
+  if (ownBills.length) {
+    lines.push("\n## Pagos fijos (el valor es por cada vez)");
+    for (const b of ownBills)
+      lines.push(`- ${b.name}: ${b.amount ? formatCOP(b.amount) : "valor variable"}, ${b.once_month ? `una sola vez, el ${b.due_day} de ${monthLabel(b.once_month)}` : cadenceText(billSchedule(b))}`);
+  }
   if (incomes.length) {
     lines.push("\n## Ingresos programados");
     for (const i of incomes.filter((x) => !x.once_month || x.once_month >= current)) {

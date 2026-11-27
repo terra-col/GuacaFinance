@@ -340,6 +340,12 @@ export async function saveBill(_prev: FormState, form: FormData): Promise<FormSt
   const amountRaw = text(form, "amount");
   const amount = amountRaw ? parsePesos(amountRaw) : null;
   if (amountRaw && !amount) return { error: "El valor no es válido." };
+  // A one-time payment (migration 0028): its month, on its day.
+  const once_month = text(form, "repeat") === "once" ? text(form, "once_month") : null;
+  if (once_month !== null && !MONTH.test(once_month)) return { error: "Elige el mes en que se paga." };
+  if (once_month !== null && once_month < todayInBogota().slice(0, 7)) return { error: "Ese mes ya pasó. Si ya lo pagaste, regístralo como gasto en Movimientos." };
+  if (once_month !== null && schedule.every !== "monthly") return { error: "Un pago de una sola vez no se repite." };
+  const onceLink = once_month ? { once_month } : current?.once_month ? { once_month: null } : {};
 
   // Only when it is not plain monthly, so saving keeps working before migration 0017.
   const repeats = schedule.every !== "monthly" || (current?.every && current.every !== "monthly") ? { every: schedule.every, starts_on: schedule.start } : {};
@@ -350,11 +356,13 @@ export async function saveBill(_prev: FormState, form: FormData): Promise<FormSt
     if (!debt || !isDebt(debt)) return { error: "Elige una de tus tarjetas o créditos." };
   }
   const debtLink = form.has("pays_account") && (pays || current?.pays_account) ? { pays_account: pays || null } : {};
-  const row: Record<string, unknown> = { name, due_day: schedule.day, amount, category: text(form, "category") || null, ...repeats, ...debtLink };
+  const row: Record<string, unknown> = { name, due_day: schedule.day, amount, category: text(form, "category") || null, ...repeats, ...debtLink, ...onceLink };
   const { error } = id ? await supabase.from("bills").update(row).eq("id", id) : await supabase.from("bills").insert(row);
   if (error && /pays_account/.test(error.message)) return { error: "Falta ejecutar la migración 0026 en Supabase." };
+  if (error && /once_month/.test(error.message)) return { error: "Para los pagos de una sola vez falta ejecutar la migración 0028 en Supabase." };
   if (error) return { error: recurrenceMissing(error.message) ?? `No se pudo guardar: ${error.message}` };
   revalidatePath("/", "layout");
+  if (once_month && !id) return { message: `${name} quedó para ${monthName(once_month)}.` };
   return { message: id ? `${name} quedó actualizado.` : `${name} quedó registrado.` };
 }
 

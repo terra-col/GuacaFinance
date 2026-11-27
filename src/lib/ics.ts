@@ -10,6 +10,8 @@ export interface DueItem {
   monthly_payment: number | null;
   every?: Every;
   starts_on?: string | null;
+  /** A one-time payment (migration 0028): only that month. */
+  once_month?: string | null;
 }
 
 const escapeText = (text: string) => text.replace(/\\/g, "\\\\").replace(/([,;])/g, "\\$1").replace(/\r?\n/g, "\\n");
@@ -24,7 +26,8 @@ export function buildCalendar(items: DueItem[], today: string, monthsAhead = 3):
     const named = EVERY.some((e) => e.value === every);
     // The ones of migration 0017 show as always; any other, those of the months ahead or the next one.
     const count = frequent ? 14 : every === "biweekly" ? monthsAhead * 2 : named ? monthsAhead : Math.max(1, Math.ceil(monthsAhead * timesPerMonth(every)));
-    const dates = every === "monthly" ? dueDates(item.due_day, today, monthsAhead) : nextDates({ every, day: item.due_day, start: item.starts_on ?? null }, today, count);
+    const once = item.once_month ? dueDates(item.due_day, `${item.once_month}-01`, 1).filter((d) => d >= today) : null;
+    const dates = once ? once : every === "monthly" ? dueDates(item.due_day, today, monthsAhead) : nextDates({ every, day: item.due_day, start: item.starts_on ?? null }, today, count);
     for (const date of dates) {
       const summary = `Pagar ${item.name}${item.monthly_payment ? ` · cuota ${formatCOP(item.monthly_payment)}` : ""}`;
       lines.push(

@@ -449,6 +449,8 @@ export interface Bill {
   ended_month?: string | null;
   /** The card or loan it is the instalment of (migration 0026): ticking it is a payment to it. */
   pays_account?: string | null;
+  /** A one-time payment (migration 0028): only that month, on its day. */
+  once_month?: string | null;
 }
 
 /** The fixed payments still one's own. */
@@ -457,7 +459,17 @@ export const currentBills = <T extends Pick<Bill, "ended_month">>(bills: T[]) =>
 export const billSchedule = (bill: Bill): Schedule => ({ every: bill.every ?? "monthly", day: bill.due_day, start: bill.starts_on ?? null });
 
 /** The next date a bill falls on, today included. */
-export const nextBillDate = (bill: Bill, today: string) => nextDates(billSchedule(bill), today, 1)[0] ?? null;
+/** The date of a one-time payment: its day in its month. */
+export const onceDate = (bill: Pick<Bill, "due_day" | "once_month">) => dueDates(bill.due_day, `${bill.once_month}-01`, 1)[0];
+
+/** The next date a bill falls on, today included; null for a one-time payment already behind. */
+export function nextBillDate(bill: Bill, today: string): string | null {
+  if (bill.once_month) {
+    const date = onceDate(bill);
+    return date >= today ? date : null;
+  }
+  return nextDates(billSchedule(bill), today, 1)[0] ?? null;
+}
 
 /**
  * Whether «this time does not apply»: by date for what is not monthly, by month for the rest.
@@ -481,6 +493,12 @@ export interface BillStatus {
 export function billStatus(bill: Bill, txs: Tx[], today: string, skips: Skip[] = []): BillStatus {
   const month = today.slice(0, 7);
   const schedule = billSchedule(bill);
+  if (bill.once_month) {
+    // Only its month counts: before it, nothing to warn about yet; after it, it is the past.
+    const date = onceDate(bill);
+    const done = bill.once_month !== month || txs.some((t) => t.bill_id === bill.id && paidMonth(t) === month) || findSkip(skips, "bill", bill.id, month) !== null;
+    return { date, paidThisMonth: done, days: daysBetween(today, date) };
+  }
   if (schedule.every !== "monthly") {
     const own = txs.filter((t) => t.bill_id === bill.id);
     for (let i = 0; i <= 12; i++) {
@@ -531,6 +549,8 @@ export interface ChecklistItem {
   usual?: number | null;
   /** Incomes: the months (1–12) it arrives in, or the one month of a one-time extra. */
   arrives?: { months: number[] | null; once: string | null };
+  /** A one-time payment rather than a fixed one. */
+  once?: boolean;
   /** Enough to record the payment in one tap; null when the amount or the account must be asked. */
   quick: { amount: number; accountId: string | null } | null;
   /** Once paid: the date and the account of the latest payment, to edit it in place. */
@@ -582,6 +602,8 @@ export function monthlyChecklist(accounts: Account[], bills: Bill[], txs: Tx[], 
     if (bill.ended_month && month >= bill.ended_month) continue;
     if (monthly && bill.created_at && todayInBogota(new Date(bill.created_at)).slice(0, 7) > month) continue;
     const payments = txs.filter((t) => t.bill_id === bill.id && inMonth(t));
+    // A one-time payment: only its month (or where it was paid, if it was marked for another).
+    if (bill.once_month && bill.once_month !== month && payments.length === 0) continue;
     // Monthly again after having another periodicity: earlier months show only what was paid.
     if (monthly && payments.length === 0 && schedule.start && month < schedule.start.slice(0, 7)) continue;
     const due = dueIn(bill.due_day);
@@ -625,6 +647,8 @@ export function monthlyChecklist(accounts: Account[], bills: Bill[], txs: Tx[], 
       expected,
       planned: plan,
       usual: bill.amount,
+      // A one-time payment: its value can only be set for its month.
+      ...(bill.once_month ? { once: true, arrives: { months: null, once: bill.once_month } } : {}),
       paid: payments.length > 0,
       paidAmount: payments.reduce((sum, t) => sum + t.amount, 0),
       paidOn: payments[0]?.occurred_on ?? null,

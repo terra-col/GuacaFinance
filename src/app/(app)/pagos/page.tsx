@@ -72,7 +72,8 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
   };
   const ownBills = currentBills(bills);
   const debts = accounts.filter((a) => a.kind === "credit_card" || a.kind === "loan").map(({ id, name, monthly_payment }) => ({ id, name, monthly_payment }));
-  const addPayment = house.ready ? <AddPayment houses={houses} setup={setup} ownBills={ownBills} debts={debts} /> : <BillForm inModal debts={debts} />;
+  // A one-time payment is not one a house takes over.
+  const addPayment = house.ready ? <AddPayment houses={houses} setup={setup} ownBills={ownBills.filter((b) => !b.once_month)} debts={debts} /> : <BillForm inModal debts={debts} />;
   const incomeItems = incomeChecklist(incomes, txs, month, today, skips, planned);
   // Where a payment can come from: cards and savings for a bill, savings and cash for the rest.
   const spendable = favoriteFirst(accounts.filter((a) => a.kind !== "loan")).map(({ id, name }) => ({ id, name }));
@@ -164,12 +165,12 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
       else nextIncome.add(row.id);
     }
 
-    // One-time extras drop off the list once their month is over.
+    // One-time extras and payments drop off the list once their month is over.
     const visibleIncomes = incomes.filter((i) => !i.once_month || i.once_month >= current);
     // Incomes and fixed bills with their next date (even in a coming month), soonest first.
     const scheduled: ScheduledRow[] = [
       ...visibleIncomes.map((income) => ({ kind: "income" as const, income, next: nextIncomeDate(income, today) })),
-      ...ownBills.map((bill) => ({ kind: "bill" as const, bill, next: nextBillDate(bill, today) })),
+      ...ownBills.filter((b) => !b.once_month || b.once_month >= current).map((bill) => ({ kind: "bill" as const, bill, next: nextBillDate(bill, today) })),
     ].sort((a, b) => (a.next ?? "9999").localeCompare(b.next ?? "9999"));
     // What repeats every day or two shows up to today plus the next one; the rest folds away.
     const later = new Set<string>();

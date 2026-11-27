@@ -97,7 +97,7 @@ test("wallet_ingest: zero amount or unknown card goes to the review inbox, not t
 test("calendar_feed: only the token owner's debts with a due day, and no balances", async () => {
   const rows = await as(null, "select * from calendar_feed('c-ana')");
   assert.deepEqual(rows.map((r) => [r.name, r.kind, r.due_day]), [["Internet", "bill", 5], ["Visa", "credit_card", 20]]);
-  assert.deepEqual(Object.keys(rows[0]).sort(), ["due_day", "every", "id", "kind", "monthly_payment", "name", "starts_on"]);
+  assert.deepEqual(Object.keys(rows[0]).sort(), ["due_day", "every", "id", "kind", "monthly_payment", "name", "once_month", "starts_on"]);
   assert.equal((await as(null, "select * from calendar_feed('w-ana')")).length, 0);
 });
 
@@ -359,4 +359,15 @@ test("planned_amounts: a month's value, only on one's own bills, cards and incom
   // Deleting the income takes its values with it.
   await as(ANA, "delete from incomes where id = $1", [bonus.id]);
   assert.deepEqual((await as(ANA, "select item_type from planned_amounts order by item_type")).map((r) => r.item_type), ["bill", "debt"]);
+});
+
+test("once_month: a one-time payment is monthly, and the calendar feed shows it only until its month", async () => {
+  await as(ANA, "insert into bills (name, amount, due_day, once_month) values ('Matrícula', 2000000, 10, '2099-02'), ('Impuesto viejo', 300000, 5, '2020-03')");
+  await assert.rejects(as(ANA, "insert into bills (name, due_day, every, starts_on, once_month) values ('X', 15, 'biweekly', '2026-11-16', '2099-01')"), /check constraint/);
+  await assert.rejects(as(ANA, "insert into bills (name, due_day, once_month) values ('X', 1, '2099-13')"), /check constraint/);
+  const rows = await as(null, "select * from calendar_feed('c-ana')");
+  assert.equal(rows.find((r) => r.name === "Matrícula")?.once_month, "2099-02");
+  assert.equal(rows.find((r) => r.name === "Impuesto viejo"), undefined);
+  assert.equal(rows.find((r) => r.name === "Visa").once_month, null);
+  assert.equal((await as(null, "select * from calendar_feed('nope')")).length, 0);
 });

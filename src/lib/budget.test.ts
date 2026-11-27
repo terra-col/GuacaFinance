@@ -1,7 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { budgetViews, incomeChecklist, incomeRow, monthPlan, type Income } from "./budget.ts";
-import { monthlyChecklist, planMonths, type Account, type Bill, type Planned, type Skip, type Tx } from "./finance.ts";
+import { billStatus, monthlyChecklist, nextBillDate, planMonths, type Account, type Bill, type Planned, type Skip, type Tx } from "./finance.ts";
+import { advise } from "./advice.ts";
+import { buildCalendar } from "./ics.ts";
 
 const tx = (over: Partial<Tx>): Tx => ({
   id: crypto.randomUUID(),
@@ -202,4 +204,31 @@ test("a month's value: which months can be chosen", () => {
   // Not for what has several dates a month, nor for goals.
   assert.deepEqual(planMonths({ type: "bill", every: "biweekly", forDate: "2026-11-27" }, "2026-11-26"), []);
   assert.deepEqual(planMonths({ type: "goal" }, "2026-11-26"), []);
+});
+
+test("a one-time payment: only its month, warned about only then, gone afterwards", () => {
+  const soat: Bill = { id: "soat", name: "SOAT", amount: 950_000, due_day: 18, category: "Transporte", created_at: "2026-11-27T12:00:00Z", once_month: "2027-01" };
+  const months = ["2026-12", "2027-01", "2027-02"].map((m) => monthlyChecklist([], [soat], [], m, "2026-11-27"));
+  assert.deepEqual(months.map((items) => items.length), [0, 1, 0]);
+  const [jan] = months[1];
+  assert.deepEqual([jan.due, jan.expected, jan.once, jan.quick], ["2027-01-18", 950_000, true, null]);
+  // Its value can only be set for its month.
+  assert.deepEqual(planMonths(jan, "2026-11-27"), ["2027-01"]);
+
+  // Paid early, for January: January shows it paid.
+  const early = tx({ amount: 950_000, bill_id: "soat", occurred_on: "2026-12-20", for_month: "2027-01" });
+  assert.equal(monthlyChecklist([], [soat], [early], "2027-01", "2026-12-20")[0].paid, true);
+
+  // Next date, and the warning only in its month.
+  assert.equal(nextBillDate(soat, "2026-11-27"), "2027-01-18");
+  assert.equal(nextBillDate(soat, "2027-01-19"), null);
+  assert.equal(billStatus(soat, [], "2026-12-30").paidThisMonth, true, "not its month yet: nothing to warn");
+  assert.deepEqual(billStatus(soat, [], "2027-01-16"), { date: "2027-01-18", paidThisMonth: false, days: 2 });
+  assert.equal(advise([], [], "2027-01-16", [soat]).filter((a) => a.id === "bill-soat").length, 1);
+  assert.equal(advise([], [], "2027-02-20", [soat]).filter((a) => a.id === "bill-soat").length, 0, "a month later it is the past");
+
+  // The subscribed calendar: only that date, and nothing once it went by.
+  const dates = (today: string) => buildCalendar([{ id: "soat", name: "SOAT", due_day: 18, monthly_payment: 950_000, once_month: "2027-01" }], today, 3).match(/DTSTART;VALUE=DATE:\d+/g) ?? [];
+  assert.deepEqual(dates("2026-11-27"), ["DTSTART;VALUE=DATE:20270118"]);
+  assert.deepEqual(dates("2027-01-19"), []);
 });

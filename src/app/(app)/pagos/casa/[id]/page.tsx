@@ -32,7 +32,8 @@ export default async function HousePage({ params, searchParams }: { params: Prom
   const members = shared.members.filter((m) => m.group_id === id);
   const option: HouseOption = { id, name: group.name, me: me.id, members: members.filter((m) => !m.removed_at).map(({ id, name }) => ({ id, name })) };
   const spendable = favoriteFirst(accounts.filter((a) => a.kind !== "loan")).map(({ id, name }) => ({ id, name }));
-  const own = currentBills(bills);
+  // A one-time payment is not one a house takes over.
+  const own = currentBills(bills).filter((b) => !b.once_month);
   const payments = house.payments.filter((p) => p.group_id === id);
 
   const receipts = houseMonth(house, shared, user.id, id, month, today);

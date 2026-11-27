@@ -47,19 +47,36 @@ export function BillForm({ bill, onDone, inModal = false, debts = [] }: { bill?:
     return result;
   }, {});
   const [schedule, setSchedule] = useState<EveryValue>({ every: bill?.every ?? "monthly", day: bill?.due_day ?? "", start: bill?.every && bill.every !== "monthly" ? (bill.starts_on ?? "") : "" });
+  // A fixed payment, or one that happens once (the enrolment, the SOAT, a tax).
+  const [once, setOnce] = useState(Boolean(bill?.once_month));
+  const today = todayInBogota();
   return (
     <form action={action} className={bare ? "flex flex-col gap-4" : "card flex flex-col gap-4"}>
       {!bare && <h2 className="display text-2xl">Nuevo pago fijo</h2>}
       {bill && <input type="hidden" name="id" value={bill.id} />}
+      <fieldset className="flex flex-wrap gap-2">
+        <legend className="sr-only">Cada cuánto</legend>
+        {(
+          [
+            [false, "Fijo"],
+            [true, "Una sola vez"],
+          ] as const
+        ).map(([value, label]) => (
+          <label key={label} className="month-chip">
+            <input type="radio" name="repeat" value={value ? "once" : "fixed"} checked={once === value} onChange={() => setOnce(value)} className="sr-only" />
+            {label}
+          </label>
+        ))}
+      </fieldset>
       <div className="grid gap-4 sm:grid-cols-2">
         <label className="field">
           Nombre
-          <input className="input" name="name" defaultValue={bill?.name} placeholder="Internet, arriendo, Netflix…" required />
+          <input className="input" name="name" defaultValue={bill?.name} placeholder={once ? "Matrícula, SOAT, impuesto…" : "Internet, arriendo, Netflix…"} required />
         </label>
         <label className="field">
-          {schedule.every === "monthly" ? "Valor" : "Valor cada vez"}
+          {once || schedule.every === "monthly" ? "Valor" : "Valor cada vez"}
           <MoneyInput key={pays} name="amount" defaultValue={bill?.amount ?? debt?.monthly_payment} placeholder="$ 90.000" />
-          <span className="text-xs font-normal text-ink-3">Vacío si cambia (servicios).</span>
+          <span className="text-xs font-normal text-ink-3">{once ? "Vacío si aún no sabes cuánto es." : "Vacío si cambia (servicios)."}</span>
         </label>
         {currencies && debts.length > 0 && (
           <label className="field sm:col-span-2">
@@ -72,7 +89,21 @@ export function BillForm({ bill, onDone, inModal = false, debts = [] }: { bill?:
             )}
           </label>
         )}
-        <EveryFields value={schedule} onChange={setSchedule} today={todayInBogota()} names={{ every: "every", day: "due_day", start: "starts_on" }} editing={editing} what="pago" />
+        {once ? (
+          <>
+            <input type="hidden" name="every" value="monthly" />
+            <label className="field">
+              Mes en que se paga
+              <MonthField name="once_month" min={today.slice(0, 7)} defaultValue={bill?.once_month ?? today.slice(0, 7)} required />
+            </label>
+            <label className="field">
+              Día de pago
+              <input className="input num" type="number" name="due_day" min={1} max={31} defaultValue={bill?.due_day ?? schedule.day} required />
+            </label>
+          </>
+        ) : (
+          <EveryFields value={schedule} onChange={setSchedule} today={today} names={{ every: "every", day: "due_day", start: "starts_on" }} editing={editing} what="pago" />
+        )}
         {!debt && (
           <label className="field">
             Categoría

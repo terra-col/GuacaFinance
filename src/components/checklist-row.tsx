@@ -342,6 +342,7 @@ function OwnRow({ item, month, today, editable, accounts, canPlan = false }: Pro
             {item.overdue && !paid && <span className="pill pill-urgent mr-1.5">{income ? "Atrasado" : "Vencido"}</span>}
             {status}
             {item.every && <span className="text-ink-3"> · {everyShort(item.every)}</span>}
+            {item.once && <span className="text-ink-3"> · una vez</span>}
             {item.planned && !paid && !skipped && <span className="text-ink-3"> · valor de {monthName(month)}</span>}
           </p>
         </button>

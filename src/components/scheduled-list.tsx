@@ -12,14 +12,17 @@ const MONTH_SHORT = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "se
 
 export type ScheduledRow = { kind: "income"; income: Income; next: string | null } | { kind: "bill"; bill: Bill; next: string | null };
 
+const onceText = (month: string) => `Una vez, en ${monthName(month)}${month.slice(0, 4) !== new Date().getFullYear().toString() ? ` ${month.slice(0, 4)}` : ""}`;
+
 /** "Cada mes, día 30", "jun y dic, día 20", "una vez, 30 de diciembre". */
 function cadence(row: ScheduledRow): string {
+  if (row.kind === "bill" && row.bill.once_month) return onceText(row.bill.once_month);
   if (row.kind === "bill") {
     const text = cadenceText(billSchedule(row.bill));
     return text[0].toUpperCase() + text.slice(1);
   }
   const { income } = row;
-  if (income.once_month) return `Una vez, en ${monthName(income.once_month)}${income.once_month.slice(0, 4) !== new Date().getFullYear().toString() ? ` ${income.once_month.slice(0, 4)}` : ""}`;
+  if (income.once_month) return onceText(income.once_month);
   if (income.months) {
     const list = income.months.map((m) => MONTH_SHORT[m - 1]);
     return `${list.length > 1 ? `${list.slice(0, -1).join(", ")} y ${list.at(-1)}` : list[0]}, día ${income.day}`;
@@ -32,7 +35,7 @@ function Row({ row, accounts, currentMonth, debts }: { row: ScheduledRow; accoun
   const [editing, setEditing] = useState(false);
   const income = row.kind === "income";
   const item = income ? row.income : row.bill;
-  const label = income ? (row.income.once_month ? "Extra" : row.income.months ? "Algunos meses" : "Ingreso") : "Pago fijo";
+  const label = income ? (row.income.once_month ? "Extra" : row.income.months ? "Algunos meses" : "Ingreso") : row.bill.once_month ? "Una vez" : "Pago fijo";
 
   return (
     <li className="py-3">
