@@ -25,6 +25,8 @@ const PATHS = {
   income: "M12 3.5v11m0 0-4-4m4 4 4-4M4 16.5v4h16v-4",
   payment: "M12 20.5v-11m0 0-4 4m4-4 4 4M4 3.5h16",
   adjust: "M4 7h10m4 0h2M4 17h2m4 0h10M16 5v4M8 15v4",
+  // Two arrows passing each other: money between one's own accounts.
+  transfer: "M4 8h14m0 0-3.5-3.5M18 8l-3.5 3.5M20 16H6m0 0 3.5-3.5M6 16l3.5 3.5",
   palette:
     "M12 3.5a8.5 8.5 0 1 0 0 17c1.1 0 1.7-.8 1.7-1.6 0-1.1-.9-1.5-.9-2.5 0-.9.7-1.5 1.6-1.5h2.2a3.9 3.9 0 0 0 3.9-3.9C20.5 6.8 16.7 3.5 12 3.5zM7.5 12.5v.01M9 8.5v.01M13 7v.01M16.5 9.5v.01",
 } as const;
@@ -59,5 +61,6 @@ export function txIconName(tx: Pick<Tx, "kind" | "category">): IconName {
   if (tx.category === ADJUSTMENT) return "adjust";
   if (tx.kind === "income") return "income";
   if (tx.kind === "payment") return "payment";
+  if (tx.kind === "transfer") return "transfer";
   return CATEGORY[(tx.category ?? "").toLowerCase()] ?? "other";
 }

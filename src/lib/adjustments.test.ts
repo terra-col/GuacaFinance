@@ -26,7 +26,7 @@ const txs = [
 
 test("adjustments: never income, spending or payments", () => {
   assert.deepEqual(spendingByCategory(txs, "2026-11"), [{ category: "Mercado", amount: 300_000 }]);
-  assert.deepEqual(monthFlows(txs, "2026-11"), { income: 500_000, expense: 300_000, payment: 0 });
+  assert.deepEqual(monthFlows(txs, "2026-11"), { income: 500_000, expense: 300_000, payment: 0, transfer: 0 });
 });
 
 test("adjustments: they still move the balances", () => {

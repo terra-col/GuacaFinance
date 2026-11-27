@@ -59,7 +59,7 @@ test("being paid back: the account goes up and it is not income", () => {
   };
   const txs = [...paid, tx("r", "income", 100_000)];
   assert.equal(balanceAt(bank, txs), 800_000);
-  assert.deepEqual(monthFlows(flowTxs(txs, settled, "ana"), "2026-11"), { income: 0, expense: 100_000, payment: 0 });
+  assert.deepEqual(monthFlows(flowTxs(txs, settled, "ana"), "2026-11"), { income: 0, expense: 100_000, payment: 0, transfer: 0 });
   assert.equal(myPosition(settled, "ana").owedToMe, 100_000);
   assert.equal(monthFlows(flowTxs([], { ...settled, links: [] }, "beto"), "2026-11").expense, 100_000, "paying back is not spending again");
 });

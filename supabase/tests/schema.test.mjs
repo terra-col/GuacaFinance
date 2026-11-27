@@ -405,3 +405,33 @@ test("accounts in another currency: their movements in it, and their currency fi
   await as(ANA, "update accounts set currency = 'EUR' where id = $1", [fresh.id]);
   assert.equal((await as(ANA, "select account_currencies_ready() as ok"))[0].ok, true);
 });
+
+test("transfers: between one's own savings or cash, and kept in the other account when one is deleted", async () => {
+  const [bank] = await as(ANA, "insert into accounts (kind, name, opening_balance) values ('savings', 'Nómina', 5000000) returning id");
+  const [cash] = await as(ANA, "insert into accounts (kind, name, opening_balance) values ('cash', 'Billetera', 0) returning id");
+  const [usd] = await as(ANA, "insert into accounts (kind, name, opening_balance, currency, opening_original) values ('savings', 'Dólares', 0, 'USD', 0) returning id");
+  const [eur] = await as(ANA, "insert into accounts (kind, name, opening_balance, currency, opening_original) values ('savings', 'Euros', 0, 'EUR', 0) returning id");
+  const sql = "insert into transactions (account_id, source_account_id, kind, amount, currency, original_amount, rate) values ($1, $2, 'transfer', $3, $4, $5, $6) returning id";
+  await as(ANA, sql, [cash.id, bank.id, 300000, "COP", null, null]);
+  await as(ANA, sql, [usd.id, bank.id, 4100000, "USD", 1000, 4100]);
+  // Without where it comes from, to a card, between dollars and euros, in pesos into dollars: refused.
+  await assert.rejects(as(ANA, "insert into transactions (account_id, kind, amount) values ($1, 'transfer', 1000)", [cash.id]), /check constraint|entre cuentas/);
+  await assert.rejects(as(ANA, sql, [visa.id, bank.id, 1000, "COP", null, null]), /entre cuentas de ahorros o efectivo/);
+  await assert.rejects(as(ANA, sql, [eur.id, usd.id, 4000, "USD", 1, 4000]), /debe ir en esa moneda/);
+  await assert.rejects(as(ANA, sql, [usd.id, bank.id, 4000, "COP", null, null]), /debe ir en esa moneda/);
+  // Someone else's account as origin: refused by row level security.
+  const [betoBank] = await as(BETO, "insert into accounts (kind, name, opening_balance) values ('savings', 'B', 1) returning id");
+  await assert.rejects(as(ANA, sql, [cash.id, betoBank.id, 1000, "COP", null, null]), /row-level security/);
+  // A payment still takes an origin, an income still does not.
+  await assert.rejects(as(ANA, "insert into transactions (account_id, source_account_id, kind, amount) values ($1, $2, 'income', 1000)", [cash.id, bank.id]), /check constraint/);
+
+  // Deleting the wallet: the bank keeps its $ 300.000 out, as an adjustment.
+  await as(ANA, "delete from accounts where id = $1", [cash.id]);
+  const [kept] = await as(ANA, "select kind, account_id, source_account_id, category, amount from transactions where description like 'Traslado a Billetera%'");
+  assert.deepEqual([kept.kind, kept.account_id, kept.source_account_id, kept.category, Number(kept.amount)], ["expense", bank.id, null, "Ajuste de saldo", 300000]);
+  // Deleting the bank: the dollars keep their US$ 1.000 in.
+  await as(ANA, "delete from accounts where id = $1", [bank.id]);
+  const [arrived] = await as(ANA, "select kind, account_id, currency, original_amount::text as o from transactions where description like 'Traslado desde Nómina%'");
+  assert.deepEqual([arrived.kind, arrived.account_id, arrived.currency, arrived.o], ["income", usd.id, "USD", "1000.00"]);
+  assert.equal((await as(ANA, "select transfers_ready() as ok"))[0].ok, true);
+});

@@ -23,7 +23,7 @@ import { createClient } from "./supabase/server";
 /** What every screen's frame needs: accounts for the quick «new movement» sheet and the Wallet inbox count. */
 export async function loadShell() {
   const supabase = await createClient();
-  const [session, inbox, withFavorite, usedInTxs, usedInBills, budgeted, groups, dated, datedIncomes, periods, waiting, currencies, accountCurrencies] = await Promise.all([
+  const [session, inbox, withFavorite, usedInTxs, usedInBills, budgeted, groups, dated, datedIncomes, periods, waiting, currencies, accountCurrencies, transfers] = await Promise.all([
     // Read from the cookie, no network: only to tell this person's things apart on the device (the
     // advisor's saved conversation), never to authorize anything.
     supabase.auth.getSession(),
@@ -49,6 +49,8 @@ export async function loadShell() {
     // Each account's currency (migration 0030), so the quick sheet takes an account in dollars in
     // dollars. Its own read: before the migration it fails alone and everything stays in pesos.
     supabase.from("accounts").select("id, currency"),
+    // Moving money between one's own accounts (migration 0031).
+    supabase.rpc("transfers_ready"),
   ]);
   // Until migration 0012 runs there is no favourite column: ask again without it.
   const accounts = withFavorite.error ? await supabase.from("accounts").select("id, name, kind").order("created_at") : withFavorite;
@@ -57,6 +59,7 @@ export async function loadShell() {
     pending: inbox.count ?? 0,
     accounts: ((accounts.data ?? []) as Pick<Account, "id" | "name" | "kind" | "favorite">[]).map((a) => ({ ...a, currency: currencyOf.get(a.id) ?? "COP" })),
     accountCurrenciesReady: !accountCurrencies.error,
+    transfersReady: !transfers.error,
     userId: session.data.session?.user.id ?? null,
     // The welcome tour starts by itself until it is seen once (see markTourSeen).
     tourSeen: Boolean(session.data.session?.user.user_metadata?.tour_seen),

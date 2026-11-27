@@ -5,15 +5,21 @@ import { NO_RATES, type Rates } from "@/lib/currency";
 
 const Ready = createContext(false);
 const AccountsReady = createContext(false);
+const TransfersReady = createContext(false);
 
 /** Whether other currencies exist in this database (migration 0026), and accounts in them (0030). */
-export function CurrencyProvider({ ready, accounts = false, children }: { ready: boolean; accounts?: boolean; children: React.ReactNode }) {
+export function CurrencyProvider({ ready, accounts = false, transfers = false, children }: { ready: boolean; accounts?: boolean; transfers?: boolean; children: React.ReactNode }) {
   return (
     <Ready.Provider value={ready}>
-      <AccountsReady.Provider value={ready && accounts}>{children}</AccountsReady.Provider>
+      <AccountsReady.Provider value={ready && accounts}>
+        <TransfersReady.Provider value={transfers}>{children}</TransfersReady.Provider>
+      </AccountsReady.Provider>
     </Ready.Provider>
   );
 }
+
+/** Whether money can move between one's own accounts (migration 0031). */
+export const useTransfersReady = () => useContext(TransfersReady);
 
 export const useCurrenciesReady = () => useContext(Ready);
 

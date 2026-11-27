@@ -4,7 +4,8 @@ import { assign, datesIn, nextDates, type Every, type Schedule } from "./recurre
 import type { HouseReceipt } from "./house.ts";
 
 export type AccountKind = "savings" | "cash" | "credit_card" | "loan";
-export type TxKind = "income" | "expense" | "payment";
+/** «transfer» (migration 0031): between one's own savings or cash, maybe changing currency. */
+export type TxKind = "income" | "expense" | "payment" | "transfer";
 
 export interface Account {
   id: string;
@@ -210,6 +211,7 @@ export function knownCategories(used: (string | null | undefined)[]): string[] {
 export function txIcon(tx: Pick<Tx, "kind" | "category">): string {
   if (tx.kind === "income") return "💰";
   if (tx.kind === "payment") return "💳";
+  if (tx.kind === "transfer") return "🔁";
   return CATEGORY_ICON[tx.category?.trim().toLowerCase() ?? ""] ?? "🧾";
 }
 
@@ -231,7 +233,7 @@ export function allowedTxKinds(kind: AccountKind): TxKind[] {
 export function effect(account: Account, tx: Tx): number {
   if (tx.account_id === account.id) {
     if (holdsMoney(account)) {
-      if (tx.kind === "income") return tx.amount;
+      if (tx.kind === "income" || tx.kind === "transfer") return tx.amount;
       if (tx.kind === "expense") return -tx.amount;
       return 0;
     }
@@ -239,7 +241,7 @@ export function effect(account: Account, tx: Tx): number {
     if (tx.kind === "payment") return -tx.amount;
     return 0;
   }
-  if (tx.source_account_id === account.id && tx.kind === "payment") return -tx.amount;
+  if (tx.source_account_id === account.id && (tx.kind === "payment" || tx.kind === "transfer")) return -tx.amount;
   return 0;
 }
 
@@ -435,7 +437,7 @@ export function spendingByCategory(txs: Tx[], month: string): CategoryTotal[] {
 
 /** What came in, was spent and was paid to debts in a 'YYYY-MM' month. */
 export function monthFlows(txs: Tx[], month: string): Record<TxKind, number> {
-  const flows = { income: 0, expense: 0, payment: 0 };
+  const flows = { income: 0, expense: 0, payment: 0, transfer: 0 };
   for (const tx of txs) if (!isAdjustment(tx) && tx.occurred_on.startsWith(month)) flows[tx.kind] += tx.amount;
   return flows;
 }

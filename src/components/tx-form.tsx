@@ -8,6 +8,7 @@ import { divideMovement } from "@/app/shared-actions";
 import { contactPhone } from "@/lib/contacts";
 import { DateField } from "./date-field";
 import { AmountField } from "./amount-field";
+import { useTransfersReady } from "./currency-context";
 import { isCurrency } from "@/lib/currency";
 import { CategoryField, SelectField, type PickOption } from "./pickers";
 import { useSharedReady } from "./shared-ready";
@@ -28,6 +29,7 @@ const KIND_OPTIONS: { kind: TxKind; label: string }[] = [
   { kind: "expense", label: "Gasto o compra" },
   { kind: "payment", label: "Pago a tarjeta o crédito" },
   { kind: "income", label: "Ingreso" },
+  { kind: "transfer", label: "Traslado entre cuentas" },
 ];
 
 type AccountOption = Pick<Account, "id" | "name" | "kind" | "favorite" | "currency">;
@@ -117,16 +119,29 @@ export function TxForm({
   // Keep the original values when the person flips back to the movement's own kind.
   const own = tx && kind === tx.kind ? tx : undefined;
   // The favourite account first, and already chosen for a new expense or payment.
-  const targets = favoriteFirst(accounts.filter((a) => allowedTxKinds(a.kind).includes(kind)));
   const savings = favoriteFirst(accounts.filter((a) => a.kind === "savings" || a.kind === "cash"));
+  // A transfer goes between two of one's own savings or cash (migration 0031).
+  const transfers = useTransfersReady() && savings.length >= 2;
+  const kinds = KIND_OPTIONS.filter((o) => o.kind !== "transfer" || transfers || tx?.kind === "transfer");
+  const targets = kind === "transfer" ? savings : favoriteFirst(accounts.filter((a) => allowedTxKinds(a.kind).includes(kind)));
   const favorite = favoriteAccountId(accounts);
   // The accounts chosen, to know the currency: an account in dollars takes its movements in dollars.
-  const firstTarget = own?.account_id ?? (kind !== "payment" && targets.some((a) => a.id === favorite) ? favorite! : (targets[0]?.id ?? ""));
+  const firstSource = own ? (own.source_account_id ?? "") : kind === "transfer" ? (favorite ?? savings[0]?.id ?? "") : (favorite ?? "");
+  const firstTarget =
+    own?.account_id ??
+    (kind === "transfer"
+      ? (savings.find((a) => a.id !== firstSource)?.id ?? "")
+      : kind !== "payment" && targets.some((a) => a.id === favorite)
+        ? favorite!
+        : (targets[0]?.id ?? ""));
   const [picked, setPicked] = useState<{ kind: TxKind; target: string; source: string } | null>(null);
-  const chosen = picked && picked.kind === kind ? picked : { kind, target: firstTarget, source: own ? (own.source_account_id ?? "") : (favorite ?? "") };
+  const chosen = picked && picked.kind === kind ? picked : { kind, target: firstTarget, source: firstSource };
   const pick = (part: Partial<typeof chosen>) => setPicked({ ...chosen, ...part });
   const currencyOf = (id: string) => accountForeign(accounts.find((a) => a.id === id) ?? {});
-  const lock = currencyOf(chosen.target) ?? (kind === "payment" ? currencyOf(chosen.source) : null);
+  const lock = currencyOf(chosen.target) ?? (kind === "payment" || kind === "transfer" ? currencyOf(chosen.source) : null);
+  // Dollars to euros in one go would need two rates: through pesos, in two transfers.
+  const twoForeign = kind === "transfer" && currencyOf(chosen.target) && currencyOf(chosen.source) && currencyOf(chosen.target) !== currencyOf(chosen.source);
+  const sameAccount = kind === "transfer" && chosen.target === chosen.source;
 
   return (
     // Lives inside a sheet (new or edit), so it has no card or title of its own.
@@ -167,7 +182,7 @@ export function TxForm({
         key={lock ?? "free"}
         lock={lock}
         hero
-        label={kind === "income" ? "¿Cuánto llegó?" : kind === "payment" ? "¿Cuánto pagaste?" : "¿Cuánto fue?"}
+        label={kind === "income" ? "¿Cuánto llegó?" : kind === "payment" ? "¿Cuánto pagaste?" : kind === "transfer" ? "¿Cuánto trasladas?" : "¿Cuánto fue?"}
         defaultValue={tx?.amount}
         currency={isCurrency(tx?.currency) ? tx.currency : "COP"}
         original={tx?.original_amount ? Number(tx.original_amount) : null}
@@ -180,7 +195,7 @@ export function TxForm({
       ) : (
         <fieldset className="flex flex-wrap gap-2">
           <legend className="sr-only">Tipo de movimiento</legend>
-          {KIND_OPTIONS.map((option) => (
+          {kinds.map((option) => (
             <label
               key={option.kind}
               className="month-chip px-3.5"
@@ -213,12 +228,15 @@ export function TxForm({
             {/* key: the option list changes with the kind, so the select starts fresh */}
             {otherPays && <p className="self-end text-sm text-ink-2">Como pagó otra persona, tus cuentas no se mueven.</p>}
             {!otherPays && (
-            <label className="field" key={kind}>
+            // A transfer reads «sale de» first, then «llega a».
+            <label className="field" key={kind} style={kind === "transfer" ? { order: 1 } : undefined}>
               {kind === "payment"
                 ? "Deuda que pagas"
                 : kind === "income"
                   ? "Cuenta que recibe"
-                  : "Con qué pagaste"}
+                  : kind === "transfer"
+                    ? "Llega a"
+                    : "Con qué pagaste"}
               <SelectField name="account_id" options={accountOptions(targets)} value={chosen.target} onChange={(target) => pick({ target })} required />
             </label>
             )}
@@ -233,13 +251,26 @@ export function TxForm({
                 />
               </label>
             )}
+            {kind === "transfer" && (
+              <label className="field">
+                Sale de
+                <SelectField name="source_account_id" options={accountOptions(savings)} value={chosen.source} onChange={(source) => pick({ source })} required />
+              </label>
+            )}
+            {(twoForeign || sameAccount) && (
+              <p role="alert" className="alert sm:col-span-2">
+                {sameAccount
+                  ? "Elige dos cuentas distintas."
+                  : "Entre dos monedas distintas del peso hazlo en dos traslados, pasando por una cuenta en pesos: así cada uno tiene su tasa."}
+              </p>
+            )}
             {kind === "expense" && (
               <label className="field">
                 Categoría
                 <CategoryField name="category" defaultValue={own?.category ?? "Ocio"} />
               </label>
             )}
-            <label className="field">
+            <label className="field" style={kind === "transfer" ? { order: 2 } : undefined}>
               Nota
               <input
                 className="input"
@@ -285,7 +316,7 @@ export function TxForm({
               La división no cuadra con el monto: tócala para revisarla.
             </p>
           ) : (
-            <SubmitButton className="btn self-start" disabled={divides && !dividing}>{editing ? "Guardar cambios" : "Registrar"}</SubmitButton>
+            <SubmitButton className="btn self-start" disabled={(divides && !dividing) || Boolean(twoForeign) || sameAccount}>{editing ? "Guardar cambios" : "Registrar"}</SubmitButton>
           )}
         </>
       )}

@@ -43,6 +43,9 @@ const recurrenceMissing = (message: string) =>
 
 const currencyMissing = (message: string) => (/original_amount|\bcurrency\b|\brate\b|currency_amount/.test(message) ? "Para pagos e ingresos en otra moneda falta ejecutar la migración 0029 en Supabase." : null);
 
+/** The database's own words when a movement does not match its account's currency (migration 0030). */
+const accountCurrencyError = (message: string) => (/debe ir en esa moneda|traslado va entre/.test(message) ? message : null);
+
 async function signedIn() {
   const supabase = await createClient();
   const {
@@ -299,11 +302,19 @@ export async function saveTx(_prev: FormState, form: FormData): Promise<FormStat
 
   const { data: account } = await supabase.from("accounts").select("kind").eq("id", account_id).maybeSingle();
   if (!account) return { error: "Esa cuenta ya no existe." };
-  if (!allowedTxKinds(account.kind as AccountKind).includes(kind)) {
+  const transfer = kind === "transfer";
+  if (transfer ? isDebt(account) : !allowedTxKinds(account.kind as AccountKind).includes(kind)) {
     return { error: "Ese tipo de movimiento no aplica a esa cuenta." };
   }
 
   let source_account_id: string | null = null;
+  // Between one's own savings or cash (migration 0031): out of one, into the other.
+  if (transfer) {
+    source_account_id = text(form, "source_account_id") || null;
+    if (!source_account_id || source_account_id === account_id) return { error: "Elige de qué cuenta sale y a cuál llega: dos distintas." };
+    const { data: source } = await supabase.from("accounts").select("kind").eq("id", source_account_id).maybeSingle();
+    if (!source || isDebt(source)) return { error: "El traslado sale de una cuenta de ahorros o de tu efectivo." };
+  }
   if (kind === "payment") {
     source_account_id = text(form, "source_account_id") || null;
     if (source_account_id) {
@@ -327,12 +338,13 @@ export async function saveTx(_prev: FormState, form: FormData): Promise<FormStat
   if (id && !UUID.test(id)) return { error: "Ese movimiento no existe." };
   if (id) {
     const { error } = await supabase.from("transactions").update(row).eq("id", id);
-    if (error) return { error: `No se pudo guardar: ${error.message}` };
+    if (error) return { error: accountCurrencyError(error.message) ?? `No se pudo guardar: ${error.message}` };
     revalidatePath("/", "layout");
     return { message: "Movimiento actualizado." };
   }
   const { data, error } = await supabase.from("transactions").insert(row).select("id").single();
-  if (error) return { error: `No se pudo guardar: ${error.message}` };
+  if (error && transfer && /kind_check|source_kind|transfer/.test(error.message)) return { error: "Para trasladar entre cuentas falta ejecutar la migración 0031 en Supabase." };
+  if (error) return { error: accountCurrencyError(error.message) ?? `No se pudo guardar: ${error.message}` };
   revalidatePath("/", "layout");
   // «Dividir» needs to know which one, and only an expense can be divided.
   return { message: "Movimiento registrado.", id: kind === "expense" ? (data.id as string) : undefined };

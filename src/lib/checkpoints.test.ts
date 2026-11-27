@@ -70,5 +70,5 @@ test("older adjustments keep adding, and no check is ever spending", () => {
   const old = tx("expense", 200_000, "2026-11-05", "2026-11-05T10:00:00", { category: ADJUSTMENT });
   assert.equal(balanceAt(bank, [old]), 800_000, "no checkpoint: as before");
   assert.equal(balanceAt(bank, [old, checkpoint(650_000, "2026-11-22", "2026-11-22T10:00:00")]), 650_000);
-  assert.deepEqual(monthFlows([old, checkpoint(1, "2026-11-22", "2026-11-22T10:00:00")], "2026-11"), { income: 0, expense: 0, payment: 0 });
+  assert.deepEqual(monthFlows([old, checkpoint(1, "2026-11-22", "2026-11-22T10:00:00")], "2026-11"), { income: 0, expense: 0, payment: 0, transfer: 0 });
 });

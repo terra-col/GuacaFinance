@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { deleteTx } from "@/app/actions";
-import { formatCOP, formatDate, isAdjustment, isDebt, monthName, relativeDay, daysBetween, type Account, type Tx, type TxKind } from "@/lib/finance";
+import { accountForeign, formatCOP, formatDate, isAdjustment, isDebt, monthName, relativeDay, daysBetween, type Account, type Tx, type TxKind } from "@/lib/finance";
 import type { SharedMark } from "@/lib/shared";
 import { Icon, txIconName } from "./icons";
 import { formatForeign, isCurrency } from "@/lib/currency";
@@ -19,6 +19,7 @@ const FILTERS: { value: Filter; label: string }[] = [
   { value: "expense", label: "Gastos" },
   { value: "payment", label: "Pagos" },
   { value: "income", label: "Ingresos" },
+  { value: "transfer", label: "Traslados" },
   { value: "adjustment", label: "Ajustes" },
 ];
 
@@ -34,6 +35,8 @@ const LOOK: Record<TxKind, { label: string; stripe: string; tint: string; sign: 
   expense: { label: "Gasto", stripe: "var(--debt)", tint: "bg-debt/15", sign: "−" },
   payment: { label: "Pago a deuda", stripe: "var(--brand)", tint: "bg-brand/15", sign: "−" },
   income: { label: "Ingreso", stripe: "var(--savings)", tint: "bg-savings/15", sign: "+" },
+  // Between one's own accounts: neither money in nor money out.
+  transfer: { label: "Traslado", stripe: "var(--line-strong)", tint: "bg-brand/8", sign: "" },
 };
 
 const PAGE = 60;
@@ -52,7 +55,7 @@ export function TxList({
   shared = NOTHING_SHARED,
 }: {
   txs: Tx[];
-  accounts: Pick<Account, "id" | "name" | "kind">[];
+  accounts: Pick<Account, "id" | "name" | "kind" | "currency">[];
   today: string;
   showAdjustments?: boolean;
   /** The movements that are the money of a shared entry. */
@@ -82,12 +85,14 @@ export function TxList({
       ? `Saldo del banco · ${accountNames[tx.account_id] ?? "cuenta"}`
       : isAdjustment(tx)
       ? `Ajuste de saldo · ${accountNames[tx.account_id] ?? "cuenta"}`
-      : tx.kind === "payment" ? `Pago a ${accountNames[tx.account_id] ?? "cuenta"}` : (tx.description ?? (tx.kind === "income" ? "Ingreso" : (tx.category ?? "Gasto")));
+      : tx.kind === "payment" ? `Pago a ${accountNames[tx.account_id] ?? "cuenta"}` : tx.kind === "transfer" ? (tx.description ?? `A ${accountNames[tx.account_id] ?? "cuenta"}`) : (tx.description ?? (tx.kind === "income" ? "Ingreso" : (tx.category ?? "Gasto")));
   const detail = (tx: Tx) =>
     isAdjustment(tx) ? (tx.description ?? "") : [
       shared[tx.id]?.kind === "expense" ? `tu parte ${formatCOP(shared[tx.id].mine)}` : null,
       tx.kind === "expense" && tx.description ? tx.category : null,
-      tx.kind === "payment" ? (tx.source_account_id ? `desde ${accountNames[tx.source_account_id]}` : null) : accountNames[tx.account_id],
+      tx.kind === "transfer"
+        ? `${accountNames[tx.source_account_id ?? ""] ?? "cuenta"} → ${accountNames[tx.account_id] ?? "cuenta"}`
+        : tx.kind === "payment" ? (tx.source_account_id ? `desde ${accountNames[tx.source_account_id]}` : null) : accountNames[tx.account_id],
       tx.kind === "payment" ? tx.description : null,
       tx.source === "wallet" ? "Apple Wallet" : null,
       tx.for_month ? `cuenta para ${monthName(tx.for_month)}` : null,
@@ -102,6 +107,12 @@ export function TxList({
     if (!isAdjustment(tx)) return LOOK[tx.kind].sign;
     const account = accounts.find((a) => a.id === tx.account_id);
     return tx.kind === "income" || (tx.kind === "expense" && account && isDebt(account)) ? "+" : "−";
+  };
+  // An account in another currency keeps the bank's balance in cents of it.
+  const checkpointText = (tx: Tx) => {
+    if (tx.checkpoint === null || tx.checkpoint === undefined) return null;
+    const code = accountForeign(accounts.find((a) => a.id === tx.account_id) ?? {});
+    return code ? formatForeign(tx.checkpoint / 100, code) : formatCOP(tx.checkpoint);
   };
   const inFilter = useCallback(
     (tx: Tx, f: Filter) => {
@@ -252,7 +263,7 @@ export function TxList({
                       </div>
                       <p className={`display num shrink-0 rounded-xl px-2 py-0.5 text-lg ${isAdjustment(tx) ? "text-ink-3" : tx.kind === "income" ? "bg-savings/15" : ""}`}>
                         {sign(tx)}
-                        {formatCOP(tx.checkpoint ?? tx.amount)}
+                        {checkpointText(tx) ?? formatCOP(tx.amount)}
                         {isCurrency(tx.currency) && tx.currency !== "COP" && tx.original_amount && (
                           <span className="block text-right font-sans text-xs font-medium text-ink-3">{formatForeign(Number(tx.original_amount), tx.currency)}</span>
                         )}

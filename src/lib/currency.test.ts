@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { NO_RATES, atTodayRate, formatForeign, needsRates, parseHundredths, parseRate, toPesos } from "./currency.ts";
-import { balanceAt, balanceByCurrency, monthlyChecklist, nativeBalance, totals, valueRate, type Account, type Bill, type Planned, type Tx } from "./finance.ts";
+import { balanceAt, balanceByCurrency, monthFlows, monthlyChecklist, nativeBalance, totals, valueRate, type Account, type Bill, type Planned, type Tx } from "./finance.ts";
 import { incomeChecklist, incomeRow, type Income } from "./budget.ts";
 
 test("amounts as people write them", () => {
@@ -86,4 +86,24 @@ test("accounts in another currency: balance there, valued in pesos at today's ra
   const groups = balanceByCurrency([wise, bank, card], txs);
   assert.deepEqual(groups.map((g) => [g.currency, g.have, g.owe, g.rate]), [["COP", 2_000_000, 90_000, null], ["USD", 1149.75, 0, 4200]]);
   assert.equal(balanceByCurrency([bank, card], txs).length, 1, "all in pesos: no detail");
+});
+
+test("transfers: out of one account into the other, also changing currency, and never spending", () => {
+  const base = { institution: null, opening_date: "2026-01-01", credit_limit: null, annual_rate: null, monthly_payment: null, statement_day: null, due_day: null, wallet_card_name: null };
+  const bank: Account = { ...base, id: "bank", kind: "savings", name: "Banco", opening_balance: 10_000_000 };
+  const cash: Account = { ...base, id: "cash", kind: "cash", name: "Efectivo", opening_balance: 0 };
+  const wise: Account = { ...base, id: "wise", kind: "savings", name: "Wise", opening_balance: 0, currency: "USD", opening_original: "0", fx_rate: 4000 };
+  const tx = (over: Partial<Tx>): Tx => ({ id: crypto.randomUUID(), account_id: "cash", source_account_id: "bank", kind: "transfer", amount: 0, category: null, description: null, occurred_on: "2026-11-05", source: "manual", bill_id: null, income_id: null, ...over });
+  const txs = [
+    tx({ amount: 300_000 }),
+    // $ 4.100.000 out of the bank, US$ 1.000 into Wise: the exchange's own rate.
+    tx({ account_id: "wise", amount: 4_100_000, currency: "USD", original_amount: "1000", rate: "4100" }),
+  ];
+  assert.equal(balanceAt(bank, txs), 10_000_000 - 300_000 - 4_100_000);
+  assert.equal(balanceAt(cash, txs), 300_000);
+  assert.equal(nativeBalance(wise, txs), 100_000, "US$ 1.000,00");
+  assert.equal(balanceAt(wise, txs), 4_000_000, "valued at today's 4.000: the exchange cost $ 100.000 of value");
+  const t = totals([bank, cash, wise], txs);
+  assert.equal(t.savings, 10_000_000 - 4_100_000 + 4_000_000);
+  assert.deepEqual(monthFlows(txs, "2026-11"), { income: 0, expense: 0, payment: 0, transfer: 4_400_000 }, "not income nor spending");
 });

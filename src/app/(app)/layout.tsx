@@ -20,14 +20,14 @@ import { SharedReadyProvider } from "@/components/shared-ready";
 import { RecurrenceReadyProvider } from "@/components/recurrence-ready";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const { pending, accounts, categories, userId, tourSeen, sharedReady, socialReady, noticeCount, recurrenceReady, incomeRecurrenceReady, customPeriodsReady, currenciesReady, accountCurrenciesReady, today } = await loadShell();
+  const { pending, accounts, categories, userId, tourSeen, sharedReady, socialReady, noticeCount, recurrenceReady, incomeRecurrenceReady, customPeriodsReady, currenciesReady, accountCurrenciesReady, transfersReady, today } = await loadShell();
 
   return (
     // Every category field (Registrar, editing a movement, fixed bills, Wallet's inbox) offers the person's own categories too.
     <CategoriesProvider categories={categories}>
     <SharedReadyProvider ready={sharedReady} social={socialReady}>
     <RecurrenceReadyProvider ready={recurrenceReady} incomes={incomeRecurrenceReady} custom={customPeriodsReady}>
-    <CurrencyProvider ready={currenciesReady} accounts={accountCurrenciesReady}>
+    <CurrencyProvider ready={currenciesReady} accounts={accountCurrenciesReady} transfers={transfersReady}>
     <div className="mx-auto w-full max-w-5xl px-4 pb-40 sm:px-6 lg:pb-16">
       <Suspense>
         <NavProgress />
